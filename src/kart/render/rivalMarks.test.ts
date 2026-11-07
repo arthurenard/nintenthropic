@@ -4,7 +4,7 @@ import { MARK_FAR, markLook } from "./rivalMarks";
 describe("the nemesis marker's look", () => {
   it("is not there on top of you or out of sight", () => {
     expect(markLook(0).opacity).toBe(0);
-    expect(markLook(4).opacity).toBe(0);
+    expect(markLook(3).opacity).toBe(0);
     expect(markLook(MARK_FAR).opacity).toBe(0);
     expect(markLook(500).opacity).toBe(0);
     expect(markLook(Number.NaN).opacity).toBe(0);
@@ -15,7 +15,7 @@ describe("the nemesis marker's look", () => {
   });
 
   it("fades in over the first metres and out towards the far end", () => {
-    expect(markLook(6).opacity).toBeLessThan(markLook(10).opacity);
+    expect(markLook(4).opacity).toBeLessThan(markLook(10).opacity);
     expect(markLook(40).opacity).toBeCloseTo(0.85, 5);
     expect(markLook(MARK_FAR - 10).opacity).toBeLessThan(markLook(40).opacity);
   });

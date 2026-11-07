@@ -1781,14 +1781,15 @@ with the one ahead first, and the bigger the hit total the bigger the grudge.
 
 **On screen.**
 
-- The race intro: as the countdown begins, a glass pill calls out the biggest
+- The race intro: as the countdown begins (or, after a slow load, in the race's
+  first seconds), a glass pill calls out the biggest
   grudge among the karts in this race ("Kit vs Mango: 3-1", and under it what
   the numbers count, "Spin-outs between them" or "Who finishes ahead").
 - A **nemesis** is whoever has hit you the most (two hits for a person, three
   for a bot, a bot's hits weighing a little less), or else your closest
   head-to-head. A small chevron in their colour hovers over their kart in your
   viewport only (`render/rivalMarks.ts`, set with the optional
-  `RaceRenderer.setRivals`; it fades in past 4 m and out towards 90 m, and never
+  `RaceRenderer.setRivals`; it fades in past 3 m and out towards 90 m, and never
   gets above 85% opacity).
 - **Revenge**: when you hit your nemesis, "Revenge!" shows in your viewport (in
   place of "Got Kit.") and a short sting plays (`kart_revenge`, the `revenge`

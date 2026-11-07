@@ -571,7 +571,8 @@ export class RaceScreen {
     const ctx = this.ctx;
     const rivals = ctx?.rivals;
     if (!ctx || !rivals || rivals.raceId === null) return;
-    if (!this.introShown && view.phase === "countdown") {
+    // (A slow load may bring the picture up after the lights have gone out: the intro still has its moment, if the race is young.)
+    if (!this.introShown && (view.phase === "countdown" || view.time < 6)) {
       this.introShown = true;
       const grudge = rivals.grudge();
       if (grudge) this.intro(grudgeLine(grudge), grudgeBasis(grudge));
@@ -595,7 +596,8 @@ export class RaceScreen {
     const pill = element("p", "view-toast rival-intro glass");
     pill.setAttribute("role", "status");
     pill.style.left = `${Math.round(box.width / 2)}px`;
-    pill.style.top = `${Math.round(box.height * 0.2)}px`;
+    // High, above the start lights' numerals.
+    pill.style.top = `${Math.round(Math.max(56, box.height * 0.055))}px`;
     pill.append(element("span", "rival-line", line), element("span", "rival-basis", basis));
     $("view-toasts").append(pill);
     window.setTimeout(() => pill.remove(), 3500);

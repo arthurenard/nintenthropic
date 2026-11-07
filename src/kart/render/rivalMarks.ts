@@ -27,8 +27,8 @@ export interface MarkLook {
 
 /** Fades in over the first few metres (a kart on your bumper needs none), holds, fades out towards the far end. */
 export function markLook(distance: number): MarkLook {
-  if (!(distance > 4) || distance >= MARK_FAR) return { opacity: 0, scale: 1 };
-  const near = Math.min(1, (distance - 4) / 6);
+  if (!(distance > 3) || distance >= MARK_FAR) return { opacity: 0, scale: 1 };
+  const near = Math.min(1, (distance - 3) / 4);
   const far = Math.min(1, (MARK_FAR - distance) / 30);
   return { opacity: 0.85 * Math.min(near, far), scale: Math.max(0.55, Math.min(1, 26 / distance + 0.2)) };
 }
