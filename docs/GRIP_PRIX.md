@@ -1240,6 +1240,7 @@ a 1440x900 window at 2x, resolution pinned at 1 so tiers compare at equal pixels
   same race stepped a sixtieth of a second at a time (`?manual=1`, `Math.random` and the page's clock fixed) and the
   canvases compared byte for byte at frames 150, 500, 900 and 1500. `shots.mjs`: the same posed still from two dev pages
   at each tier, with the difference in 8-bit levels.
+- `split.mjs` also takes `--dpr 2 --size WxH --soft --cpu n --level n` (a sharper window, SwiftShader, a slower main thread, a held governor step) and prints the governor's step and the resolution as the race went (`trace`).
 - `calls.mjs`: what a frame's draw calls are: one frame of the stepped race, each kind of object drawn (where it hangs
   in the scene, the kind of mesh and material), how many times in the views and in their shadow passes, and a total for
   each view. Calls and triangles are counted, so unlike a frame time they do not move with the machine's load.
@@ -1425,14 +1426,69 @@ this machine's single-thread speed four views stop holding 60 fps; the answer to
 lower). Proposals: karts (welded meshes sooner, fewer draw calls a kart), the tracks (fewer distinct materials in the
 landmarks) and a mid-race step down for the shadow pass of views 3 and 4.
 
-*Not done, and not measured, against what was asked of this area:* the shadow pass still runs once per view (four times
-with four players); there is no per-view resolution (the one dynamic resolution covers the whole canvas) and no tier that
-steps down mid-race beyond `onStrain`; shader pre-warm was only observed (nothing links after the green light), not
-changed; hands jumping between players, the wheel freezing, input-to-kart latency, tracker read rates, a laptop hosting
-phones as wheels over real Wi-Fi (host snapshot cost) and any older laptop, integrated GPU or Safari were not measured.
-The `--cpu n` figures are one run per side. A friend's "bugging" report is therefore not explained: no frame hitch was
-found on a fast machine, so it is likely weaker hardware or tracking. If the minimap's canvas is resized it stays blank
-until its next draw, at most 30 ms.
+**Weaker machines, second pass: a shared shadow pass and the load governor** (2026-11-07; `render/shadowGroups.ts`,
+`render/loadGovernor.ts`, `renderer.ts`). A friend's laptop "bugged" in local multiplayer; the first pass found nothing on
+the M4 Max, so this pass stood a weak machine in for it (`split.mjs --dpr 2 --cpu 6`: four players, Retina pixels, a main
+thread six times slower, on a host with a load average of 10 to 35, so read the milliseconds as a direction and the calls and
+triangles as exact) and took the work that grows with the views away a step at a time.
+
+- *What a frame of four views is made of* (`calls.mjs`, Canyon Run, high): the karts are the biggest part of it, about a
+  third of the draw calls (the new bodies are MeshPhysicalMaterial, 75 objects, half of those calls in the shadow pass),
+  then the scenery, then a tail of about a hundred small kinds (landmarks and set pieces, 200 calls). The shadow pass is a
+  fifth of the calls and, on the GPU, a share of the 17 ms the views take at 2x.
+- *One shadow pass for views whose karts are near each other* (`shadowGroups`): the map is aimed at the middle of the group
+  and drawn once, with the group's first view; the others draw with it as it stands (`shadowMap.autoUpdate`), and the
+  casters are the karts any of the group's views can see. The views are drawn group by group, so a later group's map never
+  replaces an earlier one's. Spread is a number of metres (half the tier's shadow range at step 1, the range at step 2,
+  more later); at step 0 every view has its own pass, as before.
+- *The load governor* (`LoadGovernor`; the levels are `lookFor`): five steps, each a number or a flag and none a new shader
+  program (no program links after the green light at any step, measured with `split.mjs`). Step 1: shared shadows within
+  half the range, karts welded from 24 m (a kart's `LOD` distance is now live), 75% of the particles, 4 taps in the boost's
+  blur. Step 2: shadows within the range, at most 3 passes, welded from 18 m, 55% of the particles, scenery beyond the fog's
+  far end left out (`reach` in `cull.ts`), 3 taps. Step 3: within 1.5 ranges, 2 passes, 15 m, 40%, scenery beyond 85% of the
+  fog, 2 taps. Step 4: one pass for the frame (a view far from the pack has no cast shadows, only the kart's blob), 12 m, 30%,
+  70% of the fog, no streaks. Step 0 is the picture as it was: `same.mjs --against` on the commit before this one is
+  identical at frames 150, 500 and 900, Canyon Run, Fun Fair and Five Finger Circuit, 1 and 4 views, high.
+- *When it steps.* Down: two slow windows in a row (45 frames each, median over 1.25 times 16.7 ms; one window if over 1.8
+  times), then 2 s left alone. A run of steps is judged from where it began once it is two down (a step of a few per cent
+  is not undone before the next): if neither the frames nor the time the main thread took to build them (not quantised
+  to whole refreshes) came down by 5%, the whole run is put back and left alone until the frames change (a browser holding
+  the page to 30 fps, a busy hand tracker). Up: 12 s of easy windows, then one step as a trial; a trial that fails is
+  undone and that step closed for 30 s, then 60 s, up to 4 min; three trials a race. It cannot flicker. Dynamic
+  resolution waits for the governor's first two steps (they cost the picture less than blur) and acts at once after, or when
+  steps were found futile. A race starts at the step the device ended the last one at, per number of views
+  (`handy.kart.load.v1`, 14 days). `?load=n` holds a step for the bench and the eye.
+- *Measured* (`bench.mjs --extra "&load=n"`, dev page, high, four views, 1440x900 at 2x, pinned resolution, one run each:
+  calls, k triangles, GPU ms views / post, CPU ms): Canyon Run step 0 771, 3209k, 21.2 / 7.2, 11.5; step 1 541, 1972k,
+  6.9 / 4.0, 6.7; step 2 496, 1817k, 7.5 / 4.0, 6.6; step 4 436, 1547k, 8.9 / 4.6, 7.2. Fun Fair 593, 1660k at step 0 and 518,
+  1543k at step 4; Five Finger Circuit 705, 2432k and 644, 2312k (its calls are the set pieces and landmarks, which no step
+  touches). On the weak stand-in, whole races on the real page (`split.mjs --players 4 --dpr 2 --cpu 6`, 40 s, old = the
+  commit before, new = this; the host quieter, about 10):
+
+  | | fps | frames over 33 / over 50 ms | main-thread tasks over 50 ms | draw calls | where it ended |
+  | --- | --- | --- | --- | --- | --- |
+  | Canyon Run, before | 44.3 | 543 / 17 | 13 | 512 | |
+  | Canyon Run, after | 46.8 | 488 / 7 | 7 | 456 | step 2, resolution 0.95 |
+  | Fun Fair, before | 42.9 | 611 / 20 | 17 | 575 | |
+  | Fun Fair, after | 46.8 | 527 / 0 | 0 | 461 | step 2 to 3, resolution 1 |
+
+  On the normal machine (1440x900 at 1x, four players, 25 s) before and after are both 60 fps, p99 16.8 ms, no frame
+  over 33 ms, no program linked; the governor stays at step 0. Four players at 2x and 4x slower: both sides around 40 to 49
+  fps over several runs, the host's load moving them more than the change did; the run that was hardest hit (load 30
+  or more) went from 33 to 50 ms frames in a third of the frames to a fifth, which is the direction, not a figure.
+- *Shader pre-warm*: the loading screen's `compileAsync` and two pictures through the whole chain already built every program
+  (`linked 0` after the loading screen, countdown included, with the new kart bodies, the set pieces and every governor step
+  held with `?load=`, on Canyon Run and Fun Fair); nothing was changed there.
+- *Not done.* Per-view resolution: the post chain reads one picture, so a view drawn smaller needs the bloom and the grade
+  to read it at another scale; the one dynamic resolution still covers the whole canvas (and `handsFirst` lowers it for
+  the tracker). A tier that changes MSAA or the shadow map's size mid-race (a new target, a few hundred ms). Drawing views at
+  alternate frames (half rate each) under heavy load. Hiding far landmarks and set pieces per view (the long tail of calls;
+  they move on timers, so a bounding sphere kept at load is not safe). SwiftShader (`--soft`) was tried and says nothing but
+  that it is slow (10 fps, 640x360, 4 views, with a 2x spread between runs). Not measured on an older laptop, an integrated
+  GPU, Windows or Safari; hands jumping between players, the wheel freezing, input-to-kart latency, tracker read rates and a
+  laptop hosting phones as wheels over real Wi-Fi were not looked at. The `--cpu n` figures are one run per side. If the
+  minimap's canvas is resized it stays blank until its next draw, at most 30 ms. A headless screenshot of the real page may
+  come out black or cropped under load (the canvas is not preserved); the dev page's is reliable.
 
 **Tiers.** `guessTier(gpu, cores, { splitScreen: true })` (Grip Prix passes it; the arcade's own guess is unchanged): a
 base Apple chip (M1 to M4) starts at medium, as do Safari and an iPad, which report only "Apple GPU" (unless the
