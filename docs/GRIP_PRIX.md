@@ -1104,6 +1104,15 @@ this machine's single-thread speed four views stop holding 60 fps; the answer to
 lower). Proposals: karts (welded meshes sooner, fewer draw calls a kart), the tracks (fewer distinct materials in the
 landmarks) and a mid-race step down for the shadow pass of views 3 and 4.
 
+*Not done, and not measured, against what was asked of this area:* the shadow pass still runs once per view (four times
+with four players); there is no per-view resolution (the one dynamic resolution covers the whole canvas) and no tier that
+steps down mid-race beyond `onStrain`; shader pre-warm was only observed (nothing links after the green light), not
+changed; hands jumping between players, the wheel freezing, input-to-kart latency, tracker read rates, a laptop hosting
+phones as wheels over real Wi-Fi (host snapshot cost) and any older laptop, integrated GPU or Safari were not measured.
+The `--cpu n` figures are one run per side. A friend's "bugging" report is therefore not explained: no frame hitch was
+found on a fast machine, so it is likely weaker hardware or tracking. If the minimap's canvas is resized it stays blank
+until its next draw, at most 30 ms.
+
 **Tiers.** `guessTier(gpu, cores, { splitScreen: true })` (Grip Prix passes it; the arcade's own guess is unchanged): a
 base Apple chip (M1 to M4) starts at medium, as do Safari and an iPad, which report only "Apple GPU" (unless the
 core count says a Pro or Max: 12 or more); Apple Pro, Max and Ultra start at high; old Intel graphics at low, Iris Xe

@@ -125,8 +125,8 @@ export const QUALITY: Record<Tier, QualitySettings> = {
  * The pixel ratio the race's picture is drawn at: the screen's, no higher than the tier's cap, times the resolution the
  * race has settled on, and brought down further where that would put more than the tier's budget of pixels on the
  * canvas (a big window or a TV). The HUD is HTML and stays as sharp as the screen; only the 3D is a little softer.
- * A 1440 x 900 window at 2x (5.2 million) and a 16-inch MacBook at its native size (7.7) are under or near the high
- * tier's budget, so they are drawn as before.
+ * A 1440 x 900 window at 2x (5.2 million) is under the high tier's budget and is drawn as before; a 16-inch
+ * MacBook at its native size (7.7 million) is held to 6.5 million, about 8% fewer pixels per side's worth of sharpness.
  */
 export function pixelRatioFor(dpr: number, tier: QualitySettings, scale: number, width: number, height: number): number {
   // The budget comes first and the race's own resolution is a share of what it leaves, so each step of dynamic resolution still takes pixels away.

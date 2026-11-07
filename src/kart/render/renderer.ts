@@ -263,6 +263,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     renderer.setRenderTarget(target);
     renderer.clear(true, true, false);
     target.scissorTest = true;
+    try {
     for (let index = 0; index < frameViews.length; index++) {
       const v = frameViews[index]!;
       const x = Math.floor(v.rect.x * pr);
@@ -305,8 +306,13 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       for (const a of tooNear) a.root.visible = true;
       tooNear.length = 0;
     }
-    scene.matrixWorldAutoUpdate = true;
-    target.scissorTest = false;
+    } finally {
+      // Whatever a view throws, the scene goes back to updating its own matrices, and no kart stays hidden for being near a lens.
+      scene.matrixWorldAutoUpdate = true;
+      for (const a of tooNear) a.root.visible = true;
+      tooNear.length = 0;
+      target.scissorTest = false;
+    }
     if (profiling) smooth("draw", performance.now() - t0);
   };
   const post = new PostChain(renderer, tier, drawViews);

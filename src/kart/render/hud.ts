@@ -163,6 +163,11 @@ export interface HudOptions {
 /** The shortest time between two drawings of the minimap, seconds (one frame at 60 fps is 0.0167: every second frame, the odd one more at 59). */
 const MAP_EVERY = 0.03;
 
+/** Whether a map last drawn at `at` is due again at `clock`: after `every` seconds, or at once if the clock went backwards (a restart). */
+export function mapIsDue(clock: number, at: number, every: number): boolean {
+  return !(clock - at < every && clock >= at);
+}
+
 export class Hud {
   private views: ViewHud[] = [];
   private free: FreeHud | null = null;
@@ -382,7 +387,7 @@ export class Hud {
 
   /** Whether the map is due a redraw now (a paused or first frame always draws once). */
   private mapDue(): boolean {
-    if (this.clock - this.mapAt < MAP_EVERY && this.clock >= this.mapAt) return false;
+    if (!mapIsDue(this.clock, this.mapAt, MAP_EVERY)) return false;
     this.mapAt = this.clock;
     return true;
   }
