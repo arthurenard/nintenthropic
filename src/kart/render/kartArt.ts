@@ -26,6 +26,7 @@ import { artNode, hasArt } from "./art";
 import type { Driver } from "./drivers";
 import { mergeBaked, rgb, type Rgb } from "./kartBuilder";
 import { brakeLights } from "./brakeLights";
+import { cluster } from "./farLod";
 import { SURF, kartMaterial, withStudioFallback, type Surf } from "./kartMaterial";
 import { bodyClass, liveryColour, liveryNode, liveryOf } from "./livery";
 import { FAR_DISTANCE, KART_EXHAUST, STEERING, WHEEL_FRONT, WHEEL_REAR } from "./kartSpec";
@@ -33,6 +34,9 @@ import type { KartModel } from "./kart";
 
 /** The front wheels are the rear wheel's model drawn this much smaller. */
 export const FRONT_SCALE = WHEEL_FRONT.r / WHEEL_REAR.r;
+
+/** The grid the far kart is thinned on, in metres. */
+const FAR_CELL = 0.2;
 
 const GOLD: Rgb = [1.0, 0.52, 0.06];
 
@@ -322,7 +326,10 @@ export function createArtKart(racer: Pick<RacerSetup, "id" | "colour" | "charact
     const driverFar = d.bake();
     d.dispose();
     parts.push({ geometry: driverFar, matrix: new Matrix4() });
-    farGeo = mergeBaked(parts);
+    const welded = mergeBaked(parts);
+    // Thinned: a far kart is a few dozen pixels, so it keeps its shape, paint, livery and lamps, not its tread and spokes.
+    farGeo = cluster(welded, FAR_CELL);
+    welded.dispose();
     driverFar.dispose();
   }
   wheelGeo.dispose();
@@ -332,6 +339,9 @@ export function createArtKart(racer: Pick<RacerSetup, "id" | "colour" | "charact
   farMesh.castShadow = true;
   withStudioFallback(farMesh);
   farBody.add(farMesh);
+  // The far kart's tail lamps flare too: the same skin, its own mesh.
+  const farBrake = brakeLights(body);
+  if (farBrake) farBody.add(farBrake.mesh);
   farRoot.add(farBody);
 
   const lod = new LOD();
@@ -350,6 +360,7 @@ export function createArtKart(racer: Pick<RacerSetup, "id" | "colour" | "charact
       farBody.rotation.copy(bodyGroup.rotation);
       driver.update({ time: p.time ?? 0, steer: p.steer, lean: p.lean, twirl: p.twirl ?? 0, emote: p.emote, finished: p.finished, dizzy: p.dizzy, lookBack: p.lookBack, rest: p.rest, shut: p.shut });
       brake?.show(p.brake ?? 0);
+      farBrake?.show(p.brake ?? 0);
       if (wheelRim) wheelRim.rotation.z = -p.steer * STEERING.turn;
       for (const f of fronts) {
         f.pivot.rotation.y = -p.steer * 0.5;

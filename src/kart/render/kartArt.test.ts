@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { BoxGeometry, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, Object3D } from "three";
 import { createDriver } from "./drivers";
 import { CHARACTERS } from "../characters";
+import { BOT_COLOURS, PLAYER_COLOURS } from "../contract";
+import { cluster } from "./farLod";
 import { createArtKart, bakeArt, forRacer, resetArtKart, type ArtKit } from "./kartArt";
 import { liveryColour, liveryNode } from "./livery";
 import { MeshBuilder, rgb } from "./kartBuilder";
@@ -267,6 +269,46 @@ describe("the Blender kart as the game draws it", () => {
     const nodes = art();
     resetArtKart();
     expect(createArtKart({ id: 1, colour: "#30D158", character: "bramble" }, kit, (n) => nodes.get(n)?.clone(true) ?? null)).not.toBeNull();
+  });
+
+  it("keeps every driver's pattern readable on every racer colour (a luma gap, or colours far apart, after the swap)", () => {
+    const luma = (c: readonly number[]): number => 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;
+    let worst = Infinity;
+    for (const paint of [...PLAYER_COLOURS, ...BOT_COLOURS]) {
+      for (const c of CHARACTERS) {
+        const accent = rgb(paint);
+        const got = liveryColour(accent, c.livery.colour);
+        const diff = Math.abs(luma(got) - luma(accent));
+        const apart = Math.hypot(got[0] - accent[0], got[1] - accent[1], got[2] - accent[2]);
+        expect(diff > 0.2 || apart >= 1, `${c.id} on ${paint}`).toBe(true);
+        worst = Math.min(worst, diff);
+      }
+    }
+    expect(worst).toBeGreaterThanOrEqual(0);
+  });
+
+  it("keeps the kart's own wheel when the file has a light body but no light wheel", () => {
+    const nodes = art();
+    nodes.set("kart.body.light", nodes.get("kart.body")!.clone(true));
+    resetArtKart();
+    const model = createArtKart({ id: 1, colour: "#30D158", character: "bun" }, kit, (n) => nodes.get(n)?.clone(true) ?? null);
+    expect(model).not.toBeNull();
+  });
+
+  it("thins the far kart on a grid: fewer triangles, the same surfaces and bounds", () => {
+    const b = new MeshBuilder();
+    b.as(SURF.paint, () => b.blob(0, 0, 0, 1, 0.5, 2, [1, 0, 0], 3));
+    b.as(SURF.chrome, () => b.blob(0, 1, 0, 0.3, 0.3, 0.3, [1, 1, 1], 3));
+    const full = b.build();
+    const thin = cluster(full, 0.4);
+    expect(thin.index!.count).toBeLessThan(full.index!.count / 2);
+    expect(thin.index!.count).toBeGreaterThan(30);
+    const surfs = new Set<number>();
+    for (let i = 0; i < thin.getAttribute("aSurf").count; i++) surfs.add(Math.round(thin.getAttribute("aSurf").getX(i) * 100));
+    expect(surfs.size).toBe(2);
+    thin.computeBoundingBox();
+    expect(thin.boundingBox!.max.z).toBeGreaterThan(1.5);
+    expect(thin.boundingBox!.max.z).toBeLessThanOrEqual(2.01);
   });
 
   it("builds a model that the actor can pose: wheels spin, the front pair steers, the steering wheel turns, a far version takes over", () => {

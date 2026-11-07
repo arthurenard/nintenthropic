@@ -40,7 +40,7 @@ import { buildRabbit } from "./rabbit";
 import { buildRobot } from "./robot";
 import { driverFromArt } from "./fromArt";
 import { EYE_GROW, Lids } from "./face";
-import { Face, moodOf } from "./expression";
+import { FACES, Face, moodOf } from "./expression";
 
 export const BUILDERS: Record<Species, (l: Look) => DriverBuild> = {
   rabbit: buildRabbit,
@@ -132,10 +132,11 @@ export class Driver {
       }
     }
     // The modelled heads carry no brows or mouth of their own: this draws them, so they can change.
-    if (species && modelled) {
+    if (species && modelled && FACES[species]) {
       try {
         this.face = new Face(species, built.head, headMesh);
-      } catch {
+      } catch (e) {
+        if (import.meta.env?.DEV) console.warn(`no face for ${species}`, e);
         this.face = null;
       }
     }

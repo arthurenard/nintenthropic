@@ -65,7 +65,7 @@ occlusion from the field), decimated with Blender's own decimator, coloured per 
 `species/<name>.py` models one driver; `shared.py` is what they have in common (the racing suit, gloved arms, the
 helmet, eyes, whiskers). Brows and smiles are NOT modelled: `brow()` and `smile()` there draw nothing, because the game
 draws them live so they can change with the driver's mood (src/kart/render/drivers/expression.ts holds where each
-species' brows and mouth go, in the head's space). The eyes are drawn `EYE_GROW` (1.14) times the size a species asks
+species' brows and mouth go, in the head's space; the cat's "w" and the robot's row of lit dots are drawn there too, and the penguin's and the duck's beaks part there). The eyes are drawn `EYE_GROW` (1.14) times the size a species asks
 for, and face.ts's eyelids follow. Parts are modelled in their own space, driver facing +z, left = +x: the
 head about its centre (0, 0.84, 0.06), an arm along +z from its shoulder (+-shoulder, 0.46, 0.02), the torso about
 the hips. The game (src/kart/render/drivers/fromArt.ts) joins a part's pieces into one geometry and reads each
@@ -78,6 +78,14 @@ piece's material by name:
 
 A species with all four of head, torso, arm.L, arm.R is built from the art; any missing piece of a bit (tail,
 scarf...) is the code-built one. The helmet joins the head. Otherwise the driver is the code-built stand-in.
+
+### Not yet checked on screen (karts and drivers)
+
+The three bodies, the liveries and the faces were judged on the turntable (front, back, chase angle, the nine-driver
+grid) and in the dev race, whose karts have no character, so every kart there is a sprint kart. Before merging, look at
+a light and a heavy driver in a real chase-camera race, the podium, the driver-select stage, the portraits and mirror
+mode. The far kart is the near one welded and clustered at run time (`src/kart/render/farLod.ts`), not a model of its
+own, so it follows any change to the bodies for free.
 
 ## The natural worlds (`art/kart/world/nature*.py`)
 

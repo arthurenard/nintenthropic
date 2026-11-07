@@ -787,7 +787,9 @@ that file exists (`render/art.ts`).
   is the driver's own unless it would vanish into the paint (cream on yellow),
   when it becomes near-black or white; on the golden kart it is cream. The
   pattern is welded into the kart's body geometry when it is made: no draw call,
-  no shader. The far kart is the same welded mesh. The coachwork below is placed
+  no shader. The far kart (34 m and beyond) is the whole kart welded, driver at rest, then thinned by
+  vertex clustering on a 0.2 m grid (`render/farLod.ts`, surfaces kept apart so chrome stays chrome and
+  paint stays paint): about 2 to 3k triangles against 22k welded, with its own brake-light skin. The coachwork below is placed
   for the sprint kart and moves for the buggy and the muscle kart (`weight` in
   `kartExtras`). **Faces and looks.** The modelled drivers' eyes are 14% bigger
   with a larger glint (`EYE_GROW`), and their brows and mouths are drawn live
@@ -797,8 +799,12 @@ that file exists (`render/art.ts`).
   grin with a tongue at a cheer or the finish, relaxed on the grid; a mood is held
   0.22 s before a milder one replaces it, a hit or a cheer shows at once. The
   face is welded onto the head's own geometry (one per mood, made when first
-  worn and shared by the species' brow and mouth shapes), so it costs no draw call.
-  The code-built stand-ins keep their own fixed faces. Each driver blinks (`drivers/face.ts`:
+  worn and shared by the species' brow and mouth shapes; the racing face is made when
+  the driver is), so it costs no draw call. Every modelled species has a mouth that
+  changes: the rabbit, fox, otter, bear, frog and cat draw a smile, a gritted slot,
+  an O and an open grin; the penguin and the duck part their beak in a dark gape
+  (open a little at the strain, wide when hit, curled at a cheer); the robot's
+  screen mouth is lit (dots, a bar, a zigzag, a ring, a smile). The code-built stand-ins keep their own fixed faces. Each driver blinks (`drivers/face.ts`:
   one lid mesh in the face's colour that slides down over the bead eyes, every
   2.2 to 5.4 s, now and then twice, about 0.2 s, each driver at its own
   times; no draw call while the eyes are open) and shuts its eyes in a

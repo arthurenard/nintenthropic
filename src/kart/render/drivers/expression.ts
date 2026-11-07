@@ -44,6 +44,8 @@ interface MouthSpec {
   colour: string;
   /** A mouth too wide for an open shape (a frog's) opens narrower. */
   wide?: boolean;
+  /** A beak: closed it shows nothing, hit or cheering it parts in a dark gape across the seam. A "led" mouth is lit (a robot's). */
+  kind?: "beak" | "led";
 }
 
 interface FaceSpec {
@@ -54,13 +56,14 @@ interface FaceSpec {
 /** Where each species' brows and mouth are, in the head's space (the numbers its model was built to carry them at). */
 export const FACES: Partial<Record<Species, FaceSpec>> = {
   rabbit: { brow: { x: 0.115, y: 0.118, length: 0.07, slant: 0.25, arch: 0.01, r: 0.0075, colour: "#8c7468" }, mouth: { half: 0.045, y: -0.098, depth: 0.016, r: 0.0052, colour: "#8a5a55" } },
-  penguin: { brow: { x: 0.1, y: 0.105, length: 0.07, slant: 0.2, arch: 0.01, r: 0.0075, colour: "#232738" } },
+  penguin: { brow: { x: 0.1, y: 0.105, length: 0.07, slant: 0.2, arch: 0.01, r: 0.0075, colour: "#232738" }, mouth: { half: 0.055, y: -0.082, depth: 0.012, r: 0.0055, colour: "#2a1208", kind: "beak" } },
   frog: { mouth: { half: 0.16, y: -0.095, depth: 0.04, r: 0.0062, colour: "#2f3a22", wide: true } },
   fox: { brow: { x: 0.118, y: 0.128, length: 0.085, slant: 0.3, arch: 0.012, r: 0.0085, colour: "#3a231d" }, mouth: { half: 0.075, y: -0.112, depth: 0.02, r: 0.0058, colour: "#3f2620" } },
   otter: { brow: { x: 0.115, y: 0.122, length: 0.075, slant: 0.28, arch: 0.01, r: 0.008, colour: "#3e281a" }, mouth: { half: 0.07, y: -0.145, depth: 0.025, r: 0.0055, colour: "#4a2e20" } },
-  cat: { brow: { x: 0.115, y: 0.125, length: 0.07, slant: 0.3, arch: 0.01, r: 0.0075, colour: "#a85514" } },
+  cat: { brow: { x: 0.115, y: 0.125, length: 0.07, slant: 0.3, arch: 0.01, r: 0.0075, colour: "#a85514" }, mouth: { half: 0.065, y: -0.098, depth: 0.014, r: 0.0052, colour: "#6a3a22" } },
   bear: { brow: { x: 0.13, y: 0.13, length: 0.08, slant: -0.15, arch: 0.012, r: 0.0095, colour: "#3a2113" }, mouth: { half: 0.055, y: -0.135, depth: 0.03, r: 0.0055, colour: "#1d1816" } },
-  duck: { brow: { x: 0.125, y: 0.14, length: 0.075, slant: 0.3, arch: 0.012, r: 0.008, colour: "#9a7a14" } },
+  duck: { brow: { x: 0.125, y: 0.14, length: 0.075, slant: 0.3, arch: 0.012, r: 0.008, colour: "#9a7a14" }, mouth: { half: 0.07, y: -0.09, depth: 0.012, r: 0.0055, colour: "#3a1a06", kind: "beak" } },
+  robot: { mouth: { half: 0.08, y: -0.085, depth: 0.03, r: 0.009, colour: "#5ad8e0", kind: "led" } },
 };
 
 /** How a mood moves the brows: slant added, arch multiplied, lift in metres, thickness multiplied. */
@@ -137,6 +140,46 @@ function mouth(b: MeshBuilder, head: BufferGeometry, spec: MouthSpec, mood: Mood
     if (tongue > 0) b.as(SURF.fur, () => b.blob(0, y - ry * 0.45, z + 0.004, rx * tongue, ry * 0.5, 0.012, TONGUE, 0));
   };
   const w = spec.wide ? 0.55 : 1;
+  if (spec.kind === "beak") {
+    // A dark gape along the beak's seam (a thread pressed to its surface, thicker the wider it opens).
+    const gape = (half: number, y: number, r: number, curl: number): void => {
+      const pts: Vector3[] = [];
+      for (let k = 0; k < 7; k++) {
+        const x = -half + (2 * half * k) / 6;
+        const yy = y + curl * (x / half) ** 2;
+        pts.push(new Vector3(x, yy, at(x, yy) + 0.001));
+      }
+      b.as(SURF.cloth, () => thread(b, pts, r, INK));
+    };
+    if (mood === "shocked") gape(spec.half * 0.9, spec.y - 0.004, 0.017, 0);
+    else if (mood === "happy") gape(spec.half, spec.y + 0.002, 0.011, 0.014);
+    else if (mood === "effort") gape(spec.half * 0.85, spec.y, 0.0045, 0);
+    return;
+  }
+  if (spec.kind === "led") {
+    // A lit mouth: dots at rest, a bar while racing, a zigzag at the strain, a ring when hit, a smile at a cheer.
+    const glow: Rgb = [0.35, 2.3, 2.5];
+    const lit = (fn: () => void): void => b.as(SURF.lamp, fn);
+    const line = (pts: [number, number][], r: number): void => lit(() => thread(b, pts.map(([x, y]) => new Vector3(x, y, at(x, y) + 0.002)), r, glow));
+    switch (mood) {
+      case "calm":
+        for (const [x, r] of [[-0.075, 0.018], [0, 0.022], [0.075, 0.018]] as const) lit(() => b.blob(x, spec.y, at(x, spec.y) - 0.002, r, 0.013, 0.01, glow, 1));
+        break;
+      case "determined":
+        line([[-spec.half, spec.y], [0, spec.y], [spec.half, spec.y]], 0.008);
+        break;
+      case "effort":
+        line([[-spec.half, spec.y], [-0.04, spec.y + 0.014], [0, spec.y - 0.014], [0.04, spec.y + 0.014], [spec.half, spec.y]], 0.007);
+        break;
+      case "shocked":
+        lit(() => b.blob(0, spec.y - 0.005, at(0, spec.y) - 0.002, 0.026, 0.03, 0.01, glow, 1));
+        break;
+      case "happy":
+        line([[-spec.half, spec.y + 0.012], [-0.04, spec.y - 0.012], [0.04, spec.y - 0.012], [spec.half, spec.y + 0.012]], 0.009);
+        break;
+    }
+    return;
+  }
   switch (mood) {
     case "calm":
       arc(spec.half, spec.y, spec.depth, spec.r);
@@ -203,6 +246,9 @@ export class Face {
   ) {
     this.faces = MOODS.map((m) => faceGeometry(species, head, m));
     if (!this.faces[0]) throw new Error("no face");
+    this.show(0);
+    // The face worn while racing is made now, not mid-race.
+    this.show(MOODS.indexOf("determined"));
     this.show(0);
   }
 

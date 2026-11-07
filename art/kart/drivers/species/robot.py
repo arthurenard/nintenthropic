@@ -31,9 +31,7 @@ def build():
     for sx in (-1, 1):
         eye = S.box((sx * 0.1, 0.03, 0.245), (0.05, 0.042, 0.012), 0.012)
         h.solid(eye, (sx * 0.1 - 0.1, -0.05, 0.2), (sx * 0.1 + 0.1, 0.12, 0.3), h=0.004, tris=60, albedo=GLOW, mat="glow", ao=0.0, reach=0.02, symmetric=False)
-    for x, r in ((-0.075, 0.018), (0.0, 0.022), (0.075, 0.018)):
-        dot = S.ellipsoid((x, -0.085, 0.247), (r, 0.013, 0.01))
-        h.solid(dot, (x - 0.05, -0.15, 0.2), (x + 0.05, -0.02, 0.3), h=0.003, tris=26, albedo=GLOW * 0.8, mat="glow", ao=0.0, reach=0.02, symmetric=False)
+    # The mouth (a row of lit dots) is drawn live by the game (src/kart/render/drivers/expression.ts).
     # The cap, a brim and the headphones: the kart's colour.
     cap = Part("robot", "helmet", HEAD_AT)
     flat = S.intersect(S.ellipsoid((0, 0.17, -0.01), (0.285, 0.15, 0.27)), lambda P: 0.15 - P[:, 1], 0.012)

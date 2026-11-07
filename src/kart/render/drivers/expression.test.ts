@@ -64,9 +64,9 @@ describe("a driver's face", () => {
     expect(face.current).toBe("happy");
   });
 
-  it("is left to the species that have one: a robot's screen and the stand-ins' own faces get none", () => {
+  it("is left to the stand-ins, which draw their own, and a species with no spec throws", () => {
     const h = head();
-    expect(() => new Face("robot", h, new Mesh(h, new MeshBasicMaterial()))).toThrow();
+    expect(() => new Face("nobody" as "fox", h, new Mesh(h, new MeshBasicMaterial()))).toThrow();
     // The code-built stand-in (no art loaded here) wears no live face, only its lids.
     const d = createDriver("fox", "#ff453a", [0, 0, 0]);
     expect(() => d.update({ time: 1, steer: 0, lean: 0, twirl: 0 })).not.toThrow();
