@@ -64,7 +64,7 @@ test("a scripted run of hits earns awards on the results, a grudge in the next i
   const intro = page.locator(".rival-intro");
   await expect(intro).toBeVisible({ timeout: 20_000 });
   await expect(intro.locator(".rival-line")).toHaveText(/^Hana vs Gus: \d+-\d+$/);
-  await expect(intro.locator(".rival-basis")).toHaveText("Spin-outs between them");
+  await expect(intro.locator(".rival-basis")).toHaveText("Hits between them");
   await shot(page, info, "rivals-intro", 300);
   // The marker hovers over their kart, in the one viewport, once they are in sight.
   const mark = page.locator(".gp-rival-mark");

@@ -170,7 +170,7 @@ describe("grudges", () => {
     const g = pairGrudge(t, kit, mango)!;
     expect(grudgeLine(g)).toBe("Kit vs Mango: 2-1");
     expect(g.basis).toBe("hits");
-    expect(grudgeBasis(g)).toBe("Spin-outs between them");
+    expect(grudgeBasis(g)).toBe("Hits between them");
   });
 
   it("names the one ahead first", () => {
