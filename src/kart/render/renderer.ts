@@ -56,7 +56,7 @@ import { DIVIDER, PostChain, type DrawViews } from "./post";
 import { GpuTimer } from "./gpuTimer";
 import { pointScale } from "./points";
 import { Skids } from "./skids";
-import { QUALITY, capTier, hudBlurFor, type QualitySettings, type Tier } from "./quality";
+import { QUALITY, capTier, hudBlurFor, pixelRatioFor, type QualitySettings, type Tier } from "./quality";
 import { Things } from "./things";
 import { slotsFromThings, rowSlots, type BoxSlot } from "./world/boxes";
 import { createWorld, type World } from "./world";
@@ -338,7 +338,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
 
   /** The most of its resolution the picture may use (limitResolution): below 1 while the hand tracker is short of the GPU. */
   let ceiling = 1;
-  const pixelRatio = () => Math.max(0.5, Math.min(dpr, settings.pixelRatioCap) * Math.min(resolution.scale, ceiling));
+  const pixelRatio = () => pixelRatioFor(dpr, settings, Math.min(resolution.scale, ceiling), width, height);
 
   const applySize = () => {
     renderer.setPixelRatio(pixelRatio());

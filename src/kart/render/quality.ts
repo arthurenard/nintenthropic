@@ -40,6 +40,8 @@ export interface QualitySettings {
   particles: number;
   /** The most the device pixel ratio may count for. */
   pixelRatioCap: number;
+  /** The most pixels the race's picture may have in all, whatever the window: a TV or a 5K display at 2x asks for 8 to 15 million, each with four samples of 16-bit colour. */
+  pixelBudget: number;
   anisotropy: number;
   /** Pixels on a side of the road texture. */
   roadTexture: number;
@@ -67,6 +69,7 @@ export const QUALITY: Record<Tier, QualitySettings> = {
     detailedTyres: true,
     particles: 1400,
     pixelRatioCap: 2,
+    pixelBudget: 6500000,
     anisotropy: 8,
     roadTexture: 1024,
     glassBlur: true,
@@ -85,6 +88,7 @@ export const QUALITY: Record<Tier, QualitySettings> = {
     detailedTyres: true,
     particles: 900,
     pixelRatioCap: 1.75,
+    pixelBudget: 4500000,
     anisotropy: 4,
     roadTexture: 1024,
     glassBlur: true,
@@ -103,6 +107,7 @@ export const QUALITY: Record<Tier, QualitySettings> = {
     detailedTyres: false,
     particles: 450,
     pixelRatioCap: 1.25,
+    pixelBudget: 2500000,
     anisotropy: 2,
     roadTexture: 512,
     glassBlur: false,
@@ -115,6 +120,19 @@ export const QUALITY: Record<Tier, QualitySettings> = {
     groundTile: 80,
   },
 };
+
+/**
+ * The pixel ratio the race's picture is drawn at: the screen's, no higher than the tier's cap, times the resolution the
+ * race has settled on, and brought down further where that would put more than the tier's budget of pixels on the
+ * canvas (a big window or a TV). The HUD is HTML and stays as sharp as the screen; only the 3D is a little softer.
+ * A 1440 x 900 window at 2x (5.2 million) and a 16-inch MacBook at its native size (7.7) are under or near the high
+ * tier's budget, so they are drawn as before.
+ */
+export function pixelRatioFor(dpr: number, tier: QualitySettings, scale: number, width: number, height: number): number {
+  // The budget comes first and the race's own resolution is a share of what it leaves, so each step of dynamic resolution still takes pixels away.
+  const base = Math.min(dpr, tier.pixelRatioCap, Math.sqrt(tier.pixelBudget / Math.max(1, width * height)));
+  return Math.max(0.5, base * scale);
+}
 
 /**
  * Whether the HUD's glass blurs the picture behind it. Blurring a canvas that changes every frame is work for the GPU's
