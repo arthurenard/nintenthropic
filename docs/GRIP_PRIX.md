@@ -887,8 +887,8 @@ heard and let go after half a second of silence, and is told only what has moved
   final lap (0.45), being hit, a storm's bolt or a skyrocket bursting near (0.5), a blast or a fall (0.6), the start
   boost (0.65), the third drift boost (0.72), a nitro (0.78); a lighter dip never cuts a deeper one short. Measured
   over three laps of eight bots on Meadow Loop with one kart in view, the sliders where a new player finds them: the
-  whole mix −18.1 LUFS (true peak −2.4 dBTP), the effects −19.7 (−21.8 before the engines were remade) and the music
-  −22.9; each place alone −34 to −36.
+  whole mix −17.0 LUFS (true peak −1.4 dBTP), the effects −18.2 (−19.7 before the engines were raised 2.5 dB and the
+  rooms added) and the music −22.9; each place alone −34 to −36.
 - **What it costs.** Measured over a race of eight bots on Kitchen Rally with four views (Meadow Loop with one), against
   a bus that only counts, in Node on the M4 Max: the audio code takes 0.011 ms a frame with four views and 0.007 with one
   (CPU time, the least of three runs for each second of the race, medians of three alternating runs of the checkout
