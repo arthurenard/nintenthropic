@@ -659,7 +659,7 @@ export const VOLCANO_RUSH: TrackDef = {
   theme: "volcano",
   laps: 3,
   width: 14,
-  blurb: "Black rock and rivers of lava: switchback up the volcano's flank, weave along the ridge, then dive off the brow, over a lava gap and across the stone bridge.",
+  blurb: "Black rock and rivers of lava: switchback up the flank, get fired over a lava tongue by the geyser cannon, weave the erupting ridge, then glide off the brow and down the mountain to the stone bridge.",
   points: [
     // The start straight, then left onto the volcano's flank.
     { x: 0, z: 0 },
@@ -796,7 +796,7 @@ export const STARLIGHT_RIBBON: TrackDef = {
   theme: "space",
   laps: 3,
   width: 20,
-  blurb: "The finale, a ribbon of light over a ringed planet: roll through the twist, fly two crests, swing round the banked carousel, leap between two ribbons.",
+  blurb: "The finale, a ribbon of light over a ringed planet: roll through the twist, float over two crests, swing round the carousel under a meteor shower, glide down and get fired across the gap between two ribbons.",
   bank: 8,
   points: [
     // Off the line and up into the twist: the ribbon rolls one way, then the other, as it climbs.
@@ -923,7 +923,7 @@ export const FIVE_FINGER_CIRCUIT: TrackDef = {
   theme: "palm",
   laps: 3,
   width: 13,
-  blurb: "An island shaped like an open hand: up and down every finger, round the thumb, and back along the wrist.",
+  blurb: "An island shaped like an open hand: up and down every finger, a cannon off the wrist, and a glide from the thumb's tip down to the water.",
   secret: true,
   points: [
     { x: 0, z: 0 },
