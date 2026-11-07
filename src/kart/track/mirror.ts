@@ -10,7 +10,7 @@
  * twice gives the same object (the sim's and the picture's per-track caches
  * are keyed by it). Its id is the original's plus MIRROR_SUFFIX.
  */
-import type { TrackDef } from "./geometry";
+import type { HazardDef, TrackDef } from "./geometry";
 import { trackById } from "./tracks";
 
 export const MIRROR_SUFFIX = "-mirror";
@@ -27,6 +27,21 @@ function withDefined<T extends object, K extends keyof T>(object: T, key: K, val
   return value === undefined ? object : { ...object, [key]: value };
 }
 
+/**
+ * A hazard in a mirror: its offset flips, and so does which way a swinging ball starts and a crosser crosses (the sign
+ * of their `span`), so a pendulum is at the mirrored place at the same moment.
+ */
+function mirrorHazard(hazard: HazardDef): HazardDef {
+  const out = withDefined({ ...hazard }, "offset", flipped(hazard.offset));
+  if (hazard.motion === "swing") out.span = -(hazard.span ?? 5);
+  else if (hazard.motion === "slide") {
+    // Without a span the direction is `dir` (left to right when absent): it flips instead.
+    if (hazard.span !== undefined) out.span = -hazard.span;
+    if (hazard.span === undefined || hazard.dir !== undefined) out.dir = (hazard.dir ?? 1) === 1 ? -1 : 1;
+  }
+  return out;
+}
+
 /** The track as seen in a mirror. */
 export function mirrorTrack(def: TrackDef): TrackDef {
   const known = mirrors.get(def);
@@ -39,12 +54,13 @@ export function mirrorTrack(def: TrackDef): TrackDef {
     drops: def.drops?.map((drop) => (drop.side === "both" ? { ...drop } : { ...drop, side: swapSide(drop.side) })),
     verges: def.verges?.map((verge) => ({ ...verge, side: swapSide(verge.side) })),
     surfaces: def.surfaces?.map((surface) => withDefined({ ...surface }, "offset", flipped(surface.offset))),
-    hazards: def.hazards?.map((hazard) => withDefined({ ...hazard }, "offset", flipped(hazard.offset))),
+    hazards: def.hazards?.map((hazard) => mirrorHazard(hazard)),
+    air: def.air?.map((section) => withDefined({ ...section }, "offset", flipped(section.offset))),
     landmarks: def.landmarks?.map((landmark) => withDefined({ ...landmark, offset: flip(landmark.offset) }, "turn", flipped(landmark.turn))),
     duck: def.duck ? { ...def.duck, offset: flip(def.duck.offset) } : undefined,
   };
   // Optional fields the original did not have stay absent, not undefined.
-  for (const key of ["boostPads", "drops", "verges", "surfaces", "hazards", "landmarks", "duck"] as const) {
+  for (const key of ["boostPads", "drops", "verges", "surfaces", "hazards", "air", "landmarks", "duck"] as const) {
     if (mirrored[key] === undefined) delete mirrored[key];
   }
   mirrors.set(def, mirrored);

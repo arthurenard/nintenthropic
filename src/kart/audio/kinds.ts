@@ -13,7 +13,7 @@ export type TrackTheme = TrackDef["theme"];
  * faster final-lap version, which the race switches to by itself); "race"
  * means the theme loaded with ``load``. "menu" and "lobby" share a tune.
  */
-export type MusicKind = TrackTheme | "race" | "menu" | "lobby" | "results" | "results-win" | "podium";
+export type MusicKind = TrackTheme | "race" | "menu" | "lobby" | "results" | "results-win" | "podium" | "jingle-win" | "jingle-lose";
 
 /** The piece that plays for a kind (a theme's own tune; "lobby" is the menu's). */
 export function pieceFor(kind: MusicKind, loaded: TrackTheme | null): PieceId | null {
@@ -45,6 +45,8 @@ export type KartSound =
   | "finish-win"
   | "finish-ok"
   | "cheer"
+  /** The results' applause. */
+  | "applause"
   /** The photo finish's camera. */
   | "shutter"
   /** The Konami code: the gold sting, the same as the arcade's (a core cue, loaded with the engine). */
@@ -64,6 +66,7 @@ export const SOUND_CUES: Record<KartSound, string> = {
   "finish-win": "kart_finish_win",
   "finish-ok": "kart_finish_ok",
   cheer: "kart_cheer",
+  applause: "kart_applause",
   shutter: "kart_shutter",
   gold: "ui_gold",
 };

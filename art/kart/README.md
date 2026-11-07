@@ -10,7 +10,7 @@ stand-in (src/kart/render/art.ts loads what exists).
 
 | File (`public/assets/kart/`) | Built by | What | Budget |
 | --- | --- | --- | --- |
-| `karts.glb` | `art/kart/karts/` | `kart.body` (the whole fixed kart; material "paint" takes the racer's colour), `kart.wheel` (one, rear size, origin at its hub, axis x, outer face +x; the game scales it 0.84 for the front), `kart.steering` (ring in xy, origin at its hub). Material names the game reads: paint, trim, stripe, chrome, rim, steel, rubber, tread, plastic, seat, lamp, tail, glass (src/kart/render/kartArt.ts). AO is in the vertex colours | ≤ 12k tris, ≤ 0.6 MB |
+| `karts.glb` | `art/kart/karts/` | Three bodies by weight class: `kart.body` (the sprint kart, also named `kart.body.middle`), `kart.body.light` (open buggy on a roll cage) and `kart.body.heavy` (wide-fendered muscle kart); `kart.wheel` (middle, five spokes), `kart.wheel.light` (eight wire spokes) and `kart.wheel.heavy` (deep dish with lug nuts), each one wheel, rear size, origin at its hub, axis x, outer face +x (the game scales it 0.84 for the front); `kart.steering` (ring in xy, origin at its hub); and `kart.livery.<class>.<pattern>` (27 small decal meshes in material "livery": flames, spots, checks, waves, tiger, chevrons, bolts, diamonds, twin; projected onto that class's hull). Material names the game reads: paint, trim, livery, stripe, chrome, rim, steel, rubber, tread, plastic, seat, lamp, tail, glass (src/kart/render/kartArt.ts). AO is in the vertex colours | each body <= 9.5k tris (middle about 8.2k, light 7.6k, heavy 9.1k), a livery <= 1.3k, file <= 1 MB |
 | `drivers.glb` | `art/kart/drivers/` | `driver.<species>.<part>` for the nine species: head, torso, arm.L, arm.R, helmet, and the bits that move on their own (tail, scarf, sac, bulb); each node's translation is its joint | ≤ 5k tris per driver, ≤ 1.5 MB |
 | `world-<theme>.glb` | `art/kart/world/` | `landmark.<kind>` (the doc's theme table), `scenery.<kind>.<n>` (trees, rocks...) | ≤ 3 MB each |
 | `poster.webp`, `title.webp`, `icon.png`, `icon-180.png` | `art/kart/poster/` | Key art for the home page's card, the title screen's background and the app icon: Blender Cycles renders of the game's own models (see "The key art") | poster 1600×900 ≤ 250 KB, title 2560×1440 ≤ 450 KB |
@@ -38,6 +38,23 @@ stand-in (src/kart/render/art.ts loads what exists).
   frame: x metres right of the centre line, z along the road centred on 0,
   cut into pieces of 3 m or less along z so the game can bend it.
 
+## The karts (`art/kart/karts/`)
+
+    /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P art/kart/karts/build.py
+
+One script builds all three bodies. `PROFILES` holds each class's tub (the hull's keys: z, half-width, bottom, top,
+squareness, and the cockpit well); `use_profile(name)` picks the one `hull()` lofts. `Shell` wraps a hull for questions
+(where its surface is, projections onto it); `build_middle`, `build_light` and `build_heavy` assemble a class's body
+from small helpers shared between them (`seat`, `coil` springs, `fender` arches, `megaphones`, `lamp`, `mirrors`,
+`front_suspension`, `rear_suspension`). The hubs, the exhaust mouths (`EXHAUST`) and the number plate (`PLATE_Z`,
+`PLATE_Y`) are the same for every class: the sim, the effects and the game's plate depend on them. Keep each body
+inside `KART_HALF_WIDTH` (src/kart/render/kartSpec.ts); `KART_LEDGER=1` prints which lines spend the triangles.
+
+The liveries are `pattern(name, ...)` (primitives: ribbons, discs, quads, in a window's own 2D metres) and `decal(...)`,
+which projects them onto the hull from the side (flanks) or from above (hood) and lifts them 6 mm. They are exported
+as separate nodes, one per class and pattern, and the game welds the driver's own into the body (src/kart/render/livery.ts
+chooses the colour). Add a pattern to `LIVERIES` and `pattern()`, then to a driver in `src/kart/characters.ts`.
+
 ## The drivers (`art/kart/drivers/`)
 
 Built in Blender from signed-distance shapes (sdflib.py: smooth unions, surface nets, exact normals, ambient
@@ -46,7 +63,10 @@ occlusion from the field), decimated with Blender's own decimator, coloured per 
     /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup -P art/kart/drivers/build.py [-- --only fox,cat]
 
 `species/<name>.py` models one driver; `shared.py` is what they have in common (the racing suit, gloved arms, the
-helmet, eyes, brows, smiles, whiskers). Parts are modelled in their own space, driver facing +z, left = +x: the
+helmet, eyes, whiskers). Brows and smiles are NOT modelled: `brow()` and `smile()` there draw nothing, because the game
+draws them live so they can change with the driver's mood (src/kart/render/drivers/expression.ts holds where each
+species' brows and mouth go, in the head's space; the cat's "w" and the robot's row of lit dots are drawn there too, and the penguin's and the duck's beaks part there). The eyes are drawn `EYE_GROW` (1.14) times the size a species asks
+for, and face.ts's eyelids follow. Parts are modelled in their own space, driver facing +z, left = +x: the
 head about its centre (0, 0.84, 0.06), an arm along +z from its shoulder (+-shoulder, 0.46, 0.02), the torso about
 the hips. The game (src/kart/render/drivers/fromArt.ts) joins a part's pieces into one geometry and reads each
 piece's material by name:
@@ -58,6 +78,14 @@ piece's material by name:
 
 A species with all four of head, torso, arm.L, arm.R is built from the art; any missing piece of a bit (tail,
 scarf...) is the code-built one. The helmet joins the head. Otherwise the driver is the code-built stand-in.
+
+### Not yet checked on screen (karts and drivers)
+
+The three bodies, the liveries and the faces were judged on the turntable (front, back, chase angle, the nine-driver
+grid) and in the dev race, whose karts have no character, so every kart there is a sprint kart. Before merging, look at
+a light and a heavy driver in a real chase-camera race, the podium, the driver-select stage, the portraits and mirror
+mode. The far kart is the near one welded and clustered at run time (`src/kart/render/farLod.ts`), not a model of its
+own, so it follows any change to the bodies for free.
 
 ## The natural worlds (`art/kart/world/nature*.py`)
 

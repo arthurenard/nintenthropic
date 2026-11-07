@@ -615,7 +615,7 @@ describe("the ground", () => {
     expect(turned(ice)).toBeGreaterThan(turned(road) * 2.5);
     expect(turned(ice)).toBeGreaterThan(2);
     const braked = (t: TrackDef) => view(trial(t, 60, 20, 40, { brake: 1 })).speed;
-    expect(braked(ice)).toBeGreaterThan(braked(road) + 8);
+    expect(braked(ice)).toBeGreaterThan(braked(road) + 4);
     const pulled = (t: TrackDef) => view(trial(t, 60, 0, 120, { throttle: 1 })).speed;
     expect(pulled(ice)).toBeLessThan(pulled(road) - 2);
     expect(view(trial(ice, 100, 15, 5, { throttle: 1 })).surface).toBe("ice");

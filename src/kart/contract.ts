@@ -45,7 +45,7 @@ export interface DriveInput {
   steer: number;
   /** 0..1. With the wheel, 1 while the hands are fists: karts accelerate on their own. */
   throttle: number;
-  /** 0..1. Held at a standstill it reverses (the sim decides when). */
+  /** 0..1. Held, it slows the kart and then backs it up. */
   brake: number;
   /** Held to drift: true while the drift button is held (keys and pads; the wheel drifts with `slide`). */
   drift: boolean;
@@ -161,8 +161,8 @@ export type RaceEvent = { id: number; tick: number } & (
   | { type: "lap"; kart: number; lap: number }
   | { type: "final-lap"; kart: number }
   | { type: "finish"; kart: number; place: number; time: number }
-  /** Off a ramp's lip into the air, or (`crest`) off the top of a hill taken fast. */
-  | { type: "jump"; kart: number; crest?: boolean }
+  /** Off a ramp's lip into the air, or (`crest`) off the top of a hill taken fast, or (`arc`) thrown by a cannon, a glide's lift-off or a half-pipe lip. */
+  | { type: "jump"; kart: number; crest?: boolean; arc?: "cannon" | "glide" | "lip" }
   /**
    * A trick in the air (it boosts on landing): the drift button or a shake.
    * `kick`: a shake right at a ramp's lip, which also throws the jump higher and further.
@@ -219,10 +219,14 @@ export interface KartView {
   /** In the air (a hop, a jump), metres above the road. */
   hop: number;
   offroad: boolean;
+  /** Against a barrier this tick (a glancing rub or a hit), for the scrape's sound. */
+  rub?: boolean;
   /** What it is driving on. */
   surface: Surface | "road";
   /** Seconds since a trick began in the air (for its animation), 0 when none. */
   trick: number;
+  /** 1 while gliding under a parasol (a glide section, sim/air.ts), else 0. Optional: none is 0. */
+  glide?: number;
   /**
    * Seconds left of a rescue (0 when none): it fell, the drone lifts it
    * back to the road and lets it go. The picture draws it falling for the

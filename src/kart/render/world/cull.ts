@@ -108,6 +108,9 @@ export class CulledInstances {
     return this.cells.length;
   }
 
+  /** The runs of one view's cells, as pairs of (first, count): kept, so a frame makes no array for each. */
+  private readonly runs: number[] = [];
+
   /** The mesh a view draws (made when first asked for). */
   private meshFor(view: number): InstancedMesh {
     let mesh = this.meshes[view];
@@ -128,6 +131,8 @@ export class CulledInstances {
     mesh.updateMatrix();
     mesh.visible = false;
     first.parent?.add(mesh);
+    // The renderer works the scene's matrices out once a frame, before this view's mesh exists: this one's is brought up now.
+    mesh.updateWorldMatrix(true, false);
     this.meshes[view] = mesh;
     return mesh;
   }
@@ -145,7 +150,8 @@ export class CulledInstances {
     // The cells in view, as runs of the sorted arrays (neighbouring cells join up).
     let hash = 0;
     let n = 0;
-    const runs: number[] = [];
+    const runs = this.runs;
+    runs.length = 0;
     for (let i = 0; i < this.cells.length; i++) {
       const cell = this.cells[i]!;
       if (!frustum.intersectsSphere(cell.sphere)) continue;

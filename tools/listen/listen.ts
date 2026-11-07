@@ -120,7 +120,9 @@ async function renderListen(spec: ListenSpec): Promise<ListenResult> {
       void ctx.resume();
     });
   }
+  const r0 = performance.now();
   const buffer = await ctx.startRendering();
+  const renderMs = performance.now() - r0;
   audio.dispose();
   try {
     engine.dispose();
@@ -133,6 +135,7 @@ async function renderListen(spec: ListenSpec): Promise<ListenResult> {
     right: toBase64(buffer.getChannelData(1).slice()),
     sampleRate: SR,
     seconds,
+    renderMs,
     frameMs: { mean: times.reduce((a, b) => a + b, 0) / times.length, p95: sorted[Math.floor(0.95 * (sorted.length - 1))]!, worst: sorted.at(-1)! },
     fired,
     most,

@@ -1,7 +1,7 @@
 /**
  * The contract between the app, the input, the audio and the games.
  *
- * Every part of Super Claude Bros. is built against these types; see
+ * Every part of Nintenthropic is built against these types; see
  * docs/WEB_ARCHITECTURE.md for what each one means in play. Change them only
  * deliberately, and update every implementation in the same change.
  */

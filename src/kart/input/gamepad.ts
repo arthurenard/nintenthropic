@@ -4,7 +4,7 @@
  *
  *   left stick (or the d-pad)   steer
  *   right trigger               throttle
- *   left trigger                brake, and back up if held at a standstill
+ *   left trigger                brake, and back up if held
  *   A                           drift, held (in the air: a trick)
  *   the stick left, right, left  a shake (in the air: a trick)
  *   B or X                      use the item

@@ -388,7 +388,7 @@ describe("forgetting", () => {
     expect(forgetSavedAims(storage)).toBe(0);
   });
 
-  it("everything takes all Super Claude Bros. keeps, in both storages, and nothing of anyone else's", () => {
+  it("everything takes all Nintenthropic keeps, in both storages, and nothing of anyone else's", () => {
     const local = kept();
     const session = new MemoryStorage();
     session.setItem("handy.unlocks.v1", '["golden"]');

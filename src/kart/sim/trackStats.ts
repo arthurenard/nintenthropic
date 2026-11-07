@@ -20,6 +20,8 @@ export interface TrackStats {
   fallRate: number;
   rescues: number;
   hazardHits: number;
+  /** The same, by the kind of hazard that hit (and where along the lap, to the hundredth), to see which set piece bites. */
+  hitsBy: Record<string, number>;
   jumps: number;
   tricks: number;
   tricked: number;
@@ -46,6 +48,7 @@ export function trackStats(track: TrackDef, options: { seed?: number; laps?: num
   let falls = 0;
   let rescues = 0;
   let hazardHits = 0;
+  const hitsBy: Record<string, number> = {};
   let jumps = 0;
   let tricks = 0;
   let tricked = 0;
@@ -65,7 +68,11 @@ export function trackStats(track: TrackDef, options: { seed?: number; laps?: num
         const k = v.karts[e.kart]!;
         fallAt.push(Math.round(k.lapProgress * 1000) / 1000);
       } else if (e.type === "rescued") rescues++;
-      else if (e.type === "hazard") hazardHits++;
+      else if (e.type === "hazard") {
+        hazardHits++;
+        const key = `${e.kind}@${(Math.round(v.karts[e.kart]!.lapProgress * 100) / 100).toFixed(2)}`;
+        hitsBy[key] = (hitsBy[key] ?? 0) + 1;
+      }
       else if (e.type === "jump") jumps++;
       else if (e.type === "trick") tricks++;
       else if (e.type === "land" && e.boost) tricked++;
@@ -103,6 +110,7 @@ export function trackStats(track: TrackDef, options: { seed?: number; laps?: num
     fallRate: falls / (karts * laps),
     rescues,
     hazardHits,
+    hitsBy,
     jumps,
     tricks,
     tricked,

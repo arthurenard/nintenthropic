@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bannerFor, placeChange, PLACE_POP } from "./hud";
+import { bannerFor, mapIsDue, placeChange, PLACE_POP } from "./hud";
 
 describe("the banners under the item slot", () => {
   it("show one at a time: a skyrocket on its way, then the wrong way, then the final lap", () => {
@@ -21,5 +21,14 @@ describe("the place", () => {
   it("pops at most a few times a second, so two karts side by side do not make it flicker", () => {
     expect(PLACE_POP).toBeGreaterThanOrEqual(0.25);
     expect(PLACE_POP).toBeLessThanOrEqual(0.6);
+  });
+});
+
+describe("the minimap's clock", () => {
+  it("draws the first time, then every 30 ms, and at once after the clock restarts", () => {
+    expect(mapIsDue(0, -Infinity, 0.03)).toBe(true);
+    expect(mapIsDue(0.02, 0, 0.03)).toBe(false);
+    expect(mapIsDue(0.03, 0, 0.03)).toBe(true);
+    expect(mapIsDue(0.5, 3, 0.03)).toBe(true);
   });
 });

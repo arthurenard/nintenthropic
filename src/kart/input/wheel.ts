@@ -21,7 +21,7 @@
  * Times are seconds inside, milliseconds at the doors (a frame's capturedAt,
  * sample's `now`), as the rest of the tracker's clock is.
  */
-import { OneEuroFilter } from "../../input/filter";
+import { OneEuroFilter, Velocity } from "../../input/filter";
 import type { DriveInput, WheelHand, WheelStatus } from "../contract";
 import type { HandFrame, SeenHand } from "../../tracking/types";
 import { edgeWay, type Way } from "./edges";
@@ -41,16 +41,42 @@ export const WHEEL = {
   deadZone: 4,
   /** Steer = (how far into the lock, 0..1) to this power: below 1 would be twitchy, above 1 is gentle near the centre. */
   curve: 1.5,
-  /** The angle's One Euro filter: steady when the wheel rests, quick when it is turned fast. */
-  smoothing: { minCutoff: 1.5, beta: 0.05 },
-  /** Both hands open this long: brake, seconds. */
-  brakeAfter: 0.15,
+  /**
+   * The angle's One Euro filter: steady when the wheel rests, quick when it is turned fast. Measured on made-up
+   * noise of 0.4 to 1 degree (docs/GRIP_PRIX.md, Input): 1.5/0.05 lagged 40 ms behind a wheel turned 30 degrees a
+   * second, 20 ms at 90; 2/0.1 lags 27 and 13 ms, and rests within 0.1 degree of as steady (the dead zone hides it).
+   */
+  smoothing: { minCutoff: 2, beta: 0.1 },
+  /**
+   * Between camera frames (30 a second, the kart ticking at 60) the angle carries on at the speed it was turning, for
+   * at most this long, seconds: the steer glides instead of stepping, and is a frame less late. Zero when the wheel rests.
+   */
+  lead: 0.045,
+  /**
+   * The lead fades in with the speed: none below the first of these, all of it at the second, degrees a second. Hands
+   * that rest wobble at up to 40 or so degrees a second on the camera's noise (measured on real hands, fixtures/moves.json),
+   * and carrying that on would only make the steer jitter; a wheel being turned goes 100 and more.
+   */
+  leadSpeed: [20, 60],
+  /**
+   * A frame is some time old when it arrives (the camera, the read, the worker's answer: tracker.ts measures 40 to 90
+   * ms). The wheel carries on that far at its speed too, this share of the delay measured (the frame's arrival less
+   * the moment the camera took it, when that is a believable 0 to 250 ms), so the kart steers where the hands are
+   * rather than where they were; a fifth, because a lead longer overshoots a wheel that stops (0.5 overshot a fast stop by 7 degrees, 0.2 by 3).
+   */
+  compensate: 0.2,
+  /** Both hands open this long (after each has held open, Grip): brake, seconds. */
+  brakeAfter: 0.1,
   /** A hand open for longer than this and closed again is not a flick, seconds. */
   flick: 0.6,
   /** Both hands opening within this of each other is a brake, never an item, seconds. */
   together: 0.25,
-  /** A shake: the wheel's angle swinging back this many degrees the other way counts as a reversal (shake.ts has the rest). */
-  shake: { swing: 14 },
+  /**
+   * A shake: the wheel's angle swinging back this many degrees the other way counts as a reversal (shake.ts has the
+   * rest). A person's shake swings 70 to 90 degrees a stroke (measured, fixtures/moves.json); the wobble of hands coming
+   * down from a cheer swings 13 or 14 and was counted at 14.
+   */
+  shake: { swing: 17 },
   /** One hand gone: hold the angle this long, then ease to the centre over `ease`, seconds. */
   oneHand: { hold: 0.4, ease: 0.6 },
   /** Both gone: steer eases to the centre after `hold` over `ease`; throttle stops after `throttle`; mode says lost after `mode`. */
@@ -226,6 +252,13 @@ export class WheelReader {
 
   private readonly slots: Record<Side, Slot> = { left: newSlot(), right: newSlot() };
   private readonly filter = new OneEuroFilter(WHEEL.smoothing.minCutoff, WHEEL.smoothing.beta);
+  /** How fast the smoothed angle is turning, degrees a second, and when it was last set (seconds). */
+  private readonly speed = new Velocity(6);
+  private turnedAt = -Infinity;
+  /** The last frame's step in the smoothed angle, degrees a second. */
+  private step = 0;
+  /** How old frames are on arrival, seconds (smoothed). */
+  private delay = 0;
   private readonly gestures = new Gestures();
   /** The smoothed wheel angle before the level is taken away, degrees, unwrapped (it can pass 180). */
   private angle = 0;
@@ -260,6 +293,8 @@ export class WheelReader {
   push(frame: HandFrame, at: number = frame.capturedAt): void {
     if (!readsSeat(frame, this.seat)) return;
     const t = this.advance(at);
+    const old = at - frame.capturedAt;
+    if (old >= 0 && old <= 250) this.delay += (old / 1000 - this.delay) * 0.1;
     const seen = this.assign(this.candidates(frame, t), t);
     for (const side of SIDES) {
       const slot = this.slots[side];
@@ -291,11 +326,12 @@ export class WheelReader {
       if (fresh || this.gestures.stands(t) || this.braking) this.shaker.reset();
       else this.shaker.push(t, this.angle);
     } else {
-      this.shaker.reset();
+      // A hand lost for a frame or two (the tracker misses one now and then) does not end a shake in the making.
+      if (t - this.lastBothSeen > WHEEL.present) this.shaker.reset();
       this.restartAutoLevel();
     }
     this.settle(t);
-    this.gestures.frame(t, this.aspect, this.gestureHand("left", t), this.gestureHand("right", t), shapeSteer(this.angleAt(), this.steering), this.braking);
+    this.gestures.frame(t, this.aspect, this.gestureHand("left", t), this.gestureHand("right", t), shapeSteer(this.angleAt(t), this.steering), this.braking);
   }
 
   /**
@@ -519,9 +555,19 @@ export class WheelReader {
 
   /** Turns the two palms into the wheel's angle (and feeds the level helper). */
   private turn(left: HandReading, right: HandReading, t: number, fresh: boolean): void {
-    if (fresh) this.filter.reset();
+    if (fresh) {
+      this.filter.reset();
+      this.speed.reset();
+    }
     const degrees = wheelAngle(left, right, this.aspect, this.haveAngle && !fresh ? this.angle : null);
+    const before = this.angle;
+    const dt = t - this.turnedAt;
     this.angle = this.filter.filter(degrees, t);
+    this.speed.update(this.angle, t);
+    // The latest step alone: when the wheel has just stopped it is already near zero while the smoothed speed is not.
+    // Frames that arrive close together (a worker delivering two at once) say little of the speed: at least a 60 Hz tick.
+    this.step = fresh || !(dt > 0) ? 0 : (this.angle - before) / Math.max(dt, 1 / 60);
+    this.turnedAt = t;
     this.haveAngle = true;
     if (this.auto) this.watchLevel(t);
   }
@@ -589,6 +635,9 @@ export class WheelReader {
     this.braking =
       this.slotHeld(left, t) &&
       this.slotHeld(right, t) &&
+      // A hand's first frame back is not braked on until a second says the same (Grip.steady).
+      left.grip.steady &&
+      right.grip.steady &&
       left.grip.state === "open" &&
       right.grip.state === "open" &&
       t - Math.max(left.grip.since, right.grip.since) >= WHEEL.brakeAfter &&
@@ -607,8 +656,23 @@ export class WheelReader {
   }
 
   /** The wheel's turn, degrees from level, as the kart should see it (smoothed, eased out when hands are gone). */
-  private angleAt(): number {
-    return wrap(this.angle - this.levelDegrees) * this.fade;
+  private angleAt(t: number = this.time): number {
+    return wrap(this.angle + this.lead(t) - this.levelDegrees) * this.fade;
+  }
+
+  /** How far on the wheel has probably turned since the last frame: its speed over the time since, up to WHEEL.lead. */
+  private lead(t: number): number {
+    const since = t - this.turnedAt;
+    if (!(since >= 0) || !this.haveAngle) return 0;
+    // With no new frame for a while (a hand lost) the speed is stale: the lead fades out between 0.1 and 0.2 s.
+    const ahead = Math.min(since, WHEEL.lead) + WHEEL.compensate * this.delay;
+    // The slower of the smoothed speed and the last step, and none if they disagree: a wheel stopping is not carried past.
+    const smoothed = this.speed.value;
+    const speed = smoothed * this.step > 0 ? Math.sign(smoothed) * Math.min(Math.abs(smoothed), Math.abs(this.step)) : 0;
+    const moving = smooth((Math.abs(speed) - WHEEL.leadSpeed[0]) / (WHEEL.leadSpeed[1] - WHEEL.leadSpeed[0]));
+    if (moving === 0) return 0;
+    // Past full lock the steer cannot go further (shapeSteer saturates), so the lead cannot push the kart beyond it.
+    return speed * moving * ahead * (1 - smooth((since - 0.1) / 0.1));
   }
 
   private modeAt(t: number): WheelStatus["mode"] {
@@ -633,8 +697,8 @@ export class WheelReader {
       hands: hands as WheelStatus["hands"],
       left,
       right,
-      angle: this.angleAt(),
-      steer: shapeSteer(this.angleAt(), this.steering),
+      angle: this.angleAt(t),
+      steer: shapeSteer(this.angleAt(t), this.steering),
       grip,
       mode: this.modeAt(t),
       levelled: this.isLevelled,
@@ -663,7 +727,7 @@ export class WheelReader {
     // coasts on for half a second (a dropped frame must not stop it) and then lifts.
     const throttle = mode === "drive" ? 1 : mode === "lost" && t - this.lastAnySeen <= WHEEL.noHands.throttle ? 1 : 0;
     return {
-      steer: shapeSteer(this.angleAt(), this.steering),
+      steer: shapeSteer(this.angleAt(t), this.steering),
       throttle,
       brake: mode === "brake" ? 1 : 0,
       // The wheel drifts only with open hands, which brake going straight or slowly and drift in a bend at speed: the

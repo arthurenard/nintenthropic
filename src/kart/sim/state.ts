@@ -20,12 +20,13 @@ export const ITEM_USES: Readonly<Partial<Record<ItemKind, number>>> = { nitro3: 
 
 /** Millimetres (or milliseconds, or milli-anything). */
 export function q3(v: number): number {
-  return Math.round(v * 1000) / 1000;
+  // + 0: a tiny negative rounds to -0, which JSON turns into 0 (a snapshot must survive the trip unchanged).
+  return Math.round(v * 1000) / 1000 + 0;
 }
 
 /** A tenth of a milliradian. */
 export function q4(v: number): number {
-  return Math.round(v * 10000) / 10000;
+  return Math.round(v * 10000) / 10000 + 0;
 }
 
 /** An angle brought into -pi..pi. */
@@ -97,6 +98,7 @@ export interface KartState {
   boost: number;
   spin: number;
   flood: number;
+  /** The brake pedal's build-up, in ticks (it grows while the brake is held, fades when let go). Named `stand` on the wire. */
   stand: number;
   /** Ticks in a row the throttle has been on while counting down. */
   held: number;
@@ -115,6 +117,8 @@ export interface KartState {
   s: number;
   offset: number;
   offroad: boolean;
+  /** Pressed against a barrier this tick (heard as a scrape; not part of a snapshot). */
+  rub: boolean;
   /** Net distance travelled along the lap from the start line, metres (negative on the grid). */
   progress: number;
   /** The boost pad (index + 1) the kart is on, -1 on a boost strip, or 0. */
@@ -128,9 +132,10 @@ export interface KartState {
   vy: number;
   /**
    * 0 on the ground (a kart just off a crest, not yet high enough to be a jump, is 0 with `aloft` counting), 1 in a
-   * jump (or dropping off a ramp's lip too slow to fly), 2 in a jump where a trick is allowed.
+   * jump (or dropping off a ramp's lip too slow to fly), 2 in a jump where a trick is allowed,
+   * 3 in a planned arc (a cannon or a lip: tricks allowed), 4 gliding under a parasol (sim/air.ts).
    */
-  flight: 0 | 1 | 2;
+  flight: 0 | 1 | 2 | 3 | 4;
   /** Ticks since a trick began in the air, or 0. */
   trick: number;
   /** Ticks since the kart left the ground (up to 255), 0 on it. */

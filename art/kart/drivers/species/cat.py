@@ -60,12 +60,7 @@ def build():
         stripe_piece(h, face, sx * 0.268, -0.045, 0.026, 80 * sx, width=0.014)
         H.brow(h, face, sx * 0.115, 0.125, length=0.07, slant=0.3, arch=0.01, r=0.0075, colour=STRIPE * 0.55)
     stripe_piece(h, face, 0.0, 0.2, 0.05, 0, width=0.016)
-    # A little "w" of a mouth.
-    for sx in (-1, 1):
-        pts = S.surface_point(face2, np.array([sx * 0.0, sx * 0.02, sx * 0.045, sx * 0.065]), np.array([-0.07, -0.098, -0.11, -0.098]))
-        pts = pts + S.normals(face2, pts) * -0.003
-        v, nn, fc = S.tube(pts, [0.0052, 0.0052, 0.0048, 0.003], 5)
-        h.mesh(v, nn, fc, "cloth", H.lin("#6a3a22"))
+    # The mouth is drawn live by the game (src/kart/render/drivers/expression.ts).
     H.whiskers(h, face2, 0.12, -0.09, length=0.2, count=2, spread=0.04)
     parts.append(h)
 

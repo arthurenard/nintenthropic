@@ -82,6 +82,13 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
   private readonly master: GainNode;
   private readonly reverbIn: GainNode;
   private readonly reverbReturn: GainNode;
+  private readonly convolver: ConvolverNode;
+  private readonly glue: DynamicsCompressorNode;
+  private readonly trim: GainNode;
+  private readonly limiter: DynamicsCompressorNode;
+  private roomSwap: ReturnType<typeof setTimeout> | null = null;
+  /** The reverb return's level before a slow-motion swell: REVERB_RETURN until a game sets its own place. */
+  private reverbLevel = REVERB_RETURN;
   private music: GainNode | null = null;
   private voices: Voice[] = [];
   private readonly loops = new Set<LoopState>();
@@ -127,7 +134,17 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
     // And behind it a soft clip, in case anything outruns the limiter's attack.
     const clip = ctx.createWaveShaper();
     clip.curve = softClipCurve();
-    this.master.connect(limiter).connect(clip).connect(ctx.destination);
+    // Ahead of the limiter, a glue stage that does nothing (ratio 1) until a game asks for it with setMix.
+    const glue = ctx.createDynamicsCompressor();
+    glue.threshold.value = 0;
+    glue.knee.value = 0;
+    glue.ratio.value = 1;
+    glue.attack.value = 0.012;
+    glue.release.value = 0.22;
+    this.glue = glue;
+    this.trim = ctx.createGain();
+    this.limiter = limiter;
+    this.master.connect(glue).connect(this.trim).connect(limiter).connect(clip).connect(ctx.destination);
 
     this.muffle = ctx.createBiquadFilter();
     this.muffle.type = "lowpass";
@@ -157,6 +174,7 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
     ir.copyToChannel(l as Float32Array<ArrayBuffer>, 0);
     ir.copyToChannel(r as Float32Array<ArrayBuffer>, 1);
     convolver.buffer = ir;
+    this.convolver = convolver;
     this.reverbIn = ctx.createGain();
     this.reverbReturn = ctx.createGain();
     this.reverbReturn.gain.value = REVERB_RETURN;
@@ -428,6 +446,54 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
     return this.music;
   }
 
+  /**
+   * Swap the reverb's room for a game's own (a track's place): an impulse response (energy-normalised, any
+   * length) and the return's level. The sends already in flight keep ringing in the new room.
+   */
+  setImpulse(left: Float32Array, right: Float32Array, level = REVERB_RETURN): void {
+    if (this.closed) return;
+    const ir = this.ctx.createBuffer(2, left.length, this.ctx.sampleRate);
+    ir.copyToChannel(left as Float32Array<ArrayBuffer>, 0);
+    ir.copyToChannel(right as Float32Array<ArrayBuffer>, 1);
+    this.swapRoom(ir, level);
+  }
+
+  /** Back to the town's room and a plain master (a game that never asked for another must not inherit the last one's). */
+  resetRoom(): void {
+    if (this.closed) return;
+    const [l, r] = townImpulse(this.ctx.sampleRate);
+    this.setImpulse(l, r, REVERB_RETURN);
+    this.setMix({});
+  }
+
+  /**
+   * The master's finish for a game that wants it: a glue compressor (gentle, so a pile-up of engines and effects
+   * sits together, with a trim in dB to bring the compressor's make-up back to the target loudness) and the limiter's ceiling in dBFS. With nothing given the master is the arcade's plain one.
+   */
+  setMix(mix: { glue?: { threshold: number; ratio: number; knee?: number }; ceiling?: number; trimDb?: number }): void {
+    if (this.closed) return;
+    this.trim.gain.value = Math.pow(10, (mix.trimDb ?? 0) / 20);
+    const g = mix.glue;
+    this.glue.threshold.value = g ? g.threshold : 0;
+    this.glue.ratio.value = g ? g.ratio : 1;
+    this.glue.knee.value = g ? g.knee ?? 10 : 0;
+    this.limiter.threshold.value = mix.ceiling ?? -1.5;
+  }
+
+  /** A new room is swapped in while the return is silent, so a ringing send never clicks at the change. */
+  private swapRoom(ir: AudioBuffer, level: number): void {
+    if (this.roomSwap !== null) clearTimeout(this.roomSwap);
+    this.reverbReturn.gain.cancelScheduledValues(this.ctx.currentTime);
+    this.reverbReturn.gain.setTargetAtTime(0, this.ctx.currentTime, 0.012);
+    this.roomSwap = setTimeout(() => {
+      this.roomSwap = null;
+      if (this.closed) return;
+      this.convolver.buffer = ir;
+      this.reverbLevel = level;
+      this.applyFilters();
+    }, 70);
+  }
+
   setFilter(name: "hurt" | "slowmo", amount: number): void {
     if (this.closed) return;
     const x = clamp(amount, 0, 1);
@@ -438,7 +504,7 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
       this.slowmo = x;
       if (slowmoEngaged(before, x)) this.playInternal("slowmo_boom", {}, true);
     } else {
-      this.warnOnce(`filter:${String(name)}`, `Super Claude Bros. audio: no filter named "${String(name)}"`);
+      this.warnOnce(`filter:${String(name)}`, `Nintenthropic audio: no filter named "${String(name)}"`);
       return;
     }
     this.applyFilters();
@@ -461,7 +527,7 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
 
   private spec(cue: string): CueSpec | undefined {
     const spec = Object.prototype.hasOwnProperty.call(CUES, cue) ? CUES[cue] : undefined;
-    if (!spec) this.warnOnce(cue, `Super Claude Bros. audio: no sound named "${cue}"`);
+    if (!spec) this.warnOnce(cue, `Nintenthropic audio: no sound named "${cue}"`);
     return spec;
   }
 
@@ -678,7 +744,7 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
     this.muffle.frequency.setTargetAtTime(Math.min(h.cutoff, s.cutoff), now, 0.06);
     this.muffle.Q.setTargetAtTime(h.q, now, 0.06);
     this.duck.gain.setTargetAtTime(h.duck, now, 0.08);
-    this.reverbReturn.gain.setTargetAtTime(REVERB_RETURN * s.reverb, now, 0.2);
+    this.reverbReturn.gain.setTargetAtTime(this.reverbLevel * s.reverb, now, 0.2);
     if (Math.abs(s.rate - this.rate) > 1e-4) {
       const stretch = this.rate / s.rate;
       this.rate = s.rate;

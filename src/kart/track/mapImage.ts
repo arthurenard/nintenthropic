@@ -237,6 +237,15 @@ export function trackMapSvg(def: TrackDef, options: MapOptions = {}): string {
     push(`<text x="${px(p.x) + 3}" y="${py(p.z) + 4}" font-size="12" font-weight="700" fill="#b88700" stroke="${background}" stroke-width="3" paint-order="stroke">ramp${ramp.trick === false ? "" : " *"}</text>`);
   }
 
+  // Launch and air sections: the flight as a band over the road, the pad bright at its start.
+  for (const a of def.air ?? []) {
+    const s = a.at * geo.length;
+    push(`<polygon points="${band(s, s + a.length, (x) => -half(x) * 0.6, (x) => half(x) * 0.6)}" fill="#00b7d4" opacity="0.28" stroke="#0089a3" stroke-width="1" stroke-dasharray="5 4"/>`);
+    push(`<polygon points="${band(s - 6, s, (x) => -half(x), (x) => half(x))}" fill="#00b7d4" opacity="0.85" stroke="#006b80" stroke-width="1"/>`);
+    const p = geo.point(s, -half(s) - 5);
+    push(`<text x="${(px(p.x) - 4).toFixed(1)}" y="${(py(p.z) + 4).toFixed(1)}" font-size="12" font-weight="700" fill="#0089a3" stroke="${background}" stroke-width="3" paint-order="stroke" text-anchor="end">${a.kind} ${a.length} m</text>`);
+  }
+
   // Hazards: their paths in orange, and a ring where each is at time 0.
   for (const h of def.hazards ?? []) {
     const path: string[] = [];
@@ -284,6 +293,7 @@ export function trackMapSvg(def: TrackDef, options: MapOptions = {}): string {
     ["#e5334b", "open edge / gap"],
     ["#e8890c", "verge barrier"],
     ["#ffd60a", "ramp (* trick)"],
+    ["#00b7d4", "cannon / glide / lip"],
     ["#ff6a00", "hazard path"],
     ["#5b2fd0", "landmark"],
     ["#ffb020", "item row"],

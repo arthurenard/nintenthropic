@@ -70,15 +70,21 @@ export const kitchen: PieceSpec = {
   key: { tonic: "F", scale: "major" },
   bpm: 140,
   swing: 0.6,
+  race: true,
   rack: {
-    bass: { inst: "pizz", level: -2, pan: -0.15 },
-    chords: { inst: "epiano", level: -3, pan: 0.3, reverb: 0.15, chorus: 0.25 },
-    lead: { inst: "trumpet-muted", level: 0, reverb: 0.2, delay: 0.1 },
-    vibes: { inst: "vibes", level: -1, pan: -0.3, reverb: 0.3, delay: 0.15 },
+    bass: { inst: "upright", level: -2, pan: -0.15, highpass: 40, comp: { threshold: -17, ratio: 3, attack: 0.012, release: 0.12 } },
+    chords: { inst: "rhodes", level: -3, pan: 0.3, reverb: 0.15, chorus: 0.2, highpass: 180, tremolo: { rate: 4.6, depth: 0.14, pan: true } },
+    lead: { inst: "trumpet-mute", level: 0, reverb: 0.2, delay: 0.1, highpass: 350 },
+    vibes: { inst: "vibes", level: -1, pan: -0.3, reverb: 0.3, delay: 0.15, highpass: 200 },
     celesta: { inst: "celesta", level: -6, pan: 0.35, reverb: 0.35, delay: 0.2 },
-    drums: { inst: "drums", level: -3 },
+    horns: { inst: "brass-stab", level: -5, pan: -0.15, reverb: 0.25, highpass: 250 },
+    drums: { inst: "drums", level: -3.5, kit: "brush" },
   },
-  fx: { reverb: { t60: 1.1, size: 0.5, mix: 0.25 }, delay: { beats: 0.75, feedback: 0.25, tone: 3000, mix: 0.15 } },
+  fx: {
+    reverb: { t60: 1.2, size: 0.5, mix: 0.25, predelay: 0.015 },
+    delay: { beats: 0.75, feedback: 0.25, tone: 3000, mix: 0.15 },
+    master: { air: 1 },
+  },
   sections: [
     {
       name: "A",

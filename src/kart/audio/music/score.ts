@@ -19,6 +19,7 @@
 import { Rng, hashSeed } from "../../../audio/dsp/rng";
 import type { DrumKind } from "../../../audio/dsp/voices";
 import { BASS_PATTERNS, COMP_PATTERNS, type BassPatternName, type CompPatternName, degreeSemitones } from "./patterns";
+import type { KitStyle } from "./kit";
 import { type Chord, type ScaleName, bassNote, chordPitchClasses, noteToMidi, parseChord, voicing } from "./theory";
 
 // --- what a piece is made of -----------------------------------------------------------------------
@@ -94,6 +95,11 @@ export interface SectionSpec {
   parts: Record<string, Part>;
   /** Everything's velocity, a build-up or a breakdown (default 1). */
   level?: number;
+  /**
+   * A modulation: every pitched part of the section (and the chords it is written over) plays this many semitones higher
+   * than written, so a final chorus can be the same chorus a tone up without being written twice.
+   */
+  shift?: number;
 }
 
 export interface RackEntry {
@@ -114,13 +120,33 @@ export interface RackEntry {
   chorus?: number;
   /** A low-pass over the whole part, Hz. */
   lowpass?: number;
+  /** A high-pass over the whole part, Hz (keeps the low end clear for the bass and the kick). */
+  highpass?: number;
+  /** Peaking EQ bands, [Hz, Q, dB]. */
+  eq?: readonly (readonly [number, number, number])[];
+  /** Saturation of the summed part (a guitar amp, a tape): 1 clean, 3 crunchy, 6 fuzz. */
+  drive?: number;
+  /** A rotating speaker: rate Hz (slow 0.7, fast 6.5) and depth 0..1. */
+  rotary?: { rate: number; depth: number };
+  /** Tremolo or auto-pan: rate Hz, depth 0..1. */
+  tremolo?: { rate: number; depth: number; pan?: boolean };
+  /** A compressor on the part. */
+  comp?: { threshold: number; ratio: number; attack: number; release: number; makeup?: number };
+  /** Sidechain pump: the part ducks by this much (0..1) at every kick of the piece's drums. */
+  duck?: number;
+  /** Stereo width of the part (1 as it is). */
+  width?: number;
+  /** For drums: the kit (see ./kit.ts). */
+  kit?: KitStyle;
 }
 
 export interface PieceFx {
   /** Reverb tail, seconds to fall 60 dB; size 0..1; the wet return level. */
-  reverb: { t60: number; size: number; mix: number };
+  reverb: { t60: number; size: number; mix: number; predelay?: number; damping?: number };
   /** Ping-pong delay: time in beats, feedback 0..0.8, darkness (low-pass Hz), return level. */
   delay?: { beats: number; feedback: number; tone: number; mix: number };
+  /** The bus: glue compression threshold (dBFS, default -22), stereo width (default 1.12) air (high shelf dB at 9 kHz, default 1.5) and loudness (dB around the shared -18 dBFS RMS, -3..+2, so a calm piece sits a little under a driving one). */
+  master?: { glue?: number; width?: number; air?: number; loud?: number };
 }
 
 export interface PieceSpec {
@@ -134,6 +160,10 @@ export interface PieceSpec {
   rack: Record<string, RackEntry>;
   sections: SectionSpec[];
   fx: PieceFx;
+  /** A one-shot (a jingle, a stinger): played once, never folded into a loop, its tail left to ring. */
+  oneShot?: boolean;
+  /** A race theme: it also gets the invincibility layer and, in its final-lap version, the stinger. */
+  race?: boolean;
 }
 
 // --- what a score is ------------------------------------------------------------------------------------
@@ -159,6 +189,8 @@ export interface ScoreNote {
   chord?: string;
   /** The sixteenth-note step of the bar it starts on (tunes only). */
   step?: number;
+  /** The section's modulation, semitones (0 in the piece's own key); the chord symbol above is as written, before it. */
+  shift?: number;
 }
 
 export interface ScoreHit {
@@ -175,6 +207,8 @@ export interface Score {
   bars: ScoreBar[];
   notes: ScoreNote[];
   hits: ScoreHit[];
+  /** Where each section starts and ends in the score, seconds. */
+  sections: { name: string; start: number; end: number }[];
   /** Mistakes found while compiling (a tune that does not fill its section...). Empty in a good piece. */
   warnings: string[];
   tempoScale: number;
@@ -267,6 +301,7 @@ export function compile(spec: PieceSpec, options: CompileOptions = {}): Score {
   const bars: ScoreBar[] = [];
   const notes: ScoreNote[] = [];
   const hits: ScoreHit[] = [];
+  const sections: Score["sections"] = [];
 
   let clock = 0;
   spec.sections.forEach((section, sectionIndex) => {
@@ -276,6 +311,8 @@ export function compile(spec: PieceSpec, options: CompileOptions = {}): Score {
     const barDur = (beats * 60) / (bpm * tempoScale);
     const chordBars = parseChordBars(section.chords);
     const level = section.level ?? 1;
+    const modulation = section.shift ?? 0;
+    const sectionStart = clock;
     const firstBar = bars.length;
     for (let b = 0; b < section.bars; b++) bars.push({ start: clock + b * barDur, dur: barDur, beats, bpm: bpm * tempoScale, section: sectionIndex, index: b });
     const barAt = (b: number): ScoreBar => bars[firstBar + b]!;
@@ -328,7 +365,7 @@ export function compile(spec: PieceSpec, options: CompileOptions = {}): Score {
                   part: name,
                   time: when(b, at) + slip(),
                   dur: length(Math.min(item.dur, slotLen - item.step), b),
-                  midi: midi + transpose,
+                  midi: midi + transpose + modulation,
                   vel: force((part.vel ?? 0.85) * item.accent),
                 });
               }
@@ -354,7 +391,7 @@ export function compile(spec: PieceSpec, options: CompileOptions = {}): Score {
                     part: name,
                     time: when(b, at) + (part.roll ?? 0) * k + slip(),
                     dur,
-                    midi: midi + transpose,
+                    midi: midi + transpose + modulation,
                     vel: force((part.vel ?? 0.7) * (1 - 0.04 * k)),
                   });
                 });
@@ -391,7 +428,7 @@ export function compile(spec: PieceSpec, options: CompileOptions = {}): Score {
                   part: name,
                   time: when(b, at) + slip(),
                   dur: length(part.every * (part.gate ?? 0.8), b),
-                  midi: ladder[index]! + transpose,
+                  midi: ladder[index]! + transpose + modulation,
                   vel: force((part.vel ?? 0.6) * (s % 4 === 0 ? 1 : 0.85)),
                 });
               }
@@ -416,10 +453,11 @@ export function compile(spec: PieceSpec, options: CompileOptions = {}): Score {
                 part: name,
                 time: when(b, inBar) + slip(),
                 dur: length(n.dur * gate, b),
-                midi: midi + (part.shift ?? 0) + transpose,
+                midi: midi + (part.shift ?? 0) + transpose + modulation,
                 vel: force((part.vel ?? 0.8) * (n.accent ? 1.18 : 1)),
                 chord: chord.symbol,
                 step: inBar,
+                shift: modulation,
               });
             }
           }
@@ -467,9 +505,13 @@ export function compile(spec: PieceSpec, options: CompileOptions = {}): Score {
       }
     }
     clock += section.bars * barDur;
+    sections.push({ name: section.name, start: sectionStart, end: clock });
   });
 
+  // (A humanising slip before the first beat would cut the start off a note that opens the loop.)
+  for (const n of notes) if (n.time < 0) n.time = 0;
+  for (const h of hits) if (h.time < 0) h.time = 0;
   notes.sort((a, b) => a.time - b.time);
   hits.sort((a, b) => a.time - b.time);
-  return { id: spec.id, duration: clock, bars, notes, hits, warnings, tempoScale, transpose };
+  return { id: spec.id, duration: clock, bars, notes, hits, sections, warnings, tempoScale, transpose };
 }

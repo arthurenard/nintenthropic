@@ -52,16 +52,22 @@ export const funfair: PieceSpec = {
   name: "Fun Fair",
   key: { tonic: "G", scale: "major" },
   bpm: 168,
+  race: true,
   rack: {
-    bass: { inst: "sub", level: -2, pan: -0.1 },
-    chords: { inst: "organ-soft", level: -3, pan: 0.25, reverb: 0.15 },
-    lead: { inst: "organ-pipe", level: 0, reverb: 0.25 },
-    brass: { inst: "brass", level: 0, pan: -0.2, reverb: 0.2 },
-    glock: { inst: "glock", level: -1, pan: 0.3, reverb: 0.35, delay: 0.15 },
-    sparkle: { inst: "glock", level: -4, pan: -0.3, reverb: 0.35 },
-    drums: { inst: "drums", level: -3 },
+    // The oom of the oom-pah: an upright with a tuba's weight.
+    bass: { inst: "upright", level: -2, pan: -0.1, highpass: 40, comp: { threshold: -17, ratio: 3, attack: 0.01, release: 0.1 } },
+    chords: { inst: "organ-soft", level: -3, pan: 0.25, reverb: 0.15, highpass: 180, rotary: { rate: 4.8, depth: 0.5 } },
+    lead: { inst: "calliope", level: 0, reverb: 0.28, highpass: 300, rotary: { rate: 5.6, depth: 0.3 }, comp: { threshold: -15, ratio: 2.5, attack: 0.01, release: 0.12 } },
+    brass: { inst: "brass-section", level: -1, pan: -0.2, reverb: 0.22, highpass: 250 },
+    glock: { inst: "ice-bell", level: -2, pan: 0.3, reverb: 0.35, delay: 0.15 },
+    sparkle: { inst: "music-box", level: -4.5, pan: -0.3, reverb: 0.35 },
+    drums: { inst: "drums", level: -3, kit: "march" },
   },
-  fx: { reverb: { t60: 1.0, size: 0.55, mix: 0.2 }, delay: { beats: 0.75, feedback: 0.25, tone: 3500, mix: 0.12 } },
+  fx: {
+    reverb: { t60: 1.3, size: 0.65, mix: 0.24, predelay: 0.014 },
+    delay: { beats: 0.75, feedback: 0.25, tone: 3500, mix: 0.12 },
+    master: { air: 2 },
+  },
   sections: [
     {
       name: "Waltz",

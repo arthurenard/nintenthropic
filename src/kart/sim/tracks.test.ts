@@ -25,12 +25,12 @@ const LANDMARKS: Record<TrackTheme, string[]> = {
 };
 const HAZARDS: Record<TrackTheme, string[]> = {
   meadow: [],
-  canyon: ["boulder", "tumbleweed"],
+  canyon: ["boulder", "tumbleweed", "ore-cart", "wrecking-ball", "rock-crusher"],
   harbour: ["crab", "forklift"],
   kitchen: ["orange", "pea", "teacup"],
-  snow: ["penguin", "snowball", "yeti"],
+  snow: ["penguin", "snowball", "yeti", "icicle"],
   volcano: ["fireball", "boulder", "geyser"],
-  funfair: ["teacup-ride", "bumper-car"],
+  funfair: ["teacup-ride", "bumper-car", "arm-ball", "funhouse-panel", "mallet", "swing-boat"],
   space: ["asteroid", "comet"],
   palm: ["crab", "coconut", "beach-ball"],
 };

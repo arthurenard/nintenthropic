@@ -1,136 +1,120 @@
 /**
- * Harbour Lights: night on the quay, in synthwave. A minor at 116 beats a
- * minute, a rolling sixteenth bass, a gated glowing pad, plucked sixteenth
- * arpeggios and a saw lead through a dotted-eighth echo over a four-on-the-
- * floor 808 kick. 28 bars, about 58 seconds: a drums-and-arp intro that
- * teases the hook (4), the verse (8), the chorus that opens up with a square
- * lead an octave above (8), a break with a distant ship's horn and a snare
- * riser (4), and a last half-chorus that ends on E to fall back into the top.
+ * Harbour Lights: the quay at night, as a lounge band would play a sea song.
+ * D minor at 108 beats a minute with the eighths swung into a long, rolling
+ * triplet lilt; an upright walking under a soft Rhodes, a smoky saxophone
+ * singing the tune, an accordion answering low (the shanty), a nylon guitar
+ * picking harp-like runs, vibes in the bridge and brushes on the drums.
+ *
+ * The form: a four-bar intro (harp and Rhodes, the sax's pickup), the tune (A),
+ * the shanty chorus on the flat sixth and seventh with the accordion beside it
+ * (B), a four-bar vibes bridge into F, the tune again a whole tone up with
+ * horns and vibes added (the lift), and a two-bar turn on the dominant. 34
+ * bars, about 76 seconds.
  */
 import { arp, bass, chords, drums, tune } from "./dsl";
 import type { PieceSpec } from "../score";
 
-// Verse: Am F C G twice, in the synthwave 3 + 3 + 2 rhythm.
-const VERSE =
-  "e5:3 a5:3 g5:2 e5:4 c5:2 d5:2 | c5:3 f5:3 e5:2 c5:4 a4:4 | " +
-  "e5:3 g5:3 c6:2 g5:4 e5:4 | d5:3 g5:3 b5:2 g5:4 d5:4 | " +
-  "e5:3 a5:3 c6:2 b5:4 a5:2 e5:2 | a5:3 c6:3 a5:2 f5:4 c5:2 a4:2 | " +
-  "g5:3 e5:3 g5:2 c6:4 g5:4 | d5:3 b4:3 g4:2 b4:4 d5:4";
+// Eight bars over Dm9 Gm7 Bbmaj7 A7 | Dm9 Gm7 Em7b5|A7 Dm: up the D minor chord, home through the dominant.
+const A =
+  "a4:2 d5:2 f5:4 a5:6 g5:2 | g5:2 f5:2 d5:4 bb4:4 d5:4 | bb4:2 d5:2 f5:4 a5:6 f5:2 | e5:4 g5:2 e5:2 c#5:4 a4:4 | " +
+  "a4:2 d5:2 f5:4 a5:4 c6:4 | bb5:4 a5:2 g5:2 f5:4 d5:4 | g5:4 e5:4 c#5:2 e5:2 g5:2 a5:2 | d5:8 r:4 a4:2 d5:2";
 
-// The intro teases the hook: two empty bars, then the verse's bars over C and G.
-const TEASE = "r:32 e5:3 g5:3 c6:2 g5:4 e5:4 | d5:3 g5:3 b5:2 g5:4 d5:4";
+// Eight bars over Bb C Dm F | Bb C A7sus4 A7: the chorus, the shanty's flat seventh pulling to the tonic.
+const B =
+  "d6:6 c6:2 bb5:4 f5:4 | g5:6 e5:2 c5:4 e5:4 | f5:4 a5:4 d6:8 | c6:6 a5:2 f5:4 a5:4 | " +
+  "d6:6 c6:2 bb5:4 d6:4 | e6:6 d6:2 c6:4 g5:4 | a5:8 d6:4 e6:4 | c#6:4 e6:4 a5:8";
 
-// Chorus over F G Am Em | F G Am E: long notes that ring out, then quick turns.
-const CHORUS_A = "c6:6 a5:2 c6:4 a5:2 f5:2 | b5:6 g5:2 b5:4 g5:2 d5:2 | e5:2 a5:4 c6:2 b5:4 a5:2 e5:2 | g5:6 e5:2 g5:4 b5:4";
-const CHORUS_B = "c6:6 a5:2 c6:4 a5:2 f5:2 | b5:6 g5:2 d5:4 g5:4 | a5:2 c6:4 e6:2 c6:4 a5:4 | b5:6 g#5:2 e5:4 g#5:4";
-// The last half-chorus climbs to the high E, then falls through the leading tone back to the A.
-const CHORUS_END = "c6:4 a5:2 f5:2 c6:6 a5:2 | b5:6 g5:2 d5:4 g5:4 | a5:2 c6:4 e6:2 c6:4 a5:4 | b5:6 g#5:2 e5:4 g#5:4";
+// The accordion walks beside the chorus: long notes, a third or a sixth under the sax.
+const ACCORDION =
+  "bb4:8 f4:8 | e4:8 g4:8 | a4:8 f4:8 | a4:8 c5:8 | bb4:8 d5:8 | e5:8 c5:8 | d5:8 g4:8 | e4:8 a4:8";
 
-// The break: held notes over Dm Am F G, the last one climbing into the chorus.
-const BREAK = "a5:8 f5:4 d5:4 | e5:8 c5:4 a4:4 | a5:8 c6:4 a5:4 | g5:4 b5:4 d6:8";
-// A ship's horn, far off: a fifth over the Dm and a fifth over the F.
-const HORN = "d3+a3:12 r:4 | r:16 | f3+c4:12 r:4 | r:16";
+// Four bars over Gm7 C7 Fmaj7 Bbmaj7: the vibes alone, in F.
+const BRIDGE = "bb5:4 d6:4 g6:8 | e6:6 c6:2 g5:4 e5:4 | a5:4 c6:4 f6:8 | d6:6 bb5:2 f5:4 d5:4";
 
-const introGroove = {
-  "kick-808": "x...x...x...x...",
-  hat: "x.x.x.x.x.x.x.x.",
+// Three bars of waiting, then the sax's pickup over the dominant.
+const INTRO = "r:56 e5:2 g5:2 a5:2 e5:2";
+
+const lounge = {
+  "kick-soft": "x.....x.....x...",
+  "snare-brush": "....x.......x...",
+  ride: "x...x.x.x...x.x.",
+  hat: "....o.......o...",
 };
-const verseGroove = {
-  "kick-808": "x...x...x...x...",
-  "snare-electro": "....x.......x...",
-  hat: "xoxoxoxoxoxoxoxo",
-};
-const chorusGroove = {
-  "kick-808": "x...x...x...x...",
-  "snare-electro": "....x.......x...",
-  clap: "....x.......x...",
-  hat: "xo.oxo.oxo.oxo.o",
-  "hat-open": "..x...x...x...x.",
-};
-const breakGroove = {
-  "kick-808": "x.......x.......",
-  hat: "x.x.x.x.x.x.x.x.",
-};
-const fill = { "snare-electro": "x.x.xxxx", "tom-mid": "......x.", clap: ".......x" };
-const riser = { "snare-electro": "xxxxxxxx", clap: "x.x.x.x.", "tom-low": "......xx" };
+const chorusGroove = { ...lounge, "kick-soft": "x...x...x...x...", shaker: "x.x.x.x.x.x.x.x." };
+const fill = { "snare-brush": "x.x.x.xx", "tom-mid": "......x.", "tom-low": "........" };
 
 export const harbour: PieceSpec = {
   id: "harbour",
   name: "Harbour Lights",
-  key: { tonic: "A", scale: "minor" },
-  bpm: 116,
+  key: { tonic: "D", scale: "minor" },
+  bpm: 108,
+  swing: 0.85,
+  race: true,
   rack: {
-    bass: { inst: "bass-synth", level: -2 },
-    chords: { inst: "pad-glow", level: -4, pan: -0.2, reverb: 0.3, chorus: 0.4 },
-    arp: { inst: "pluck-synth", level: -6, pan: 0.25, reverb: 0.2, delay: 0.3 },
-    lead: { inst: "lead-saw", level: 0, reverb: 0.3, delay: 0.4 },
-    lead2: { inst: "lead-square", level: -6, pan: 0.2, reverb: 0.3, delay: 0.3, lowpass: 4500 },
-    horn: { inst: "brass", level: 2, pan: -0.3, reverb: 0.7, lowpass: 1800 },
-    drums: { inst: "drums", level: -3 },
+    bass: { inst: "upright", level: -2, pan: -0.12, highpass: 40, comp: { threshold: -17, ratio: 3, attack: 0.012, release: 0.12 } },
+    chords: { inst: "rhodes-soft", level: -3.5, pan: 0.3, reverb: 0.25, chorus: 0.25, highpass: 200, tremolo: { rate: 4.2, depth: 0.12, pan: true } },
+    lead: { inst: "sax", level: 0, reverb: 0.3, delay: 0.2, highpass: 300, comp: { threshold: -15, ratio: 2.5, attack: 0.015, release: 0.15 } },
+    acc: { inst: "accordion", level: -4, pan: -0.3, reverb: 0.25, chorus: 0.3, highpass: 220 },
+    vibes: { inst: "vibes", level: -1, pan: 0.25, reverb: 0.35, delay: 0.2, highpass: 200 },
+    harp: { inst: "gtr-nylon", level: -6, pan: -0.35, reverb: 0.3, delay: 0.25, highpass: 200 },
+    horns: { inst: "horn-soft", level: -5.5, pan: 0.1, reverb: 0.35, highpass: 180 },
+    drums: { inst: "drums", level: -3.5, kit: "brush" },
   },
-  fx: { reverb: { t60: 1.8, size: 0.7, mix: 0.3 }, delay: { beats: 0.75, feedback: 0.35, tone: 3200, mix: 0.3 } },
+  fx: {
+    reverb: { t60: 1.9, size: 0.7, mix: 0.3, predelay: 0.022, damping: 0.45 },
+    delay: { beats: 0.75, feedback: 0.3, tone: 2800, mix: 0.17 },
+    master: { air: 1 },
+  },
   sections: [
     {
       name: "Intro",
       bars: 4,
-      level: 0.85,
-      chords: "Am F C G",
+      level: 0.8,
+      chords: "Dm9 Gm7 Bbmaj7 A7",
       parts: {
-        arp: arp("0 2 4 2 1 3 5 3", 1, { base: 53 }),
-        lead: tune(TEASE, { vel: 0.7 }),
-        drums: drums(introGroove, { fill, fillEvery: 4 }),
+        bass: bass("whole", { vel: 0.6 }),
+        chords: chords("pad", { roll: 0.02, vel: 0.5 }),
+        harp: arp("0 2 1 3 2 3 1 2", 2, { base: 55, octaves: 2, vel: 0.6 }),
+        lead: tune(INTRO, { vel: 0.75 }),
+        drums: drums({ ride: "x...x.x.x...x.x." }, { vel: 0.7 }),
       },
     },
     {
-      name: "Verse",
+      name: "A",
       bars: 8,
-      level: 0.88,
-      chords: "Am F C G",
+      chords: "Dm9 Gm7 Bbmaj7 A7 Dm9 Gm7 Em7b5|A7 Dm",
       parts: {
-        bass: bass("pulse16"),
-        chords: chords("gate16", { size: 3, centre: 64 }),
-        arp: arp("0 2 4 2 1 3 5 3", 1, { base: 53, vel: 0.5 }),
-        lead: tune(VERSE),
-        drums: drums(verseGroove, { fill, fillEvery: 4, crash: true }),
+        bass: bass("walkpush", { floor: 38 }),
+        chords: chords("sparse", { roll: 0.014 }),
+        harp: arp("0 1 2 3 2 1", 2, { base: 55, octaves: 2, vel: 0.45 }),
+        lead: tune(A),
+        drums: drums(lounge, { fill, fillEvery: 4 }),
       },
     },
     {
-      name: "Chorus",
+      name: "B",
       bars: 8,
-      chords: "F G Am Em F G Am E",
+      chords: "Bb C Dm F Bb C A7sus4 A7",
       parts: {
-        bass: bass("pulse16"),
-        chords: chords("hold2", { size: 3, centre: 62 }),
-        arp: arp("0 2 4 2 1 3 5 3", 1, { base: 53 }),
-        lead: tune(CHORUS_A + " | " + CHORUS_B),
-        lead2: tune(CHORUS_A + " | " + CHORUS_B, { shift: 12, vel: 0.7 }),
+        bass: bass("lilt", { floor: 36 }),
+        chords: chords("quarters", { roll: 0.01, vel: 0.5 }),
+        acc: tune(ACCORDION, { vel: 0.75 }),
+        lead: tune(B),
+        harp: arp("0 2 1 3 2 3", 2, { base: 55, octaves: 2, vel: 0.4 }),
         drums: drums(chorusGroove, { fill, fillEvery: 4, crash: true }),
       },
     },
     {
-      name: "Break",
+      name: "Bridge",
       bars: 4,
       level: 0.85,
-      chords: "Dm Am F G",
+      chords: "Gm7 C7 Fmaj7 Bbmaj7",
       parts: {
-        chords: chords("pad", { size: 3, centre: 60 }),
-        arp: arp("0 1 2 3 4 3 2 1", 2, { base: 53, octaves: 2, vel: 0.5 }),
-        lead: tune(BREAK, { vel: 0.8 }),
-        horn: tune(HORN),
-        drums: drums(breakGroove, { fill: riser, fillEvery: 4 }),
-      },
-    },
-    {
-      name: "Chorus end",
-      bars: 4,
-      chords: "F G Am E",
-      parts: {
-        bass: bass("pulse16"),
-        chords: chords("hold2", { size: 3, centre: 62 }),
-        arp: arp("0 2 4 2 1 3 5 3", 1, { base: 53 }),
-        lead: tune(CHORUS_END),
-        lead2: tune(CHORUS_END, { shift: 12, vel: 0.7 }),
-        drums: drums(chorusGroove, { fill, fillEvery: 4, crash: true }),
+        bass: bass("walk", { floor: 38 }),
+        chords: chords("hold2", { roll: 0.02, vel: 0.5 }),
+        vibes: tune(BRIDGE),
+        horns: chords("pad", { vel: 0.5 }),
+        drums: drums({ "kick-soft": "x.......x.......", "snare-brush": "....x.......x...", ride: "x...x.x.x...x.x." }, { fill, fillEvery: 4 }),
       },
     },
   ],

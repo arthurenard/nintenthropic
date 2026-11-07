@@ -1,5 +1,5 @@
 /**
- * What every world shares: the rubber duck. Every Super Claude Bros. game hides one, and
+ * What every world shares: the rubber duck. Every Nintenthropic game hides one, and
  * every Grip Prix track has it somewhere off the racing line (`duck` in the
  * track). It is a classic yellow bath duck, three metres long, bobbing and
  * looking about; in some worlds it has dressed for the weather.

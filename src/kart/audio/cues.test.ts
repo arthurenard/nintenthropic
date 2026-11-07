@@ -9,52 +9,101 @@ import { describe, expect, it } from "vitest";
 import { CUES, cuesInPack } from "../../audio/cues/table";
 import { momentaryMaxDb } from "../../audio/dsp/master";
 import { renderTake, takeCount } from "../../audio/render";
-import type { RaceEvent } from "../contract";
+import type { HitCause, ItemKind, RaceEvent } from "../contract";
+import { ITEM_KINDS } from "../sim/state";
 import { estimatePitch, peakOfBuffer, spectralCentroid, toDb } from "./analysis";
 import { AMBIENCE, ambienceCues } from "./ambience";
-import { ENGINE_CUES, ENGINE_LAYERS, ENGINE_NOTE, REV_HI, REV_LO, SURFACE_CUES } from "./engines";
-import { ordersFor } from "./events";
+import { ENGINE_CUES, ENGINE_LAYERS, ENGINE_NOTE, REV_HI, REV_LO, REV_MID, SURFACE_CUES } from "./engines";
+import { HORNS, chimeOrder, emoteOrder, ordersFor } from "./events";
 import { SOUND_CUES } from "./kinds";
 import { SIM_EVENTS } from "./simulate";
 
 const SR = 44100;
+
+/** An in-place radix-2 FFT (for the harmonic count). */
+function fft(re: Float64Array, im: Float64Array): void {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      [re[i], re[j]] = [re[j]!, re[i]!];
+      [im[i], im[j]] = [im[j]!, im[i]!];
+    }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = (-2 * Math.PI) / len;
+    const wr = Math.cos(ang);
+    const wi = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let cr = 1;
+      let ci = 0;
+      for (let k = 0; k < len / 2; k++) {
+        const a = i + k;
+        const b = i + k + len / 2;
+        const xr = re[b]! * cr - im[b]! * ci;
+        const xi = re[b]! * ci + im[b]! * cr;
+        re[b] = re[a]! - xr;
+        im[b] = im[a]! - xi;
+        re[a]! += xr;
+        im[a]! += xi;
+        const t = cr * wr - ci * wi;
+        ci = cr * wi + ci * wr;
+        cr = t;
+      }
+    }
+  }
+}
 const KART = cuesInPack("kart");
 /** Every place's sounds, and the beds among them (the loops). */
 const AMBIENCE_CUES = [...new Set((Object.keys(AMBIENCE) as (keyof typeof AMBIENCE)[]).flatMap(ambienceCues))];
 const BEDS = [...new Set(Object.values(AMBIENCE).flatMap((a) => a.beds.map((b) => b.cue)))];
-const takes = new Map<string, Float32Array[]>();
+const rendered = new Map<string, Float32Array[][]>();
+const stereo = new Set<string>();
 
-function bufferOf(cue: string, take: number): Float32Array {
-  let list = takes.get(cue);
+/** Every channel of a take: stereo takes (the engines, the tyres, the ground, the wind) are not narrowed by the panner. */
+function channelsOf(cue: string, take: number): Float32Array[] {
+  let list = rendered.get(cue);
   if (!list) {
     list = [];
-    for (let k = 0; k < takeCount(cue); k++) list.push(renderTake(cue, k, { sampleRate: SR, seed: 1 }).channels[0]!);
-    takes.set(cue, list);
+    for (let k = 0; k < takeCount(cue); k++) list.push(renderTake(cue, k, { sampleRate: SR, seed: 1 }).channels);
+    rendered.set(cue, list);
+    if (list[0]!.length > 1) stereo.add(cue);
   }
   return list[take]!;
 }
 
+function bufferOf(cue: string, take: number): Float32Array {
+  return channelsOf(cue, take)[0]!;
+}
+
 /** The loudest 50 ms of a cue as it reaches the master: its level, less the 3 dB the panner takes from a mono cue. */
-const atMaster = (cue: string): number => momentaryMaxDb([bufferOf(cue, 0)], SR) + CUES[cue]!.level - 3.01;
+const atMaster = (cue: string): number => {
+  const channels = channelsOf(cue, 0);
+  return momentaryMaxDb(channels, SR) + CUES[cue]!.level - (stereo.has(cue) ? 0 : 3.01);
+};
 
 describe("the kart pack", () => {
   it("has every sound the design names", () => {
     const wanted = [
       // engines (four, each low and high in its revs), their rasp, idle and growl, the drift and its sparks, boosts
-      ...ENGINE_CUES, "kart_engine_grit", "kart_idle", "kart_growl", "kart_backfire", "kart_drift", "kart_drift_sparks",
-      "kart_spark_blue", "kart_spark_orange", "kart_mini_turbo", "kart_super_turbo", "kart_boost_whoosh", "kart_slingshot", "kart_boost_pad", "kart_start_boost", "kart_flood",
+      ...ENGINE_CUES, "kart_engine_grit", "kart_idle", "kart_growl", "kart_backfire", "kart_shift", "kart_drift", "kart_drift_sparks", "kart_scrape", "kart_creak", "kart_draft",
+      "kart_spark_blue", "kart_spark_orange", "kart_mini_turbo", "kart_super_turbo", "kart_boost_whoosh", "kart_flame_short", "kart_flame_long", "kart_slingshot", "kart_boost_pad", "kart_start_boost", "kart_flood",
       // another kart going by close
       "kart_pass",
       // item boxes and items
-      "kart_box_smash", "kart_roulette_tick", "kart_item_ready", "kart_nitro", "kart_puck_fire", "kart_puck_bounce", "kart_seeker", "kart_slick_splat",
+      "kart_box_smash", "kart_roulette_tick", "kart_item_ready", "kart_nitro", "kart_nitro_triple", "kart_puck_fire", "kart_puck_bounce", "kart_seeker_launch", "kart_seeker", "kart_orbit", "kart_seeker_lock", "kart_slick_splat", "kart_slick_skid",
+      // what the roulette lands on: a chime for each item
+      ...ITEM_KINDS.map((item) => `kart_get_${item}`),
       // the comet, the items that strike from afar, the decoy
-      "kart_comet", "kart_storm", "kart_skyrocket", "kart_skyrocket_burst", "kart_blast", "kart_decoy_pop",
-      // hits, bumps, walls
-      "kart_hit", "kart_spinout", "kart_bump", "kart_wall_thud", "kart_wall_scrape",
+      "kart_comet", "kart_storm", "kart_skyrocket", "kart_skyrocket_warn", "kart_skyrocket_burst", "kart_blast", "kart_decoy_drop", "kart_decoy_pop",
+      // hits, bumps (by force), walls
+      "kart_hit", "kart_spinout", "kart_bump", "kart_bump_hard", "kart_wall_thud", "kart_wall_scrape",
       // countdown, laps, finishing
-      "kart_beep_low", "kart_beep_high", "kart_lap", "kart_final_lap", "kart_finish_win", "kart_finish_ok", "kart_cheer",
+      "kart_beep_low", "kart_beep_high", "kart_lap", "kart_final_lap", "kart_finish_win", "kart_finish_ok", "kart_cheer", "kart_applause", "kart_emote_cheer", "kart_emote_wave",
       // air
-      "kart_jump", "kart_trick", "kart_land", "kart_thud", "kart_fall", "kart_drone", "kart_drone_drop", "kart_hazard", "kart_wind",
+      "kart_jump", "kart_trick", "kart_land", "kart_land_cheer", "kart_thud", "kart_fall", "kart_drone", "kart_drone_drop", "kart_hazard", "kart_wind",
       // a place won or lost
       "kart_place_up", "kart_place_down",
       // the road and the surfaces
@@ -62,39 +111,39 @@ describe("the kart pack", () => {
       // the places
       ...AMBIENCE_CUES,
       // the duck, the horn, the interface
-      "kart_duck", "kart_horn", "kart_shutter", "kart_ui_select", "kart_ui_back", "kart_ui_ready", "kart_ui_join", "kart_ui_leave", "kart_ui_start",
+      "kart_duck", "kart_horn", ...Object.values(HORNS).filter((cue) => cue !== "kart_horn" && cue !== "kart_duck"), "kart_shutter", "kart_ui_select", "kart_ui_back", "kart_ui_ready", "kart_ui_join", "kart_ui_leave", "kart_ui_start",
     ];
     for (const cue of wanted) expect(KART, cue).toContain(cue);
     expect(KART.length).toBe(wanted.length);
   });
 
   it("marks the loops as loops and the one-shots as not", () => {
-    const loops = [...ENGINE_CUES, "kart_engine_grit", "kart_idle", "kart_growl", "kart_drift", "kart_drift_sparks", "kart_seeker", "kart_drone", "kart_wind", ...Object.values(SURFACE_CUES), ...BEDS];
+    const loops = [...ENGINE_CUES, "kart_engine_grit", "kart_idle", "kart_growl", "kart_drift", "kart_drift_sparks", "kart_seeker", "kart_orbit", "kart_drone", "kart_wind", "kart_draft", "kart_scrape", ...Object.values(SURFACE_CUES), ...BEDS];
     for (const cue of KART) expect(!!CUES[cue]!.loop, cue).toBe(loops.includes(cue));
   });
 
   it("keeps every take under the bus's peak ceiling of −1 dBFS", () => {
     for (const cue of KART) {
       for (let k = 0; k < takeCount(cue); k++) {
-        const peak = toDb(peakOfBuffer(bufferOf(cue, k))) + CUES[cue]!.level - 3.01;
+        const peak = toDb(Math.max(...channelsOf(cue, k).map(peakOfBuffer))) + CUES[cue]!.level - (stereo.has(cue) ? 0 : 3.01);
         expect(peak, `${cue} take ${k}`).toBeLessThanOrEqual(-1);
       }
     }
     // (It renders every take of the pack, which a busy machine takes a while over.)
   }, 120_000);
 
-  it("is never louder than the revolver of High Noon, the loudest thing in Super Claude Bros.", () => {
+  it("is never louder than the revolver of High Noon, the loudest thing in Nintenthropic", () => {
     for (const cue of KART) expect(CUES[cue]!.level, cue).toBeLessThanOrEqual(0);
   });
 
-  it("makes the four engines' eight layers equally loud, to within 3 dB, so no kart is a favourite and no crossover a bump", () => {
+  it("makes the four engines' twelve layers equally loud, to within 3 dB, so no kart is a favourite and no crossover a bump", () => {
     const levels = ENGINE_CUES.map(atMaster);
     expect(Math.max(...levels) - Math.min(...levels), levels.map((l) => l.toFixed(1)).join(" ")).toBeLessThan(3);
   });
 
   it("tells the engines apart by weight: the light one buzzes brightest, the heavy one is deepest", () => {
     const centroid = (cue: string): number => spectralCentroid(bufferOf(cue, 0), SR);
-    for (const layer of ["lo", "hi"] as const) {
+    for (const layer of ["lo", "mid", "hi"] as const) {
       const [light, middle, heavy] = (["light", "middle", "heavy"] as const).map((f) => centroid(ENGINE_LAYERS[f][layer]));
       expect(light!).toBeGreaterThan(middle! * 1.3);
       expect(middle!).toBeGreaterThan(heavy! * 1.2);
@@ -118,11 +167,80 @@ describe("the kart pack", () => {
       return lag / SR;
     };
     for (const family of ["light", "middle", "heavy", "electric"] as const) {
-      for (const [layer, revs] of [["lo", REV_LO], ["hi", REV_HI]] as const) {
+      for (const [layer, revs] of [["lo", REV_LO], ["mid", REV_MID], ["hi", REV_HI]] as const) {
         const expected = 1 / (ENGINE_NOTE[family] * revs);
         // To within a fifth of a semitone (the firings' jitter blurs the repeat by a sample or two).
         expect(Math.abs(period(ENGINE_LAYERS[family][layer], expected) / expected - 1), `${family} ${layer}`).toBeLessThan(0.012);
       }
+    }
+  });
+
+  it("makes the engines alive, wide and rich, and the sum to mono safe: not the static, near-mono buzz they were", () => {
+    /** The spread of the level over 40 ms windows against its mean: a static drone has none. */
+    const aliveness = (cue: string): number => {
+      const [l, r] = channelsOf(cue, 0);
+      const win = Math.round(0.04 * SR);
+      const levels: number[] = [];
+      for (let s = 0; s + win <= l!.length; s += Math.round(0.02 * SR)) {
+        let e = 0;
+        for (let i = s; i < s + win; i++) e += 0.5 * (l![i]! ** 2 + r![i]! ** 2);
+        levels.push(Math.sqrt(e / win));
+      }
+      const mean = levels.reduce((a, b) => a + b, 0) / levels.length;
+      return Math.sqrt(levels.reduce((a, b) => a + (b - mean) ** 2, 0) / levels.length) / mean;
+    };
+    /** Side over mid, dB, and the mono sum's power over the channels' average, dB. */
+    const picture = (cue: string): { width: number; mono: number } => {
+      const [l, r] = channelsOf(cue, 0);
+      let mid = 0;
+      let side = 0;
+      let mono = 0;
+      let both = 0;
+      for (let i = 0; i < l!.length; i++) {
+        mid += (0.5 * (l![i]! + r![i]!)) ** 2;
+        side += (0.5 * (l![i]! - r![i]!)) ** 2;
+        mono += (0.5 * (l![i]! + r![i]!)) ** 2;
+        both += 0.5 * (l![i]! ** 2 + r![i]! ** 2);
+      }
+      return { width: 10 * Math.log10(side / mid), mono: 10 * Math.log10(mono / both) };
+    };
+    for (const cue of ENGINE_CUES) {
+      expect(stereo.has(cue) || channelsOf(cue, 0).length === 2, cue).toBe(true);
+      // The old engines varied by 3 to 6 % over 40 ms windows (a drone); an engine that is alive varies by at least 8 %.
+      expect(aliveness(cue), `${cue} aliveness`).toBeGreaterThan(0.08);
+      // The old pair was near-mono, side 15 dB under mid; these are clearly wider, and lose under 2 dB summed to mono.
+      const { width, mono } = picture(cue);
+      expect(width, `${cue} width`).toBeGreaterThan(-11);
+      expect(mono, `${cue} mono sum`).toBeGreaterThan(-2);
+    }
+    for (const cue of [...Object.values(SURFACE_CUES), "kart_wind", "kart_draft", "kart_drift", "kart_drift_sparks", "kart_scrape", "kart_engine_grit", "kart_idle"]) {
+      const { width, mono } = picture(cue);
+      expect(width, `${cue} width`).toBeGreaterThan(-12);
+      expect(mono, `${cue} mono sum`).toBeGreaterThan(-3);
+    }
+  });
+
+  it("gives every engine its harmonics: the firing note's multiples stand well above the floor between them", () => {
+    // The old recipes had 16 to 24 lines within 30 dB of the strongest, but static ones; these keep a rich series while the
+    // firings wander. Count the multiples of the note (to 6 kHz) within 30 dB of the strongest.
+    for (const family of ["light", "middle", "heavy"] as const) {
+      const cue = ENGINE_LAYERS[family].mid;
+      const x = bufferOf(cue, 0);
+      const size = 32768;
+      const re = new Float64Array(size);
+      const im = new Float64Array(size);
+      for (let i = 0; i < size; i++) re[i] = x[i]! * (0.5 - 0.5 * Math.cos((2 * Math.PI * i) / size));
+      fft(re, im);
+      const f0 = ENGINE_NOTE[family] * REV_MID;
+      const lines: number[] = [];
+      for (let h = 1; h * f0 < 6000; h++) {
+        const c = (h * f0 * size) / SR;
+        let best = 0;
+        for (let k = Math.max(1, Math.floor(c * 0.99 - 1)); k <= Math.ceil(c * 1.01 + 1); k++) best = Math.max(best, Math.hypot(re[k]!, im[k]!));
+        lines.push(best);
+      }
+      const top = Math.max(...lines);
+      expect(lines.filter((m) => m > top * 0.0316).length, family).toBeGreaterThanOrEqual(8);
     }
   });
 
@@ -166,9 +284,10 @@ describe("the kart pack", () => {
 
   it("asks only for cues that exist: every name the code plays is in the table", () => {
     const names = new Set<string>([
+      "kart_shift", "kart_scrape", "kart_draft", "kart_creak",
       ...Object.values(SOUND_CUES), ...ENGINE_CUES, ...Object.values(SURFACE_CUES), ...AMBIENCE_CUES,
-      "kart_engine_grit", "kart_idle", "kart_growl", "kart_backfire", "kart_drift", "kart_drift_sparks", "kart_seeker", "kart_drone", "kart_roulette_tick", "kart_item_ready", "kart_flood",
-      "kart_duck", "kart_puck_bounce", "kart_wind", "kart_thud", "kart_place_up", "kart_place_down", "kart_slingshot", "kart_super_turbo", "kart_pass",
+      "kart_engine_grit", "kart_idle", "kart_growl", "kart_backfire", "kart_drift", "kart_drift_sparks", "kart_seeker", "kart_orbit", "kart_drone", "kart_roulette_tick", "kart_item_ready", "kart_flood",
+      "kart_duck", "kart_puck_bounce", "kart_wind", "kart_thud", "kart_place_up", "kart_place_down", "kart_slingshot", "kart_super_turbo", "kart_pass", "kart_flame_short", "kart_flame_long",
     ]);
     const scene = {
       locals: [{ kart: 0, pan: 0 }],
@@ -182,6 +301,26 @@ describe("the kart pack", () => {
         for (const o of ordersFor(e, scene)) names.add(o.cue);
       }
     }
+    // And the events the scripted race does not stage: every item picked up and used, every strike, every cause of a hit, bumps of both weights, a trick landed, each driver's horn, each emote.
+    const racers = ["bun", "pepper", "moss", "kit", "juniper", "mango", "bramble", "rivet", "dabble"].map((character, id) => ({ id, character }));
+    const wide = {
+      ...scene,
+      racers,
+      karts: new Map(racers.map((r) => [r.id, { id: r.id, x: r.id, z: 0, heading: 0, place: r.id + 1, finished: null } as never])),
+    };
+    const items: ItemKind[] = ["nitro", "nitro3", "puck", "seeker", "slick", "puck3", "comet", "storm", "skyrocket", "blast", "decoy"];
+    const causes: HitCause[] = ["puck", "seeker", "slick", "decoy", "storm", "skyrocket", "blast", "comet"];
+    const more: object[] = [
+      ...items.flatMap((item) => [{ type: "pickup", kart: 0, item }, { type: "use", kart: 0, item }, { type: "use", kart: 1, item }]),
+      ...(["storm", "skyrocket", "blast"] as const).map((item) => ({ type: "strike", kart: 0, item, x: 1, z: 1 })),
+      ...causes.map((cause) => ({ type: "hit", kart: 0, by: 1, cause })),
+      { type: "bump", a: 0, b: 1, strength: 0.2 }, { type: "bump", a: 0, b: 1, strength: 0.9 },
+      { type: "land", kart: 0, boost: true, strength: 0.5 },
+      ...racers.map((r) => ({ type: "horn", kart: r.id })),
+    ];
+    for (const event of more) for (const o of ordersFor({ id: 1, tick: 0, ...event } as RaceEvent, wide)) names.add(o.cue);
+    for (const item of items) names.add(chimeOrder(item, 0).cue);
+    for (const emote of ["cheer", "wave"] as const) names.add(emoteOrder(emote, 0)!.cue);
     for (const name of names) expect(Object.prototype.hasOwnProperty.call(CUES, name), name).toBe(true);
     for (const cue of KART) expect(names.has(cue), `${cue} is never played`).toBe(true);
   });

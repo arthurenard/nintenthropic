@@ -61,6 +61,20 @@ export const BASS_PATTERNS = {
   offbeat: bassTemplate("2:r:2 6:r:2 10:r:2 14:r:2"),
   /** Broken chord in eighths. */
   broken8: bassTemplate("0:r:1.8 2:5:1.8 4:8:1.8 6:5:1.8 8:r:1.8 10:5:1.8 12:8:1.8 14:5:1.8"),
+  /** A funk/slap line: thumb on the one, pops an octave up, a ghosted run to the next chord. */
+  slap: bassTemplate("0:r:1.4:1.15 3:8:0.7:0.8 4:r:1:0.9 6:5:1.2:0.95 8:r:1.4:1.1 11:8:0.7:0.8 12:3:1:0.9 14:a:1.6:1"),
+  /** Disco/synth octaves: root and octave in straight eighths. */
+  octaves8: bassTemplate("0:r:1.7 2:8:1.7 4:r:1.7 6:8:1.7 8:r:1.7 10:8:1.7 12:r:1.7 14:8:1.7"),
+  /** A calypso line: root, a fifth that arrives early, a lift into the next beat. */
+  calypso: bassTemplate("0:r:2.8 3:5:1.2 6:r:1.8 8:5:2.6 11:r:1.2 14:5:1.6"),
+  /** A surf-rock line: pounding eighths on the root, the fifth thrown in at the turn. */
+  surf: bassTemplate("0:r:1.6 2:r:1.6 4:r:1.6 6:5:1.6 8:r:1.6 10:r:1.6 12:5:1.6 14:8:1.6"),
+  /** A lilting two-and-a-bit: root, fifth and back, as in a sea song. */
+  lilt: bassTemplate("0:r:3.4 4:5:1.8 6:8:1.8 8:r:3.4 12:5:1.8 14:3:1.8"),
+  /** A rolling line for synthwave and rock: eighths with the octave on the off-beat of four. */
+  rolling: bassTemplate("0:r:1.7 2:r:1.7 4:r:1.7 6:8:1.7 8:r:1.7 10:r:1.7 12:r:1.7 14:5:1.7"),
+  /** A walking line with a chromatic lead-in on the last beat and a dotted push on the third. */
+  walkpush: bassTemplate("0:r:3.4 4:5:3.2 8:3:2.6 11:5:0.9 12:a:3.4"),
   /** Waltz: the bass on one, over 12 steps. */
   waltz: bassTemplate("0:r:3.5"),
   /** Waltz with the fifth answering on the third beat. */
@@ -95,6 +109,14 @@ export const COMP_PATTERNS = {
   sync: comp("0:3 3:3 6:2 8:3 11:3 14:2"),
   strum: comp("0:2.8 4:2.4 6:1.6 10:1.6 12:2.4 14:1.6"),
   quarters: comp("0:3.5 4:3.5 8:3.5 12:3.5"),
+  /** A bossa-style push: the chord lands just before the beat. */
+  bossa: comp("0:3 3:3 6:2 10:3 13:3"),
+  /** Sparse jazz hits on the and-of-two and the four. */
+  sparse: comp("6:3 14:2"),
+  /** Mandolin-quick repeated chords. */
+  tremolo: comp("0:1 1:1 2:1 3:1 4:1 5:1 6:1 7:1 8:1 9:1 10:1 11:1 12:1 13:1 14:1 15:1"),
+  /** Pushed pop hits, anticipating the bar. */
+  pushed: comp("0:2 3:2 6:1.5 10:2 12:2 15:1"),
   /** Beats two and three of a waltz (12 steps). */
   waltz: comp("4:3 8:3"),
   /** All three beats of a waltz, held a little. */

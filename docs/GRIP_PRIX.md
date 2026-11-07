@@ -7,7 +7,7 @@ back up. Every player brings their own camera — a laptop, a phone propped on
 the table — and the race is shown on each player's screen, or all together on
 one big screen in split screen, or both.
 
-It is the second kind of game in Super Claude Bros. The four shooting games aim
+It is the second kind of game in Nintenthropic. The four shooting games aim
 a finger pistol; Grip Prix holds a wheel. It lives on its own page, `race.html`,
 and has its own tile on the landing, beside Finger Guns.
 
@@ -22,8 +22,10 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   lock (Settings: Steering, Gentle 50° / Normal 40° / Quick 30°), on a curve
   that is gentle near the centre.
 - **Brake and back up.** Open both hands, going straight or slowly: brake.
-  Keep them open at a standstill and the kart reverses. You still steer while
-  reversing — open hands are tracked as well as fists.
+  The brake is a pedal that comes on: a flick of open hands barely costs
+  speed, held it takes about a second to lose most of it and under one and
+  a half to crawl, and the kart flows on into backing up without stopping dead. You
+  still steer while reversing — open hands are tracked as well as fists.
 - **Drift.** Open both hands in a bend at speed, as if braking into it: the
   kart hops into a power-slide that way, its tail swinging out, and keeps its
   speed while the hands stay open. Turn into the slide to tighten it (the tail
@@ -37,6 +39,21 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   turns): the kart twirls, and boosts when it lands.
   Shake right at a ramp's lip and the kart springs off higher and further,
   and boosts longer.
+- **Air sections** (`sim/air.ts`; `TrackDef.air`, see Track features). A pad across the road throws the kart into a
+  planned flight: `flight` 3 (a cannon or a lip, tricks allowed) or 4 (a glide, parasol up). The flight is not
+  integrated with gravity: its height over the road is a function of the metres the kart has run since the pad
+  (`arcHeight`: a parabola for a cannon and a lip, a quick climb and a long, bending float down for a glide), so where
+  it comes down is designed, a slow kart only takes longer, and the sim, a guest's prediction and every picture agree
+  without a byte more on the wire. Nothing moves with the race clock here, only with the kart's own place along the road.
+  A cannon takes any kart over 2 m/s and throws it at 21 m/s along the road; a glide takes one over 5 m/s, a lip one over
+  9 m/s. In flight the wheel turns the course (0.45 rad/s a cannon or lip, 1.1 a glide; a jump is 0.55) while an
+  autopilot swings the course toward the road's direction ahead (2.4/s, at most 1.2 rad/s) so a bend under the flight
+  does not carry a kart that lets go into the scenery; steer past an open edge by more than the edge's metre and a half
+  and the kart falls (the drone) as on the ground. The trick button is a trick in a cannon or lip flight (a boost
+  on landing), not in a glide; a glide that lands within 3 m of the road's middle (the rings painted there) boosts 0.7 s.
+  `jump` events carry `arc` ("cannon" | "glide" | "lip"); `KartView.glide` is 1 under the parasol. Bots (`bots.ts`)
+  steer a planned flight toward a lane (a glide: the middle, each bot a little off it by its number) and trick in a
+  cannon or lip flight by skill.
 - **Slipstream.** Tuck in right behind another kart: you go a little faster
   and, after a moment, are flung out past it with a boost.
 - **Hills.** A climb slows you a little; coming down, you gather speed and
@@ -210,7 +227,7 @@ Everything is under `src/kart/`. Each part is built against
 | Input | `input/` + `src/tracking/` | `wheelControl(...)`, `keyboardControl()`, `gamepadControl()` → `DriverControl`; the wheel's picture (`WheelPreview`); every hand the tracker sees. |
 | Render | `render/` | `createRaceRenderer(canvas, hudRoot, options): RaceRenderer`: the world, the karts, split screen, chase cameras, effects, each viewport's HUD, the minimap. |
 | App | `app/`, `main.ts`, `/race.html` | The screens: start, you, choose your driver, the wheel check, how to drive, lobby, race, results, standings, podium. |
-| Sound | `src/audio/cues/` pack `kart`, `src/kart/audio/` | An engine for each weight (and Rivet's motor), in two layers pitched by its revs and roughened by how hard it works; other karts heard going by (stereo, Doppler); the tyres on the road and every surface; the drift's squeal and its sparks' fizz through the three levels; the wind at speed, in the air and in a slipstream; boosts, landings, items, hits, a place won or lost, the countdown and the finish; each track's place, very quietly — synthesised like every Super Claude Bros. sound ("Sound" below). |
+| Sound | `src/audio/cues/` pack `kart`, `src/kart/audio/` | An engine for each weight (and Rivet's motor), in three rev bands pitched by its revs, built from firings, an exhaust pipe, an intake and a harmonic series (wide and alive), roughened by how hard it works, with a bark at each gear change; other karts heard going by (stereo, Doppler, duller from behind); the tyres on the road and every surface, a scraped barrier and creaking suspension; the drift's squeal and its sparks' fizz through the three levels; the wind at speed, in the air and in a slipstream; boosts, landings, items, hits, a place won or lost, the countdown and the finish; each track's place, very quietly — synthesised like every Nintenthropic sound ("Sound" below). |
 
 ### Coordinates
 
@@ -245,7 +262,28 @@ The numbers (all in `sim/tuning.ts`):
   15° off the way the kart goes (a slide let go, a shove) swings back toward
   it as the grip takes hold. `KartView.speed` is the whole speed, even in a
   slide (negative reversing); `course` is the way it goes.
-- **Brake.** 30 m/s²; held at a standstill for 0.3 s it reverses, up to 7 m/s.
+- **Brake.** A pull toward a target speed, the way the throttle is one (the
+  idea of a kart racer's eased speed, built here): the speed eases toward
+  `throttle × top − 7 × brake` with rate 1.3/s (`drive.brakeRate`, times the
+  ground's `brake`), so a brake alone heads for −7 m/s with no stop at zero
+  and no reverse delay, and brake with throttle settles near top − 7. The
+  pedal comes on: the pull starts at 20% of its rate and builds with a 0.5 s
+  time constant (`brakeRamp`) while the brake is held (under 3 m/s it is at full pull at
+  once, so backing up from rest does not wait), and fades three times
+  faster than it came when let go (`kart.stand` is this build-up, in ticks, so
+  a second tap picks up where the first left off). From 24 m/s on the road,
+  held: 0.2 s 21.1 (the old brake: 18.0), 0.5 s 15.2 (9.0), 1.0 s 6.0 (0),
+  a crawl under 2 at 1.35 s, zero at 1.5 s and backing up (the old brake reached
+  zero at 0.8 s, then waited 0.3 s), -3.3 at 2 s, -7 by 6 s. From rest, held:
+  -1.9 at 0.25 s, -3.3 at 0.5 s, -5.1 at 1 s. Brake with throttle: 21.4 at
+  0.5 s, 19.5 at 1 s, 18.2 at 1.5 s, 16.7 settled. A 0.15 s flicker costs under
+  1 m/s. Ice brakes at a quarter of the pull. Why the old one felt like 90% at once: a
+  flat 30 m/s² from the first tick against a 24 m/s top, so 0.7 s took 21 of
+  the 24 m/s, with nothing to build on and a dead stop before the reverse.
+  Bots plan their bends for 16 m/s² (`bots.planBrake`), which the new brake
+  gives over a typical 10 m/s shed (24 to 14 m/s takes about 0.6 s). 18 and 20
+  were tried on five tracks, two seeds each: laps within noise, no falls
+  either way, so it stays at 16.
 - **Hop and drift.** `drift` rising at over 10 m/s with |steer| > 0.3 hops
   (0.25 s, up to 0.35 m) into a drift that way: a power-slide. The way the
   kart goes turns at 0.9 + 0.5 × own of a full turn (own: the wheel into the
@@ -482,8 +520,8 @@ the tracks that do (24 to 34 when the machine was quiet): under 0.4% of a frame.
   `data:image/jpeg;base64,`, nothing more), any kart the sender does not drive,
   any race but this one, and a second photo of a kart. They are kept for one
   race, in memory, and a new race (a restart too) starts with none.
-- **The wire** (protocol 8; 7 changed only how devices connect, 8 added the
-  `photo` message both ways). A snapshot is one JSON line, about 1.1 KB for
+- **The wire** (protocol 9; 7 changed only how devices connect, 8 added the
+  `photo` message both ways, 9 the new tracks' set pieces and air sections, which every device must build alike). A snapshot is one JSON line, about 1.1 KB for
   eight karts: the tick, the dice, the items in the air, the eggs, and the
   kart table, 54 numbers a kart (where it is and how fast, drift, boost, item,
   lap, the bot's own state...). A kart's row is mostly zeros and what the kart
@@ -607,11 +645,27 @@ of three; bytes are exact and are the numbers to trust.
   kept by continuity (each frame's nearest to the last), so a wheel turned
   past 90° does not swap them. Angle = `atan2(dy, dx)` from the left palm to
   the right, + when the right hand is lower (turning right). A One Euro filter
-  smooths it with little lag. The level (an offset) is set by holding the
+  (`WHEEL.smoothing`, 2 Hz and beta 0.1) smooths it; on made-up noise of 0.4 to
+  1 degree (simulated hands; on Arthur's recording the filter lag is 7 ms median, camera to steer 29 ms) it trails a wheel turned 30 degrees a second by 27 ms (the first
+  settings, 1.5 Hz and 0.05: 40 ms) and one turned 90 by 13 ms (was 20), and
+  rests within 0.1 degree of as still, which the 4 degree dead zone hides.
+  Between camera frames (30 a second, the kart ticking at 60) the angle carries
+  on at the wheel's speed (`WHEEL.lead`, at most 45 ms, the slower of the
+  smoothed speed and the last step, none when they disagree, fading out when
+  no frame comes), so the steer glides instead of stepping, and a fifth of the
+  frame's measured age on arrival (`compensate`) is made up too; a wheel
+  stopping at 30 degrees from 200 a second goes 3 degrees past at most
+  (`quality.test.ts`). The level (an offset) is set by holding the
   wheel level for a second.
 - **Fist or open.** From the world landmarks: a finger is out when its tip is
   much farther from the wrist than its middle joint; three or four fingers
-  out is open, one or none a fist, with 120 ms of hold either way.
+  out is open, one or none a fist, with 120 ms of hold either way, and the
+  change must be backed by two frames however slowly the camera gives them
+  (`GRIP.frames`; three or four players on one camera are read at 10 to 20
+  frames a second, where 120 ms is a frame or two). A hand's first frame back
+  in the picture takes its state at once but is not braked on until a second
+  frame says the same (`Grip.steady`): a hand misread as open for one frame,
+  at any frame rate from 10 to 30, never brakes (`quality.test.ts`).
 - **Gestures** as in "How it plays": both open for 150 ms → brake, with
   `slide` (the sim drifts on it in a bend at speed: the wheel's
   only drift, so it never sets `drift`); one open
@@ -764,7 +818,71 @@ that file exists (`render/art.ts`).
   so no frame turns through more than 1.9 rad of it, which keeps it a buzz at
   30 fps; none of this for Reduce Motion), a whole flat turn in the air for a
   trick; a blob shadow
-  (`render/kart.ts`). Up a ramp the kart stands on the picture's wedge; off
+  (`render/kart.ts`). **Three bodies and a livery** (`kartArt.ts`, `livery.ts`,
+  `art/kart/karts/build.py`). A driver's weight class picks the kart: the light
+  drivers (Bun, Pepper, Moss) a nimble open buggy (`kart.body.light`: a slim tub
+  on a painted roll cage with a dash arch, side rails and braces, a bare engine
+  with cooling fins and an air filter, an aerial with a pennant, a small nose
+  with one round lamp, springs out in the open, eight-spoke wheels), the middle
+  drivers (Kit, Juniper, Mango, Dabble) the classic sprint kart (`kart.body`, also
+  named `kart.body.middle`: rounded tub, wing on curved struts, chrome bumpers,
+  coil springs on the front dampers), the heavy drivers (Bramble, Rivet) a wide
+  muscle kart (`kart.body.heavy`: flared fenders over all four wheels, a hood
+  scoop, a grille and a deep bumper bar, twin stacks and big pipes, a ducktail
+  wing, a thick roll hoop, deep-dish wheels with lug nuts: `kart.wheel.heavy`). The
+  hubs, the exhaust mouths and the number plate are the same on all three, so the
+  wheels, the flames, the skid marks and the collisions do not change; a file
+  without the class bodies gives the sprint kart to everyone. Each driver's kart
+  also wears a **livery**: a pattern in a second colour on the flanks and the hood
+  (`kart.livery.<class>.<pattern>`, material "livery": spots Bun, waves Pepper,
+  tiger stripes Moss, flames Kit, diamonds Juniper, lightning Mango, chevrons
+  Bramble, checks Rivet, rally stripes Dabble; the pattern and the colour wanted
+  are in `characters.ts`). The paint is the player's colour; the pattern's colour
+  is the driver's own unless it would vanish into the paint (cream on yellow),
+  when it becomes near-black or white; on the golden kart it is cream. The
+  pattern is welded into the kart's body geometry when it is made: no draw call,
+  no shader. The far kart (34 m and beyond) is the whole kart welded, driver at rest, then thinned by
+  vertex clustering on a 0.2 m grid (`render/farLod.ts`, surfaces kept apart so chrome stays chrome and
+  paint stays paint): about 2 to 3k triangles against 22k welded, with its own brake-light skin. The coachwork below is placed
+  for the sprint kart and moves for the buggy and the muscle kart (`weight` in
+  `kartExtras`). **Faces and looks.** The modelled drivers' eyes are 14% bigger
+  with a larger glint (`EYE_GROW`), and their brows and mouths are drawn live
+  (`drivers/expression.ts`): determined while racing (brows slanted and low,
+  a small tight smile), gritted in a hard bend (steer over 0.72: low thick brows
+  over a slot of teeth), raised with an O when dizzy, arched over a wide open
+  grin with a tongue at a cheer or the finish, relaxed on the grid; a mood is held
+  0.22 s before a milder one replaces it, a hit or a cheer shows at once. The
+  face is welded onto the head's own geometry (one per mood, made when first
+  worn and shared by the species' brow and mouth shapes; the racing face is made when
+  the driver is), so it costs no draw call. Every modelled species has a mouth that
+  changes: the rabbit, fox, otter, bear, frog and cat draw a smile, a gritted slot,
+  an O and an open grin; the penguin and the duck part their beak in a dark gape
+  (open a little at the strain, wide when hit, curled at a cheer); the robot's
+  screen mouth is lit (dots, a bar, a zigzag, a ring, a smile). The code-built stand-ins keep their own fixed faces. Each driver blinks (`drivers/face.ts`:
+  one lid mesh in the face's colour that slides down over the bead eyes, every
+  2.2 to 5.4 s, now and then twice, about 0.2 s, each driver at its own
+  times; no draw call while the eyes are open) and shuts its eyes in a
+  grin, ^ ^, while cheering or after finishing, half shut and heavy when dizzy.
+  On the grid (stopped: speed under 2.5 m/s, eased) the driver breathes and the
+  head wanders over the track (`KartPose.rest`). A driver with another kart
+  2 to 11 m behind, within 3.5 m of its line, at over 6 m/s, glances back over
+  that side's shoulder for 0.75 s at most every 3.2 s (`KartPose.lookBack`;
+  each actor sees the others through a registry in `kart.ts`, so it needs
+  nothing from the sim or the wire, and a driver who asked for less motion
+  does not). The **brake lights** (`brakeLights.ts`) are a skin laid over the
+  tail lamps (the art's own: the vertices of material "tail"; or the code-built
+  kart's two bars) in one shared additive material: they flare, a little larger,
+  while the kart's eased deceleration is over 2.2 m/s² (full by 6.5), on the
+  ground and above 1.5 m/s, and go out in about 0.1 s (`KartPose.brake`, worked
+  out from the speed falling in `KartActor`). One extra draw call for a kart
+  while it brakes, none otherwise. **Coachwork** (`kartExtras.ts`): each driver's
+  kart carries its own touches welded into the body geometry (no draw calls): a
+  cotton-tail puff and carrot fins (Bun), a dorsal fin (Pepper), bulging eyes on
+  the bonnet (Moss), twin swept fins (Kit), a surfboard (Juniper), ears and
+  whiskers (Mango), a roll hoop and bull bar (Bramble), an aerial and dish
+  (Rivet), a bill and tail feathers (Dabble); the golden kart wears a crown. The
+  turntable (`render/dev.html?turntable=1`) shows them: `&brake=1`, `&back=1`,
+  `&shut=1`, `&rest=1` pose the new looks. Up a ramp the kart stands on the picture's wedge; off
   the lip it rides the sim's height, which starts at the wedge's top, so the
   two meet without a step. Effects:
   drift sparks (blue, then orange, then violet for the third charge, the charge
@@ -836,47 +954,166 @@ nothing is sampled. `RaceAudio` (`race-audio.ts`) runs one race screen: it turns
 `KartView`), plays the track's place (`ambience.ts`) and the music (`music/`). Each loop is started when it is first
 heard and let go after half a second of silence, and is told only what has moved since it was last told.
 
-- **Engines.** Four, by the driver: a light kart's buzzing two-stroke, a middleweight's single-cylinder thumper, a
-  heavy kart's V-twin (two firings a cycle, unevenly spaced: its lope), and Rivet the robot's electric motor, with its
-  windings' and gears' whine. Each is made as an exhaust hears it: every firing a push of gas, a sharp edge and a puff
-  of noise ringing the pipe's resonances, no two firings quite alike in time or strength. Each is made twice, low and
-  high in its revs, and the two cross over, so neither is played far from where it was made (a loop sped up sounds
-  thin, slowed down dull). The revs run from 0.64 just moving to about 1.75 at top speed; a boost adds 8%, the air 20%
-  (the wheels spin free), a drift 3%; off the road they fall 5% and in a spin-out 25%. How hard the engine works is
-  the kart's acceleration and the climb under it: working, it sings higher, louder and rougher (its rasp, a loop
-  pulsing on its firings, comes up); lifting off or rolling downhill it softens, and lifting off hard after pulling at
-  high revs, the exhaust pops (at most once in 2.5 s; not the motor's). Near a standstill the idle takes over (the motor hums). A
-  boost's growl roars under it. Each note wavers a little, as an engine never holds one quite still.
+- **Engines.** Four, by the driver: a light kart's buzzing two-stroke, a middleweight's punchy twin (one stroke hard
+  and its partner half as hard), a heavy kart's V-twin (two firings a cycle, unevenly spaced: its lope), and Rivet the
+  robot's electric motor. None is an oscillator with a filter on it; each is built the way the machine makes its sound
+  (`src/audio/cues/kart-engines.ts`). Every firing is a push of gas (a pulse with a hard edge and a longer tail) that
+  thumps (its low-passed push, the sub a kart's chest hears), strikes the exhaust pipe (a waveguide closed at one end,
+  `pipeResonance` in `src/audio/dsp/resonators.ts`, ringing at its tube frequency and the odd multiples of it, then
+  coloured by three or four formants of the body and the muffler), throws a puff of turbulent gas out of the mouth, and
+  half a cycle later the intake draws and roars and the valves tick. Under it all runs the engine's periodic part as a
+  full harmonic series (every multiple of the note, shaped by the same resonances, swelling and dipping with the
+  firings' strength). No two firings are alike: their timing wanders, their strength spreads lognormally and breathes
+  over a few cycles, and now and then one is weak. The two ears share the firings (so the low end is one engine in the
+  middle and the sum to mono loses under 1.2 dB) but have their own pipe tuning, gas and intake noise and upper partials:
+  a twin-outlet exhaust, wide above a few hundred hertz. Each engine is made in three rev bands (low, middle and high,
+  made at revs 0.8, 1.2 and 1.8; `ENGINE_LAYERS`, `REV_LO`, `REV_MID`, `REV_HI`), so a loop is never played more than
+  about a quarter from where it was made, its pipe's resonances stay where an exhaust would have them instead of
+  sliding with the pitch, and the three cross over (`layerMix`, equal power: at most two sound at once). The motor is
+  additive (the rotor's poles, the windings' and gears' whine, the drive's switching shimmer, a second rotor a whisker
+  off beating at a different rate in each ear). The revs run from 0.64 just moving to about 1.75 at top speed; a boost
+  adds 8 %, the air 20 % (the wheels spin free), a drift 3 %; off the road they fall 5 % and in a spin-out 25 %. How
+  hard the engine works is the kart's acceleration and the climb under it: working, it sings higher, louder and
+  rougher (the load layer, `kart_engine_grit`: a burst of gas on every firing, an intake resonance in each ear, the
+  chain's and valves' rattle, a spit now and then, which is where "on throttle" brightens an engine); lifting off or
+  rolling downhill it softens, and lifting off hard after pulling at high revs, the exhaust crackles (`kart_backfire`:
+  seven to ten pops thinning out, each a thump, a crack and the pipe's ring, scattered across the field; at most once in
+  2.5 s; not the motor's). Near a standstill the idle takes over (a lumpy put-put through the same pipe, thirteen thumps
+  a second in a pattern that never repeats; the motor hums). A boost's growl (a deeper engine with flame in its throat)
+  roars under it. Each note wavers a little, as an engine never holds one quite still. The revs run through four gears
+  (`gearFactor`, a pure function of speed): ±6 % through a gear, a dip of about two semitones at each change, fading to
+  nothing standing still, at top speed and in the air; each change up under power barks (`kart_shift`: the clutch's
+  clunk, the revs cut, a rasp as the next gear takes the load; `gearIndex`, also a pure function of speed; not for the
+  motor, not coasting, at most one in 0.4 s). In the last second before Go the whole grid blips its throttle
+  (`gridFlare`: revs up by three quarters, the idle handing over to the engine, gone at Go).
 - **Other karts.** Every local kart's engine and the nearest others' (at most four others, six karts in all), heard
   from the nearest local kart: louder close (to nothing at 70 m, the engine's distance roll-off and air on top), the
   nearest standing out of the pack (each further one stepped down), to the side it lies on (a kart 3.5 m to one side
-  is half way over), and bent by Doppler from the two karts' velocities, at a third of the real speed of sound so that
-  a kart going by at 8 m/s more falls two or three semitones as it passes; one that goes by within 6 m at 3 m/s more
-  swishes past. Their drift squeals (the three nearest) and events are heard by distance. With more than one player
-  on the screen, each player's engine is quieter (two at 0.71 each, four at a half) and their everyday sounds a little
-  (four at 0.71); what must be heard is not.
-- **Ground and contact.** The tyres roll on the road (quiet, growing to top speed, gone in the air); grass, sand,
-  snow, ice and mud each have their own. A drift squeals, each spark level a tone and a half higher and louder, and
-  from the first spark its sparks fizz under it, a major third higher at each level; let go, the mini-turbo, a step
-  up for each level, and from the third a whoomph and a run of glass. Bumps, walls and landings by the sim's
-  strength (a hard landing thuds).
-- **Moments.** The countdown's beeps; a start boost; nitro; a boost pad; a slipstream's fling (a stretched band let
-  go); off a ramp a spring's boing (lighter off a crest); a trick (a spiral of pings, a slide whistle's whee and a
-  swirl that goes once round the head, the one stereo sound a kart makes); landing; item boxes and every item; hits
-  and spin-outs; a place won or lost; a lap, the final lap and the finish.
+  is half way over), duller when it is behind the listener (`earDistance`: the air's low-pass is given up to 40 % more
+  distance, as the kart's own body is in the way), and bent by Doppler from the two karts' velocities, at a third of the
+  real speed of sound so that a kart going by at 8 m/s more falls two or three semitones as it passes; one that goes by
+  within 6 m at 3 m/s more rushes past (`kart_pass`: a burst of air whose band falls as it goes, different in each ear,
+  with a soft pressure bump just after the front passes). The field is mixed, not rendered once for each view: a
+  source is heard from the nearest local kart, and each local kart's viewport has its own place in the stereo field (one
+  view centred, two left and right, four a 2 x 2), so with split screen the player in the left view hears their own kart
+  and everything near it on the left, and a kart that drives from one view's neighbourhood into another's moves across
+  the field. Their drift squeals (the three nearest) and events are heard by distance. With more than one player on the
+  screen, each player's engine is quieter (two at 0.71 each, four at a half) and their everyday sounds a little (four at
+  0.71); what must be heard is not.
+- **Ground and contact.** Every loop here is stereo: what is low and heavy is one thing in the middle, what is high and
+  grainy is made twice, once for each ear, and pulled towards the middle until the sum to mono loses under 2 dB (the
+  tests hold it). The tyres roll on the road (a rumble, the hum of the tread, which rises with speed as the loop plays
+  faster, the grain of the surface and the thump of a joint in the road, which comes faster with speed: quiet, growing to
+  top speed, gone in the air). Each surface has its own: grass swishes (a swish, a sizzle of blades, stalks snapping,
+  the turf's thrum), sand hisses and patters (a rush, 280 tiny grains a second, stones knocking), snow crunches (grains
+  with a squeak in some, the fump of the pack giving way), mud squelches (a slosh, wet slaps of the tread pulling out,
+  bubbles, a gurgle), ice hisses and creaks (fine crystals, glassy ticks, the lake groaning in a stick-slip glide).
+  A drift squeals as a real tyre does: noise through three narrow resonances (not harmonics of each other) whose
+  centres wander as the grip comes and goes, shuddering with stick and slip, over the scrub of the tread and a hiss,
+  each ear's tyre a hair apart in pitch. Its pitch follows the slip (the speed and how hard the wheel is turned), each
+  spark level is a tone and a half higher, and the step is a chirp: reaching a tier bends the squeal up a further 8 %
+  that settles over a fifth of a second. From the first spark its sparks fizz under it, a major third higher at each
+  level, with ringing glints; let go, the mini-turbo, a step up for each level, and from the third a whoomph and a run
+  of glass. A barrier scraped along is a loop that lasts as long as the contact (`kart_scrape`: plastic and metal
+  dragging with a flickering grip, the panel ringing at its own pitches, grit under it; the kart's `rub` flag (set by
+  the sim on every tick it is pressed on a barrier, a gentle rub included) keeps it going, held a tenth of a second
+  across skipped ticks, a hard hit adds its 0.35 s tail, its level follows the speed along the wall; another kart's scrape is still heard as a one-shot).
+  The chassis creaks at a hard bump or landing (`kart_creak`, the player's own kart: a short stick-slip groan, falling).
+  Bumps, walls and landings by the sim's strength (a hard landing thuds), and by the driver's weight (a light kart's
+  land and bump are pitched up to 14 % higher, a heavy kart's down to 16 % lower). The wind (`kart_wind`: a rush that
+  swells differently in each ear, a thin whistle, buffeting, a fine hiss) rises with speed and is loudest in the air;
+  in another kart's wake the torn air of the slipstream (`kart_draft`: a deep roar with fast buffeting, a ripping band
+  sweeping up and down, wide) rises as the draft charges. Not done: a kerb's rumble strip and water's splash (the sim
+  reports neither a kerb nor water under a kart; they need a kerb flag and a water ground from the tracks). Spectrograms
+  of old against new: `node tools/listen/cues.mjs --label after --shots DIR` (and `--label before --root <old checkout>`).
+- **Moments and items (rebuilt from layers).** Nothing here is one oscillator and an envelope: each sound is a
+  transient (a click, a thump, a crack), a body (a ring, a roar, a siren) and a tail (an echo, debris, rain), cut from
+  the parts in `kart-synth.ts`: FM bells for metal and glass, a kalimba, a plucked string (Karplus-Strong) for the
+  twang of a mini-turbo or a slingshot, a brass stab, a stack of detuned saws, noise through a sweeping resonance
+  chopped into grains for whooshes with texture, showers of ringing shards, rain, sirens, tweets, and a few filtered
+  echoes for a shock wave. Pitched parts sit in C major, as the music does. The recipes are in `kart-items.ts` (the
+  box, the roulette and every item), `kart-events.ts` (sparks, boosts, the start), `kart-impacts.ts` (hits, bumps, the
+  air, the fall) and `kart-jingles.ts` (the tunes, the crowd, the horns, the interface).
+  - *The roulette.* Ticks of a wooden reel (pitch steered by `race-audio.ts`: they climb as the reel slows), the
+    ratchet's latch when it stops (`kart_item_ready`), and, with the latch, a chime of the item's own (`chimeOrder`,
+    played by `race-audio.ts` when the reel stops, so it always matches the item held): nitro a fifth climbing with a puff of gas, triple nitro three pips and a
+    high one, puck two wooden taps, triple puck three climbing, seeker a sonar ping and its echo, slick a wet bubble
+    sliding down, comet a run of glass to the top, storm a bell against its tritone over a low tick of thunder, skyrocket
+    a whistle and a pop of stars, blast a thump under a wide chord, decoy the right chime a hair flat with a wink. Only
+    the player who took the box hears it; the box bursting (a crack, a crunch, shards, a rising sparkle) is heard by all
+    near.
+  - *Each item.* Nitro: a gas hiss, two sparks, a whump and a jet's roar climbing through a resonance with a
+    turbine's whine (the triple's is the same behind a ratchet of three clicks, higher). Puck: a solid thunk and a
+    whirring disc; off a barrier a wooden knock and a clear metallic ping. Seeker: a launch and a sonar ping, a loop
+    of homing beeps (`kart_seeker`, rate bent by the closing speed and up to a third faster inside 40 m, so the beeps quicken as it closes in), and a three-beep
+    lock on the kart it hits. Slick: a gloopy splat with bubbles when dropped and a wet skid under the spin-out when it
+    catches someone. Triple puck: three pucks circling the player's own kart hum while it holds them (`kart_orbit`,
+    higher for each one fired). Comet: six seconds, lit by a run of bells, then a bed of detuned saws whose filter
+    sweeps up every 1.5 s so it keeps rising, kalimba arpeggios and glitter, blinking faster in its last second and a
+    half and closed by two bells. Storm: a crack and a buzz, thunder rolling at irregular swells with its echoes, and
+    a patter of rain. Skyrocket: fuse crackle, a pop and a roar and a whistle that crosses the sky from the left to the
+    right (stereo), a siren for the kart it hunts (`kart_skyrocket_warn`: the leader of the others still racing, if it
+    is on this screen), and a burst of falling stars. Blast: a deep boom, a shock wave of air racing out and its echoes
+    coming back. Decoy: set down with a soft pok and a shimmer, and when driven into the box smash cut cheap, a cork's
+    pop, a "bip-boop" down a third and a slide whistle slipping off.
+  - *Impacts.* A hit (puck, rocket, blast, comet): a hard bonk, a clang of the chassis, a short whirl and three stars.
+    A spin-out (oil, decoy, storm): a skid's whirl winding down, a bonk, and four dizzy tweets circling, slower as the
+    head clears. Kart against kart by the sim's strength: a tap below 0.55 (a bumper's tok and squeak), a clonk with a
+    deep thump and a ringing bumper above it, louder and lower the harder. A barrier: a tyre stack's thud and a fence's
+    rattle. A hazard: a pipe's clang, debris and a sad trombone's wah-wah-waaah. A ramp: a plucked twang and a rubber
+    boing; a trick: pings spiralling up, a slide whistle and a ratchet of the spin round the head (stereo); a landing:
+    a chunk of suspension and two settles, a heavy one a thud with the frame ringing, and a trick landed is cheered
+    (`kart_land_cheer`, the player's own). Over the edge: two detuned whistles falling with a hollow "ooo", and the drone's
+    claw closing with a clunk; the drone letting go: a click, rotors, a boing and two notes.
+  - *Moments.* The countdown's blips climb the A major triad and Go is a brass-and-bell triad over a detuned pad and a
+    kick; a lap is a pluck, a tine and a chime up the triad with a swish of the line; the final lap is three hard
+    pick-ups and a brass chord with a crash, under two seconds and over before the music's own final-lap change
+    matters; a place won is two plucks up, one lost two marimba notes down; the finish is timpani, brass, a pad, a
+    crash, confetti cannons, a run of bells and a roaring crowd (second place and below a warmer, smaller one); the
+    results open with applause (`applause`, a `KartSound` the app asks for, 1.8 s in so it does not stack on the win or loss jingle); a driver's cheer (both hands up) is a party
+    blower, confetti and a "yay", a wave a two-tine hello and a swish of the hand (`emoteOrder`, from the
+    emote on the kart's view, once as it begins, and not for a finished kart: that cheer is the sim's own); the photo finish's flash charges, then the shutter clacks and pops.
+  - *Horns.* A clap honks the driver's own horn (`HORNS` in `events.ts`): Bun a party blower, Pepper a bulb horn, Moss a
+    ribbit, Kit the classic two-tone, Juniper a steam whistle, Mango a bicycle bell, Bramble a tuba, Rivet a robot's
+    honk, Dabble a quack; each kart's a little different in pitch.
+  - *Voices.* Every cue has `maxInstances` (at most 5; most 2 to 4) and a `minGap`, the race audio stops a frame at
+    eight orders (priority 3 spared) and any cue at two (`race-audio.test.ts` fires eight karts' items, hits and
+    pick-ups at once and holds the count), and another kart's sounds fall off by distance (20, 32 or 45 m).
+  - *Measured* (`node tools/listen/cue-sheet.mjs`, each cue rendered offline at its table level; `sheet.py` makes
+    the spectrograms): all 94 cues unclipped, the highest true peak −5.6 dBTP at the bus, levels matched to the old
+    ones (a take is normalised to one loudness, so the mix is the table's levels, and a race's mix stays at about −16
+    LUFS: the scripted moments scene is −17.8 LUFS, short-term −15.4, −5.5 dBTP). Hits land harder and sooner: a boost
+    pad's attack 140 to 5 ms, the reel's landing 162 to 3 ms, a place won 72 to 2 ms, a skyrocket's launch 53 to 4 ms,
+    Go 23 to 5 ms; crest factor up on the strikes (hit 15.5 to 20.8 dB, puck fired 15 to 21, bump 14 to 19), a spin-out
+    a half second longer (0.9 to 1.5 s) for its tweets; the whole pack's first takes cost 1.0 s of DSP (0.7 before,
+    for 30 cues fewer: 94 and 64), in workers.
 - **Places.** Each theme's beds, two copies of each apart in the stereo field, and something far off every few
   seconds, 15 to 70 m away (so darker and quieter): a breeze and larks (meadow), a fridge's hum and a pot on the boil
   (kitchen), water lapping, a sea breeze and gulls (harbour), a dry wind and a hawk (canyon), a crowd, generators and
   the high striker's bell (funfair), a thin wind and creaking ice (snow), the mountain's rumble and lava (volcano), a
   spaceship's drone, the void's hiss and a radio's bleeps (space), surf, wind in the palms and tropical birds (palm).
+- **Rooms.** Every track has its own reverb (`space.ts`: an impulse response made once from the theme, with its own
+  length, decay by band, pre-delay and return level: a meadow's is 0.9 s and airy, a kitchen hard tile, the funfair a
+  big top, the glacier and the volcano caves of two seconds, space 2.6 s and dark). The arcade's engine takes it with
+  `setImpulse` (`RaceAudio.load` hands it over), and the one-shots that matter send into it (`reverb` in the cue
+  table: finish, cheer, laps, blasts, storms, the skyrocket's burst, hits, landings and boosts most, the countdown a
+  little). The loops (engines, tyres, wind) stay dry: they are the near, steady ground the rest rings against. The
+  countdown climbs the A major triad (one beep at A4, C#5, E5) and Go is the A above with the triad blooming over it
+  and the crowd a beat behind (the cheer has a 1.5 s gap, so a restart never stacks it); a drift boost at the second and
+  third charge has its own flame cue behind it (`kart_flame_short`, 1 s; `kart_flame_long`, 1.8 s), while the plain
+  whoosh stays as it was for pads, kicks and the start boost.
+- **The bus.** In a race the master gets a glue compressor (threshold −20 dB, 2.5:1, soft knee) and a −2.7 dB trim for
+  its make-up gain ahead of the limiter, whose ceiling is −2 dBFS (`enterRoom` sets them; `leaveRoom` hands back the
+  arcade's plain master and town room when the race audio is disposed). A new room is swapped in with the reverb return
+  faded out for 70 ms, so a ringing send never clicks.
 - **The mix.** Levels are dB at the bus, in `src/audio/cues/kart.ts` (its header has the ladder); the tests hold it
-  (`cues.test.ts`: every take under the bus's −1 dBFS ceiling, the kinds stepped, the engines' eight layers within
+  (`cues.test.ts`: every take under the bus's −1 dBFS ceiling, the kinds stepped, the engines' twelve layers within
   3 dB, the places under the engines). The music dips under the big moments: the finish (to 0.3 of its level), the
   final lap (0.45), being hit, a storm's bolt or a skyrocket bursting near (0.5), a blast or a fall (0.6), the start
   boost (0.65), the third drift boost (0.72), a nitro (0.78); a lighter dip never cuts a deeper one short. Measured
   over three laps of eight bots on Meadow Loop with one kart in view, the sliders where a new player finds them: the
-  whole mix −18.1 LUFS (true peak −2.4 dBTP), the effects −19.7 (−21.8 before the engines were remade) and the music
-  −22.9; each place alone −34 to −36.
+  whole mix −16.2 LUFS (true peak −3.7 dBTP; Glacier Pass −15.9 / −4.0, Volcano Rush −15.8 / −3.8, Kitchen Rally with
+  four views −15.5 / −3.3), the music −22.9; each place alone −34 to −36.
 - **What it costs.** Measured over a race of eight bots on Kitchen Rally with four views (Meadow Loop with one), against
   a bus that only counts, in Node on the M4 Max: the audio code takes 0.011 ms a frame with four views and 0.007 with one
   (CPU time, the least of three runs for each second of the race, medians of three alternating runs of the checkout
@@ -893,12 +1130,96 @@ heard and let go after half a second of silence, and is told only what has moved
   one-shot, with all their numbers) hash the same before and after. A render with `tools/listen` cannot show it
   bit for bit (the takes are made in workers, so two renders of one checkout differ); the loudness, range, peak,
   brightness and width of the Kitchen Rally render, before and after, are in `compare.mjs`.
+- **Re-inventing the motion sounds, measured.** `node tools/listen/cues.mjs --label <name> [--root <checkout>] [--takes 3]`
+  renders each cue of the pack in Node (no browser, nothing played), writes a stereo WAV of each and measures it:
+  centroid and rolloff, crest, amplitude-modulation depth (the spread of the level over 40 ms windows against its mean:
+  0 is a static drone), harmonic richness (how many multiples of the firing note stand within 30 dB of the strongest, to
+  8 kHz), stereo width (side over mid, dB) and the mono sum's loss. Means of three takes, the old recipes (the
+  checkout before this pass) against the new: the combustion engines' aliveness went from 0.03 to 0.07 (a drone) to 0.11
+  to 0.18; their harmonic richness from 14 to 25 lines to 25 to 40; their width from none (mono) to -9 to -5.6 dB, the mono sum
+  losing 0.5 to 1.1 dB; the drift's squeal and every ground loop from mono to -2.6 to -9 dB wide, losing at most 1.9 dB
+  summed; the combustion engines' crest 7 to 10 dB up to 11 to 14 (firings with edges, not a hum); the heavy engine's centroid from
+  300-360 to 350-500 Hz, the light one's from 860-980 to 1340-1750, the middleweight's from 490-610 to 740-1190. A
+  scripted lap of each weight (`solo-*` in `render.mjs`: idle, pulling away, cruising, lifting off, a climb, the air,
+  four drift tiers, release, grass, sand, a nitro, ice, mud, snow), a kart going by and a pack of eight come out at -18.7
+  to -19.9 LUFS with true peaks under -6.2 dBTP, and their stereo width from -17.7 dB to -6.4 to -8.3 dB (the pack from
+  -11.9 to -7.5). The whole mix stays at -16: three laps of eight bots on Meadow Loop -16.4 LUFS (-16.2 before; true peak
+  -3.4 dBTP), Glacier Pass -16.3 / -4.5, Volcano Rush -16.1 / -4.4, Kitchen Rally with four views -15.4 / -3.4. The
+  audio graph's cost (`renderMs` in the render: the audio thread's work for eight bots on four views, effects only, 50 s)
+  went from 1.97 s to 2.55 s (3.9 % to 5.1 % of one core, medians of three alternating runs; the stereo loops and the
+  third layer), the audio code's own time a frame is unchanged at about 0.03 ms. Spectrograms before and after are made
+  with `ffmpeg -i x.wav -lavfi showspectrumpic=s=1400x420:scale=log:fscale=log:stop=12000:start=40 x.png`. The pack's synthesis
+  cost (`node tools/listen/pack-time.mjs`, every cue's first take, best of five in Node) went from 250 to about 580 ms
+  (the engines are 12 of the 86 cues and about half of it; the harmonic series is one cycle's table laid through the
+  loop, and the filters are primed with the loop's own tail instead of run over two copies); in the page the takes are made in workers, so the wait before a race grows by
+  about a fifth of a second.
 - **Listening without hearing.** `node tools/listen/render.mjs --label <name>` renders scripted scenes (one kart of
   each weight through everything, karts going by, a pack of eight, the moments, each place alone) and real races of
   bots through the real engine and `RaceAudio` on an `OfflineAudioContext`, in a muted headless Chrome, writes them to
   `tools/listen/out/<name>/` as WAV files with their loudness (BS.1770), true peak, spectrum and stereo width, and the
-  audio code's time a frame; `compare.mjs a b` sets two renders side by side. `KART_AUDIO_REPORT=dir KART_AUDIO_WAV=1
+  audio code's time a frame; `node tools/listen/cue-sheet.mjs --label <name> [--spectrograms DIR]` renders every effect on its own at its table
+  level and measures its length, attack time, crest factor, centroid, loudness and peak (`sheet.py` lays before and after spectrograms side by side); `compare.mjs a b` sets two renders side by side. `KART_AUDIO_REPORT=dir KART_AUDIO_WAV=1
   npx vitest run src/kart/audio/report.test.ts` writes each cue's picture and sound. Nothing is ever played.
+
+### The music (`src/kart/audio/music/`)
+
+Thirteen pieces and two jingles, all written for the game, all synthesised in the page (nothing sampled, nothing
+borrowed): one tune for each track's world (Meadow Loop folk-pop with a whistle, an accordion and a strummed steel
+guitar; Kitchen Rally a swing combo with an upright, a Rhodes, a muted trumpet and brushes; Harbour Lights a night
+lounge with a sax and a sea song's triplet lilt; Canyon Run a surf-western with a spring-drenched twang and a gallop;
+Fun Fair a calliope waltz that becomes a brass march; Glacier Pass icy bells, a choir and glittering arpeggios;
+Volcano Rush driven twin guitars over rock toms; Starlight Ribbon a pumping supersaw synthwave; Five Finger Circuit a
+calypso on steel pans), the menu and lobby, the two result screens, the podium and the win and lose jingles.
+
+- **Writing.** A piece is sections of bars (`pieces/*.ts`): chord symbols with extensions, a tune written note by note
+  (call and response in the rests), and generated bass, comping and arpeggio parts from named rhythms (`patterns.ts`:
+  walking and walk-and-push upright lines, slap, calypso, surf, lilt, rolling, pulse and gallop basses; Charleston,
+  bossa, sparse and pushed comps). Most pieces open with an intro or a build, state the tune, answer it, change
+  colour in a bridge, and finish with a *lift* (the chorus again a tone higher with the band swelling: `shift` on a
+  section, with `withFinale` in `pieces/dsl.ts`) and a two-bar *turn* on the dominant that falls into the first chord,
+  so the seam of the loop is a turnaround, not a restart. Volcano Rush and Five Finger Circuit kick their last chorus a
+  tone up in place. A race theme is 69 to 83 seconds before it loops.
+- **The band.** `synth.ts` adds the engines the old presets could not be: `guitar` (a Karplus-Strong string with a
+  wooden body's resonances and a pick's click), `rhodes` (two FM pairs, a tine's bark, a hammer's thunk, shorter as it
+  climbs), `buzz` (stacked band-limited saws through a moving filter, with a scoop, a swell, a late vibrato, a breath
+  and optional vowel formants: brass section and stabs, muted trumpet, sax, accordion and musette, supersaws, string
+  ensemble, choir), and `layer` (a slap bass is a thumb and a pop; a steel pan a modal bell and an FM shimmer). The
+  drums (`kit.ts`) are layered with real transients: a beater's tick over a pitched body over a sub, a snare's crack
+  over its wires and shell, hats and cymbals from six detuned metal squares; six kit styles (pop, rock, brush, electro,
+  latin, march) and the shared kit for congas, shakers and the rest.
+- **Production.** Each part has a channel strip (`RackEntry`: high-pass, low-pass, peaking EQ, drive, rotary speaker,
+  tremolo or auto-pan, chorus, width, compressor, and `duck`, the sidechain pump that dips it at every kick); the
+  parts are balanced by loudness, sent to the room (with pre-delay and damping) and the ping-pong echo, folded into a
+  seamless loop, opened with a touch of air and width, glued by a bus compressor (2.8:1, 6 ms attack), rounded by a
+  breath of saturation and held by a look-ahead limiter that works round the loop, so a produced crest of 12 dB over a
+  loudness of −18 dBFS (`CREST_DB`), the peaks at −6 and never past −1. Music is quiet under the effects as before
+  (`MUSIC_TRIM`); the race mix and the ducking stay in `race-audio.ts`.
+- **Dynamic.** At the final lap the piece switches on the next beat to its version 1.1 times faster and a semitone
+  higher (`FINAL_LAP`), with a brass *stinger* (two bars and its tail, six to seven seconds) in the new key, made with that version, landing on the
+  downbeat while the music ducks to 0.55 under it. While a local kart burns a Comet (`KartView.comet`), a one-bar layer
+  of tambourine, shaker and bell pings in the theme's key loops over the music, coming in on the next bar line and
+  leaving in half a second (`MusicPlayer.setComet`). The music opens up with the race: a high shelf rising to +3 dB
+  and half a dB of level from the first lap to the last (`setIntensity`). The jingles (`music("jingle-win")`,
+  `music("jingle-lose")`) are one-shots, a fanfare of brass over timpani and a rueful descent on a muted trumpet; coming
+  off a race, `music("results-win")` and `music("results")` open with the matching jingle and fade into their own tune as
+  its tail dies away. The comet layer is renewed at every restart of the music's loop (so a waltz bridge never leaves it
+  behind), and the comet and the race intensity are let go whenever the phase is not racing. Pieces sit at the shared
+  −18 dBFS give or take `fx.master.loud` (Glacier −1.5, Meadow −0.5, Volcano +0.5) so the calm ones are calmer. Palm and
+  Volcano end their lifted chorus with a two-bar turn on the dominant, like the others.
+- **Off the main thread, and what it costs.** The worker renders a piece in one go (the stages are the fallback's
+  slices) while the loading bar shows its progress; the final-lap version, its stinger and the comet layer render in the
+  background after the race loads. Measured in Node at 32 kHz on a quiet 16-core machine: 0.5 to 1.5 s a race theme, 0.5 to 0.9 s a screen's piece (the synthwave and the snow at the slow end; on the same machine shared with ten other jobs, load 40, the same pieces took 1.2 to 15 s). A race theme's loop is 18 to 21 MB at 32 kHz (27 to
+  32 MB at 48 kHz) and its final-lap version 16 to 19 (24 to 29); `RaceAudio` keeps only the current theme's pair and the menu's;
+  the results' and podium's tunes render when wanted (the results' common one as soon as a local kart finishes) and the
+  unplayed one of the two results tunes is let go. The comet layer (2 s) and the stinger (about 6 s) are a few hundred kilobytes.
+- **Checking without hearing.** `production.test.ts` holds the tools (a limiter that lets nothing through, a pump, a
+  compressor), the kits (a kick is low, a hat high, every kit finite and ending in silence), the instruments (each plays
+  the pitch asked, finite, ending in silence), the crest and loudness, the lift being the chorus a tone up, the
+  jingles, the comet layer and the stinger; `pieces.test.ts` holds each piece (in tune with its own chords, the right
+  length, loud but not too loud, balanced, seamless where it loops, the same every time, wide).
+  `MUSIC_OUT=<folder> npx vitest run src/kart/audio/music/measure.test.ts` renders every piece and its final-lap
+  version offline to WAV files with a `summary.json` (loudness, peak, crest, limiter depth, the share of energy in five
+  bands, centroid, stereo width, render time, size); nothing is ever played.
 
 ## Performance
 
@@ -1085,6 +1406,34 @@ Measured when three players side by side did not work well on the M4 Max, and tw
   adaptation is there so that it finds its own balance, and the Frame Rate readout says what it got ("60 fps · hands
   29/s").
 
+**Local multiplayer, measured as a whole** (2026-11-07; `tools/perf/split.mjs`: the real race page, real sim, renderer, HUD
+and net loop of a practice room, 2 to 4 scripted wheels, optionally the real camera so a tracking worker runs per column;
+1440x900 at 1x, M4 Max, Auto tier, 15 s of racing weaving about so bots, items and bumps happen, 60 s for the longest).
+Two, three and four players on Canyon Run and Fun Fair, scripted hands and the fake camera: 60 fps, p99 16.8 ms, no
+frame over 33 ms, no main-thread task over 50 ms, no shader program linked after the green light, 270 to 560 draw calls
+a frame (p99 up to 1020). Four players on Fun Fair with the camera for 60 s: the same, no hitch. The main thread is about
+a fifth busy with four views (`--profile`: three.js's own scene walk and draw submission, then `cull.select`, `project`
+and the minimap, each under half a millisecond a frame). It makes 20 MB/s of garbage (`--garbage`: four fifths is three.js
+uniform uploads); that is a minor collection every second or so and none showed as a frame. Against main (9742f80) at 1x
+the numbers are the same, because there was nothing to see on a fast machine. A weaker one is what `--cpu n` stands in for
+(the main thread n times slower, four players, medians of one run, so read as a direction): at 8x main drew 23.5 fps on
+Canyon Run (p99 100 ms, 72 frames over 50 ms) and 26.3 on Fun Fair (p99 67); this branch 25.9 (p99 67, 40 frames over 50) and
+31.0 (p99 83); at 4x this branch still holds 60 fps. What a hitch would be made of, and is not here: the shaders are all
+built behind the loading screen, the pictures are culled per view, the minimap redraws at 30 Hz, nothing allocates per
+item box. What remains is draw calls: four views at the high tier submit 500 to 560 a frame, and below about a quarter of
+this machine's single-thread speed four views stop holding 60 fps; the answer today is `onStrain` (the next race one tier
+lower). Proposals: karts (welded meshes sooner, fewer draw calls a kart), the tracks (fewer distinct materials in the
+landmarks) and a mid-race step down for the shadow pass of views 3 and 4.
+
+*Not done, and not measured, against what was asked of this area:* the shadow pass still runs once per view (four times
+with four players); there is no per-view resolution (the one dynamic resolution covers the whole canvas) and no tier that
+steps down mid-race beyond `onStrain`; shader pre-warm was only observed (nothing links after the green light), not
+changed; hands jumping between players, the wheel freezing, input-to-kart latency, tracker read rates, a laptop hosting
+phones as wheels over real Wi-Fi (host snapshot cost) and any older laptop, integrated GPU or Safari were not measured.
+The `--cpu n` figures are one run per side. A friend's "bugging" report is therefore not explained: no frame hitch was
+found on a fast machine, so it is likely weaker hardware or tracking. If the minimap's canvas is resized it stays blank
+until its next draw, at most 30 ms.
+
 **Tiers.** `guessTier(gpu, cores, { splitScreen: true })` (Grip Prix passes it; the arcade's own guess is unchanged): a
 base Apple chip (M1 to M4) starts at medium, as do Safari and an iPad, which report only "Apple GPU" (unless the
 core count says a Pro or Max: 12 or more); Apple Pro, Max and Ultra start at high; old Intel graphics at low, Iris Xe
@@ -1184,7 +1533,7 @@ tight type, springy motion; a white pill is the one main action of a screen;
    Practice; "Up to 4 players" under it. Where the art is missing or not
    fetched, the page's own meadow and road stand in. A phone that came with
    a `?join=` link does not fetch the art at all (it is on its way to a room).
-   The back link goes to the Super Claude Bros. landing (`./`). `race.html`
+   The back link is the Nintenthropic wordmark (a white pill with a soft shadow in the glass back link) and goes to the landing (`./`); the loading screen carries the same wordmark at its head. `race.html`
    carries `assets/kart/icon-180.png` as its icon and Apple touch icon.
 2. **Who's Driving?** (`you.ts`). One calm card: your name (a friendly default), how you
    drive as three tiles (Wheel, Keyboard, Gamepad), the wheel's steering, and
@@ -1312,7 +1661,38 @@ tight type, springy motion; a white pill is the one main action of a screen;
    screen with place, name and time stamped on each, the winner's ringed in
    gold. It goes where the arcade's card goes (`ui/share.ts`, shared by both):
    the system's share sheet, or the Downloads with a toast. It is made only
-   when asked.
+   when asked. Files are named `nintenthropic-grip-prix-<track>.png`, and the
+   footer draws the logo (`assets/brand/wordmark.png`, the word where it does
+   not load).
+   **The track's look on each photo** (`src/kart/app/photoFx/`). Every track
+   has a `Look` (`looks.ts`): a colour filter that stays kind to faces (warm in
+   the meadow, cool on the glacier, a night sky over the harbour, the fair, the
+   volcano and the ribbon), a soft-light wash, a vignette, a stamp with the
+   track and the place ("Meadow Loop · 1st") inside a thin frame, and
+   the animated effects that play over the picture: petals, butterflies and a
+   hot-air balloon (Meadow); steam, sprinkles and a pop of flour (Kitchen);
+   fireworks over the water with their reflection and a lighthouse beam
+   (Harbour); a sun flare, a dust devil and a tumbleweed (Canyon); fireworks
+   and confetti (Fun Fair); frost creeping in, snow and glitter (Glacier);
+   embers and a lava glow (Volcano); a ringed planet, twinkles and shooting
+   stars (Starlight); palm-leaf shadows, bubbles and a sun glint (Five Finger).
+   By place (`flourishFor`): the winner has a bobbing crown and a gold show,
+   second and third silver and bronze sparkles, the last of three or more a
+   small rain cloud. Each effect (`effects.ts`) is a pure function of the clock
+   and the card's size, with no state, and repeats within `LOOP` (4 s): so the
+   shared picture can freeze it on its best frame (`Look.peak`), a clip can loop
+   without a join, and the tests compare frames. `player.ts` draws them on one
+   canvas per card, one loop for all at most 30 times a second at no more than
+   1.25 pixels a px, only for cards that are on screen (IntersectionObserver)
+   while the page shows; Reduce Motion draws the best frame once. The page's
+   grade is CSS (`filter` on the picture, a soft-light wash, a vignette), the
+   shared picture's the same in canvas calls (`compose.ts`; a browser whose
+   canvas has no `filter`, as Safari's, shares the wash without it).
+   **Share Clip** (next to Share, only where the browser has `MediaRecorder` and
+   `canvas.captureStream`) records the shared picture moving for one loop, 4 s at
+   30 fps, as mp4 where the browser makes it and else webm, and passes it to the
+   same share sheet or Downloads (`nintenthropic-grip-prix-<track>.mp4` or
+   `.webm`); where recording fails the picture is shared instead.
    **Standings** (a Grand Prix, between races) wear the same, on the
    postcard of the race just run; the **Podium** (its end)
    has its own stage, and says to a player who did not win how close they
@@ -1371,7 +1751,7 @@ out when the lobby changes and not every frame: 1.0 style recalculation a frame 
   and never leaves it, braking reverses, a drift slides, tightens, widens,
   straightens out and charges three boosts, jumps leave the wedge the picture
   draws and land pointing where they fly, a shake tricks only in the air and
-  kicks at the lip, crests throw and hills pull, the slipstream slings, items
+  kicks at the lip, cannons, glides and lips fly the same arc every time and set a kart down on its mark (`air.test.ts`), crests throw and hills pull, the slipstream slings, items
   hit, places and laps count, the race ends, `snapshot`/`restore` round-trips,
   the same seed replays); the bots (`bots.test.ts`: temperaments mixed on every
   grid and kept through a cup, laps that differ, a pass on a side without a
@@ -1395,7 +1775,7 @@ out when the lobby changes and not every frame: 1.0 style recalculation a frame 
 - Sound (Vitest, in Node, nothing played): every cue renders finite, unclipped and
   of its length, its takes different, a loop without a click at its seam
   (`src/audio/sounds.test.ts`); the kart pack's mix by kind, every take under the
-  bus's −1 dBFS ceiling, the engines' eight layers within 3 dB of each other,
+  bus's −1 dBFS ceiling, the engines' twelve layers within 3 dB of each other,
   brighter the lighter the kart and each on its note (`cues.test.ts`); RaceAudio
   against a recording bus (`race-audio.test.ts`): the sound of every event, an
   engine's revs, crossover, load and pops, a rival heard where it is at every step
@@ -1458,6 +1838,23 @@ front of them (or a laptop), and the TV is the host's screen.
   a kart that lands short falls, and one shoved over the lip by another
   between its own steps jumps rather than falls. A kart higher than 2.4 m
   flies over an item box.
+- **Launch and air sections** (`air`): `{ kind, at, length, height, offset?, width? }`. A **cannon** is a pad of chevrons
+  with a pair of barrels beside the road that fires the kart in an arc of `height` m that comes down `length` m on;
+  a **glide** lifts the kart off a brow to `height` m and floats it down the next `length` m under a striped parasol
+  (target rings are painted where it lands: the middle of the road, the boost); a **lip** is a short, steep arc at
+  one side of the road (`offset`, `width`) for a trick. Put the landing on a stretch the kart can drive (a long gap
+  in the road under a cannon needs `drops` with `gap: true`, an open edge under a glide `drops` without), give a
+  cannon 20 m of road after its landing before a hard bend, and keep hazards out of the landing (a kart in the air is
+  above them: they are met when it comes down). The picture is `render/world/airPads.ts` (flat light, and posts
+  beyond the barrier and the camera's margin, like the start gantry's legs) and `render/parasol.ts`; the map draws
+  the flight as a band. Mirror mode flips the pad's offset.
+  A planned flight never slows below a floor speed (`AIR.flightFloor` 12 m/s, a lip 8): a storm, a hit or a wall in
+  mid-air cannot leave a kart hanging over the track, it carries on and lands. `sim/airTracks.test.ts` checks each air
+  track (and its mirror): landing run straight, no hazard, item row or boost pad under a flight, bots fly every
+  section, never fall, and finish across three seeds.
+  **Not built** (kept for the timed moving set pieces engine of the Track features section, or later): the
+  loop-the-loop ribbon, trick walls, vertical twists, the crumbling bridge over the lava, rock rain with a visible
+  build-up (Volcano's eruption is the paired lava bombs on a 7 s period), and the Five Finger beach waves.
 - **Drops** (`drops`): edges with no barrier. Over the edge (or into lava,
   a sink, space) the kart **falls**, and a **rescue drone** (a little
   propeller drone with a hook, Grip Prix's own) lifts it back to the road a
@@ -1475,6 +1872,37 @@ front of them (or a laptop), and the TV is the host's screen.
   sand, snow (slow off-road with spray), boost strips.
 - **Hazards** (`hazards`): things that move on their own (track/hazards.ts:
   a pure function of race time) and spin out a kart they touch.
+- **Timed set pieces** (track/pieces.ts, drawn by render/world/pieces.ts):
+  hazards that act on a beat and *tell you first*. They are ordinary
+  hazards, so the sim, the bots and the network need nothing new (every
+  device computes the same pose from the race clock). The motions: `swing`
+  (a wrecking ball or boat on a chain across the road, `span` metres either
+  side of `offset`, low and dangerous through the middle of its swing and
+  lifted clear of a kart's roof at each end), `crush` (a stomper or icicle:
+  up, then from half the cycle a shake and a red flush while its shadow
+  grows and reddens on the road, a fast fall at 72%, down for a moment, up at
+  90%; dangerous only while its underside is under a metre), `slide` (a cart
+  or wall panel that crosses the whole road once every cycle from out of
+  sight to out of sight, a lamp on a post glowing before it comes; a
+  negative `span` runs right to left) and `orbit` with `dir` (a sweeper
+  arm: `sweeper()` lays a line of circles from a hub, one way or both).
+  `HazardPose.warn` (0..1) is the telegraph the picture shows; `top` is how
+  high a crusher hangs. Helpers `sweeper`, `stomperRow` (a wave across the
+  lanes, with gaps), `pendulum` and `crosser` spread a piece over its
+  hazards. The picture draws one instanced mesh per kind, one for the parts
+  that move, one for the parts that never do (gantries, beams, rails, lamp
+  posts: written once, on the first frame) and one for the shadows. Reduce
+  Motion turns the rattle and the lamp's flicker into a steady colour.
+  Mirror mode negates the `span` of a swing or slide (or flips `dir` when a
+  slide has no span) so they stay in step with the flipped road.
+  The bots read the same poses a couple of seconds ahead, as for any hazard,
+  and wait (slow to 55%) or gamble (a tighter line) by skill. Not built yet:
+  turntable platforms that carry a kart, floors and gates that rise. Also
+  not built, from the round's wish list: the Canyon mine tunnel through the
+  mesa and a swaying rope bridge, a Fun Fair funhouse of mirrors and a Ferris
+  wheel to drive under with its swinging cars, the Glacier frozen waterfall
+  to drive behind and a real rolling avalanche. The Canyon and Glacier road
+  layouts are close to round one's; the set pieces are what changed.
 - **Landmarks** (`landmarks`): set pieces the picture builds, by name from
   the theme's list below; `span` for a thing over the road (a tunnel, an
   arch). What the picture builds never stands where a kart can be: nothing
@@ -1530,12 +1958,12 @@ front of them (or a laptop), and the TV is the host's screen.
 | Theme | Landmarks | Hazards |
 | --- | --- | --- |
 | meadow | windmill, barn, pond, hay-bales, hot-air-balloon, sheep, flower-field | — |
-| canyon | mesa, rock-arch (span), cactus-grove, water-tower, mine-cart | boulder, tumbleweed |
+| canyon | mesa, rock-arch (span), cactus-grove, water-tower, mine-cart | boulder, tumbleweed, ore-cart (slide), wrecking-ball (swing), rock-crusher (crush) |
 | harbour | crane, lighthouse, ship, containers, warehouse, buoy | crab, forklift |
 | kitchen | teapot, fruit-bowl, toaster, grater (span: a tunnel), salt-shaker, pepper-mill, cookbook, cereal-box, mug, fork-arch (span), spoon-arch (span), sink, window, wall-clock | orange (roll), pea (cross), teacup (orbit) |
-| snow | igloo, cabin, snowman, ice-arch (span), ice-cave (span: a tunnel), pine-snow, gondola, ski-jump | penguin (cross), snowball (roll), yeti (bob) |
+| snow | igloo, cabin, snowman, ice-arch (span), ice-cave (span: a tunnel), pine-snow, gondola, ski-jump | penguin (cross), snowball (roll), yeti (bob), icicle (crush) |
 | volcano | volcano, lava-fall, basalt-columns, stone-bridge (span), obsidian-arch (span), hot-spring | fireball (bob), boulder (roll), geyser (bob) |
-| funfair | ferris-wheel, carousel, big-top (span: a tunnel), rollercoaster (span: over the road), entrance-arch (span), food-stall, balloon-stand, hook-a-duck, helter-skelter, fireworks | teacup-ride (orbit), bumper-car (cross) |
+| funfair | ferris-wheel, carousel, big-top (span: a tunnel), rollercoaster (span: over the road), entrance-arch (span), food-stall, balloon-stand, hook-a-duck, helter-skelter, fireworks | teacup-ride (orbit), bumper-car (cross), arm-ball (orbit: a carousel's bar), funhouse-panel (slide), mallet (crush), swing-boat (swing) |
 | space | ringed-planet, ring-gate (span), asteroid, satellite, space-station, nebula | asteroid (orbit), comet (roll) |
 | palm | palm-tree, beach-hut, surfboard, sandcastle, beach-towel, giant-ring (span), wristwatch (span: the start gantry) | crab (cross), coconut (roll), beach-ball (roll) |
 
@@ -1568,16 +1996,42 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    S-bends that lean one way and the other, boulders rolling down the
    descent, a sand cut inside the hairpin for the brave.
 
+   *Design note (round two).* The signature is the old mine: the rails cross
+   the road, and the quarry works it. Each lap has four beats you can read
+   and time. On the ridge, two ore carts cross the rails one each way (a red
+   lamp on a post lights before each runs), twenty metres before the long
+   run-up to the gap. After the jump and the lip, a rope bridge: ten metres of
+   planks over the gorge with nothing on either side. Down the tumble, two
+   wrecking balls swing across the road half a beat apart, so you weave. Out
+   of the neck the rails cross again, and then the wash: the gorge opens to
+   twenty-two metres of sand with three rock crushers falling in a wave
+   (shake, red shadow, slam), and a boost pad in the middle lane, under the
+   last one, for the brave. The wow moments: the jump, the bridge, the wash.
+
 **Comet Cup**
 
 5. **Fun Fair** (funfair): dusk, every ride lit. Under the entrance arch;
-   round the carousel; through the big top (a tunnel full of lights); under
-   the rollercoaster; a teacup ride spinning beside the road and bumper cars
-   crossing a wide plaza; a ramp off the helter-skelter's foot; a hump along
-   the top and a dip under the rollercoaster; the hairpin by the hook-a-duck
-   stall (the duck), banked hard; fireworks over the finish.
+   past two mallets (test your strength: one up while the other comes down);
+   round the carousel; along the rollercoaster's own course, the lift hill
+   (six and a half metres, weaving either side of the crest) and the plunge
+   to the dip under the coaster; the hairpin by the hook-a-duck stall (the
+   duck), banked hard; back through the big top, where striped funhouse walls
+   slide across the road one each way; the plaza, where a carousel turns in
+   the middle (one arm of horses to time) with bumper cars
+   crossing and a teacup ride beside; a ramp off the helter-skelter's foot;
+   the hall of mirrors chicane under two pirate ships swinging a beat apart (3.5 m either side of the middle);
+   fireworks over the finish.
+
+   *Design note (round two).* The fair is a ride, so it has a ride's
+   rhythm: a quiet straight, a climb, a drop, a dark tunnel with moving
+   walls, a spinning plaza, a chicane. The top straight no longer runs
+   flat: its heights are the coaster's (up 6.5 m, down to -2.4 m), so the
+   plunge is the fair's wow moment, with a boost pad at the bottom. Every
+   moving thing is announced: mallets shake and redden, wall panels light a
+   lamp, the carousel turns slowly enough to read (6.5 s).
 6. **Glacier Pass** (snow): an alpine pass at blue hour. A frozen lake (all
-   ice, wide, level) to slide across in the valley, then a climb of fifteen
+   ice, wide, level) to slide across in the valley, with a kicker on it (a
+   short hop on the ice, a trick for a boost), then a climb of fifteen
    metres to the pass and a corkscrew three quarters of the way round a
    mountain hut, banked hard and falling all the way, a cliff on its outside
    and ice on its tight inside line; a crest to fly over on the shoulder, a
@@ -1586,28 +2040,62 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    moguls on the way home. Penguins waddle across, snowballs roll down at
    you, a yeti pops out of a snowdrift once a lap. The duck sits by an
    ice-fishing hole on the lake.
+
+   *Design note (round two).* The pass has weather, and the weather is on a
+   timer. In the ice cave three icicles let go one after another down the
+   cave (each shakes, and its shadow reddens, a second before it drops), and out of the cave, on the in-run
+   to the ski-jump, two big snowballs thunder down, one each side in turn
+   (an avalanche you read and slip between, then straight into the jump).
+   The lake's kicker is the first wow moment, the corkscrew the second, the
+   cave the third, the ski-jump over the crevasse the fourth.
 7. **Volcano Rush** (volcano): black rock and rivers of lava (drops). Up the
    volcano's flank in switchbacks (two banked hairpins, boulders rolling down
-   the legs at you), along a ridge twenty-two metres up that weaves between
-   lava on the outside of its bends with fireballs leaping from it, then
-   straight down the mountain: over a brow to fly, a jump over a lava gap, and
-   a stone bridge over the lava lake with nothing either side, a boost strip
-   along its left half only. The volcano smokes behind it all; the duck
-   relaxes in a hot spring beside the second hairpin.
+   the first leg at you); on the second leg a **geyser cannon** (`air` cannon,
+   82 m, 8 m up) fires you across a tongue of lava that has eaten 66 m of the
+   road (a `gap`: there is no way across on the ground); a ridge twenty-two
+   metres up that weaves between lava on the outside of its bends, where the
+   **eruption** goes off on the race clock: a pair of lava bombs leaps from
+   either side every seven seconds (the middle is clear), the next pair half
+   a beat later; then off the brow on a **glide** (140 m, 11 m up, a parasol)
+   down the mountain over the open lava fields, steering for the rings painted
+   where the road comes back (the boost), and the stone bridge over the lava
+   lake with nothing either side, a boost strip along its left half only. The
+   volcano smokes behind it all; the duck relaxes in a hot spring beside the
+   second hairpin. *Design note:* the old jump over a lava gap became the
+   glide, because a ramp can only throw a kart one way and the brow is the
+   best view on the track; the cannon is the flank's wow moment and the
+   eruption the ridge's; the glide's landing is a straight, level run before
+   the last bends.
 8. **Starlight Ribbon** (space): the finale. A glowing ribbon of road high
    over a ringed planet: up the twist, where the ribbon rolls one way and
-   then the other, two crests to fly along the top, a banked carousel round
-   the far end that falls all the way, back along a lower ribbon and down to
-   the long jump between two ribbons. Almost no barriers (fall and the drone
-   brings you back), boost strips, ring gates, asteroids orbiting the road.
-   The duck floats in an astronaut's helmet by a satellite.
+   then the other, two crests with **low-gravity lips** (`air` lip, 64 m, 5 m
+   up: a slow, floaty arc each, a trick boosts on landing), a banked carousel
+   round the far end that falls all the way, with a **meteor shower** down it
+   (two comets a beat apart, one each side) and an asteroid circling it, back
+   along a lower ribbon and down it on a **solar-sail glide** (70 m, 7 m up,
+   landing rings) and into the **cannon between two ribbons** (88 m, 9 m up,
+   over 56 m of nothing). Almost no barriers (fall and the drone brings you
+   back), boost strips, ring gates. The duck floats in an astronaut's helmet by
+   a satellite. *Design note:* the lips replace the natural crest jumps so the
+   floaty arcs are always the same, the asteroid moved off the dip so that
+   nothing waits where the lips land, and glide then cannon on one straight is
+   the finale's crescendo (a kart that lands the glide on its mark has speed
+   for the cannon).
 
 **Secret: Five Finger Circuit** (palm): an island shaped like an open hand,
 seen from above — the hand you play with. The road runs up and down every finger
 (the fingertips are hairpins), round the thumb, across the palm and back
 along the wrist, where a giant wristwatch is the start gantry; a ring to
 drive through on the straight by the wrist (the fingers are too close to one
-another for anything to stand between them); palm trees, beach huts, crabs, coconuts. The
+another for anything to stand between them); palm trees, beach huts, crabs, coconuts.
+A **wrist cannon** (36 m, 5 m up) on the first diagonal hops a kart up from the wrist
+toward the first finger, a **fingertip lip** (34 m, 3.5 m up) hops the first finger's
+long leg, and the **thumb glide** (95 m, 8 m up, a parasol) takes a kart off the thumb's
+tip and down to the wrist over the water, to rings painted at the foot of the thumb.
+*Design note:* the fingers are too close together and the legs too short for long
+flights (a cannon needs 20 m of road after it before a hard bend), so the hand gets
+short hops and one long glide down the thumb, the one long straight on the map; waves
+washing the beach road on a timer are not built (see the timed set pieces). The
 minimap is a hand, tilted: every finger climbs to its tip and back. The duck
 sunbathes, in sunglasses, in the middle of the palm.
 Unlocked by winning both cups (or, for those who know, the Konami code on the

@@ -210,9 +210,14 @@ def _aim(n):
     return float(np.degrees(np.arctan2(n[0], n[2]))), float(np.degrees(-np.arcsin(n[1])))
 
 
+# The eyes are drawn a little bigger than each species asks, and the game's eyelids (face.ts EYE_GROW) follow.
+EYE_GROW = 1.14
+
+
 def eye(part, c, r=0.045, iris="#7a4a22", aim=(0.0, 0.0, 1.0), squash=(1.0, 1.2, 0.8), sparkle=True, ring=True):
     """A big glossy bead of an eye with a coloured ring round the pupil and two glints. `c` is its centre, `aim` where it looks."""
     yaw, pitch = _aim(aim)
+    r = r * EYE_GROW
     rv = np.array(squash) * r
     rings = [0.0, 0.26, 0.52, 0.82, 1.14, 1.46, 1.75]
     ic = lin(iris) if isinstance(iris, str) else np.asarray(iris)
@@ -222,7 +227,7 @@ def eye(part, c, r=0.045, iris="#7a4a22", aim=(0.0, 0.0, 1.0), squash=(1.0, 1.2,
     part.mesh(v, n, f, "gloss", ringcol)
     if sparkle:
         R = S.euler(yaw, pitch, 0.0)
-        for d, size in (((-0.40, 0.50, 0.77), 0.33), ((0.38, -0.46, 0.80), 0.15)):
+        for d, size in (((-0.36, 0.46, 0.80), 0.40), ((0.38, -0.46, 0.80), 0.19)):
             d = np.asarray(d) / np.linalg.norm(d)
             at = np.asarray(c) + R @ (d * rv * 1.0)
             hv, hn, hf, _ = S.polar_ball(at, (r * size, r * size * 1.05, r * size * 0.5), [0.0, 0.7, 1.4], 8, rot=(yaw, pitch, 0.0))
@@ -236,7 +241,8 @@ def eyes(part, x, y, z, turn=0.22, **kw):
 
 
 def smile(part, f, half=0.1, y=-0.1, depth=0.03, r=0.0062, colour=INK, lift=-0.003, curl=0.0, n=9, mat="cloth"):
-    """A smile line drawn on the face (a thin tube pressed into the surface of the head shape f)."""
+    """Not drawn here any more: the game draws every mouth live (src/kart/render/drivers/expression.ts), so it can change."""
+    return
     xs = np.linspace(-half, half, n)
     ys = y - depth * (1 - (xs / half) ** 2) + curl * (xs / half) ** 4
     pts = S.surface_point(f, xs, ys)
@@ -247,7 +253,8 @@ def smile(part, f, half=0.1, y=-0.1, depth=0.03, r=0.0062, colour=INK, lift=-0.0
 
 
 def brow(part, f, x, y, length=0.08, slant=0.35, arch=0.012, r=0.0085, colour=INK, lift=-0.002, n=7, mat="cloth"):
-    """An eyebrow over an eye at (x, y), tilted by `slant` (positive: the outer end up)."""
+    """Not drawn here any more: the game draws every brow live (src/kart/render/drivers/expression.ts), so it can move."""
+    return
     sx = 1.0 if x >= 0 else -1.0
     t = np.linspace(-1, 1, n)
     px = x + t * length * 0.5 * sx

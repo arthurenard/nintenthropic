@@ -1,3 +1,4 @@
+import { PIECE_MODELS } from "../pieces";
 import { describe, expect, it } from "vitest";
 import { TrackGeometry, type TrackDef } from "../../../track/geometry";
 import { hazardAt } from "../../../track/hazards";
@@ -133,7 +134,7 @@ describe("the registry", () => {
       for (const name of names) if (!(name in LANDMARKS)) missing.push(`${theme}:${name}`);
     }
     for (const [theme, list] of Object.entries(THEME_HAZARDS)) {
-      for (const h of list) if (!(h.kind in HAZARDS)) missing.push(`${theme}:hazard:${h.kind}`);
+      for (const h of list) if (!(h.kind in HAZARDS) && !PIECE_MODELS.includes(h.kind)) missing.push(`${theme}:hazard:${h.kind}`);
     }
     expect(missing).toEqual([]);
   });

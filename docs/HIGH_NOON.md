@@ -1,6 +1,6 @@
 # High Noon — game design
 
-The first game of Super Claude Bros. A realistic western gunfight
+The first game of Nintenthropic. A realistic western gunfight
 you play with a finger pistol: bandits take cover in a sun-baked town, lean out,
 aim and fire back, and you survive wave after wave. It must look and feel like
 something Apple would put on stage — see [DESIGN.md](DESIGN.md) for the

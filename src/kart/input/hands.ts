@@ -37,8 +37,27 @@ export const GRIP = {
   openFingers: 3,
   /** Fingers out for a fist: with two out the hand is neither, and keeps what it was (hysteresis). */
   fistFingers: 1,
-  /** A hand changes between fist and open only after the new reading has lasted this long, seconds. */
+  /**
+   * A hand changes from fist to open only after the new reading has lasted this long, seconds: a fist misread as open
+   * brakes the kart, so this is the slow way.
+   */
   hold: 0.12,
+  /**
+   * ...and from open to fist after this long: shorter, because a hand misread as a fist only lets the brake go for a
+   * moment (and the open side of it is held to `hold` again), so letting go of the brake and ending an item flick are
+   * quick. Measured on real hands (fixtures/moves.json): a fist reads 0.55 to 0.8 times and an open hand 1.2 to 1.4.
+   */
+  holdFist: 0.05,
+  /**
+   * A hand with a knuckle this close to the edge of the picture (0..1) or outside it is partly out of view: the
+   * landmarker guesses the part it cannot see, and its fingers say nothing about the grip (it keeps what it was).
+   */
+  edge: 0.01,
+  /**
+   * ...and has been backed by at least this many frames, however few the camera gave in that time: a hand read on one
+   * frame in three (three or four players on one camera) must not flip on a single misread frame.
+   */
+  frames: 2,
 } as const;
 
 export type GripState = "fist" | "open";
@@ -100,8 +119,20 @@ export function finishReading(reading: HandReading, hand: SeenHand, aspect: numb
   const wrist = hand.landmarks[0]!;
   const knuckle = hand.landmarks[9]!;
   reading.size = Math.hypot((knuckle.x - wrist.x) * aspect, knuckle.y - wrist.y);
-  reading.fingers = fingersOut(hand.world);
+  reading.fingers = clipped(hand.landmarks) ? NEITHER : fingersOut(hand.world);
   return reading;
+}
+
+/** The finger count of a hand that cannot be read: between a fist and open, so the grip stays as it was. */
+export const NEITHER = 2;
+
+/** Is the palm partly out of the picture? */
+export function clipped(landmarks: readonly Landmark[]): boolean {
+  for (const i of PALM_POINTS) {
+    const point = landmarks[i]!;
+    if (point.x < GRIP.edge || point.x > 1 - GRIP.edge || point.y < GRIP.edge || point.y > 1 - GRIP.edge) return true;
+  }
+  return false;
 }
 
 /**
@@ -130,19 +161,32 @@ export class Grip {
   private pending: GripState | null = null;
   private pendingSince = 0;
   private pendingLast = 0;
+  private pendingFrames = 0;
+  /** Frames in a row that backed the state (1 on first sight): a state not yet backed twice is a guess, not a grip. */
+  private agreeing = 0;
+
+  /**
+   * Has the state been seen on two frames (or arrived by a change that held)? A hand's first frame back in the picture
+   * is the one most likely misread, and takes the state at once; it is not braked on until a second frame says the same.
+   */
+  get steady(): boolean {
+    return this.state !== null && this.agreeing >= GRIP.frames;
+  }
 
   /** Feeds one frame's finger count; returns true when the state changed. */
-  update(fingers: number, now: number, hold: number = GRIP.hold): boolean {
+  update(fingers: number, now: number, hold?: number): boolean {
     const reading: GripState | null = fingers >= GRIP.openFingers ? "open" : fingers <= GRIP.fistFingers ? "fist" : null;
     if (this.state === null) {
       // First sight: take what is there at once, there is nothing to hold against.
       this.state = reading ?? "fist";
       this.since = now;
+      this.agreeing = 1;
       return true;
     }
     if (reading === null) return false; // in the dead band: a change under way waits
     if (reading === this.state) {
       this.pending = null;
+      this.agreeing++;
       return false;
     }
     // A change under way that has gone unsupported for a while (a hand that sat
@@ -150,12 +194,15 @@ export class Grip {
     if (this.pending !== reading || now - this.pendingLast > GAP) {
       this.pending = reading;
       this.pendingSince = now;
+      this.pendingFrames = 0;
     }
     this.pendingLast = now;
-    if (now - this.pendingSince >= hold) {
+    this.pendingFrames++;
+    if (now - this.pendingSince >= (hold ?? (reading === "fist" ? GRIP.holdFist : GRIP.hold)) && this.pendingFrames >= GRIP.frames) {
       this.state = reading;
       this.since = this.pendingSince;
       this.pending = null;
+      this.agreeing = this.pendingFrames;
       return true;
     }
     return false;
@@ -166,5 +213,7 @@ export class Grip {
     this.state = null;
     this.pending = null;
     this.since = 0;
+    this.agreeing = 0;
+    this.pendingFrames = 0;
   }
 }

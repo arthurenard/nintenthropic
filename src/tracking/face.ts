@@ -1,5 +1,5 @@
 /**
- * The face landmarker, as Super Claude Bros. uses it: only for the eyes, only in a game
+ * The face landmarker, as Nintenthropic uses it: only for the eyes, only in a game
  * that reads the eye (GameEntry.uses.eye - Overwatch Ridge's scope), and on
  * the same camera frames as the hand. One face; its blendshapes give each
  * eye's blink score, which is all that is kept - no landmark, no picture,

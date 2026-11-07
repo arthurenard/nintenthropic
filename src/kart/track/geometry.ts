@@ -64,6 +64,28 @@ export interface Ramp {
 }
 
 /**
+ * A launch or air section (sim/air.ts): a pad across the road that throws a kart into a planned flight over `length`
+ * metres of road, landing where the flight ends. The flight is a function of how far along the road the kart has got,
+ * so it replays exactly and every screen draws the same. "cannon": a barrel pad that fires the kart up in an arc of
+ * `height` metres (tricks boost on landing; a kart too slow is still thrown, at a speed that carries it). "glide": a
+ * big lift-off after which the kart deploys a parasol and floats down in a long shallow slope, steering well and
+ * choosing where to land; landing close to the middle of the road gives a short boost. "lip": a half-pipe lip, a short
+ * arc with a trick boost guaranteed.
+ */
+export interface AirSection {
+  kind: "cannon" | "glide" | "lip";
+  /** Where the pad is, a fraction of the lap. */
+  at: number;
+  /** Metres of road the flight covers. */
+  length: number;
+  /** The arc's top above the road, metres. */
+  height: number;
+  /** The pad's middle, metres right of the centre line, and its width (default: the whole road). */
+  offset?: number;
+  width?: number;
+}
+
+/**
  * Something that moves on its own and spins out a kart it touches. Where
  * it is is a pure function of the race's time (`hazardAt` in hazards.ts),
  * so the sim and every screen agree without sending it.
@@ -77,9 +99,16 @@ export interface HazardDef {
    * How it moves. "cross": back and forth across the road. "roll": along the
    * road against the traffic, from `at` for `span` of the lap, then again.
    * "bob": up out of the ground and down again at `offset` (harmless while
-   * down). "orbit": round a circle of radius `span` metres centred at `offset`.
+   * down). "orbit": round a circle of radius `span` metres centred at `offset` (a sweeper's arm is several, at
+   * different radii and the same phase: `sweeper` in track/pieces.ts).
+   *
+   * The timed set pieces (track/pieces.ts), all pure functions of the race clock like the rest: "swing": a wrecking
+   * ball on a chain across the road, `span` metres either side of `offset`, low through the middle of its swing and
+   * lifting clear at each end. "crush": a block (or icicle) that hangs, shakes with a lamp lit (`warn`), falls, lies
+   * a moment and rises, at `offset`. "slide": crosses the whole road once a cycle from out of sight to out of sight
+   * (a negative `span` goes right to left), with a lamp lit before it comes.
    */
-  motion: "cross" | "roll" | "bob" | "orbit";
+  motion: "cross" | "roll" | "bob" | "orbit" | "swing" | "crush" | "slide";
   /** Seconds for one cycle. */
   period: number;
   /** 0..1 of the cycle at time 0, so several of a kind are not in step. */
@@ -90,6 +119,10 @@ export interface HazardDef {
   offset?: number;
   /** "cross": metres either side of `offset` (default to the road's edges). "roll": the fraction of the lap it rolls. "orbit": the circle's radius, metres. */
   span?: number;
+  /** "orbit": which way it turns, seen from above: 1 (default) or -1. */
+  dir?: 1 | -1;
+  /** "crush": how high its underside hangs when it is up, metres (default 3.2 x radius + 2.5): a cave's icicle hangs lower than a quarry's block. */
+  top?: number;
 }
 
 /** A set piece the picture builds beside the road (a giant teapot, a ferris wheel); the sim ignores it. */
@@ -163,8 +196,10 @@ export interface TrackDef {
   /** Patches that drive differently, across the road from `offset - width/2` to `offset + width/2` (the whole road if unset). */
   surfaces?: (Stretch & { kind: Surface; offset?: number; width?: number })[];
   hazards?: HazardDef[];
+  /** Cannons, glides and lips: the launch and air sections (see AirSection). */
+  air?: AirSection[];
   landmarks?: Landmark[];
-  /** Where the rubber duck hides (every Super Claude Bros. game has one). */
+  /** Where the rubber duck hides (every Nintenthropic game has one). */
   duck?: { at: number; offset: number; y?: number };
   /**
    * How far the road leans into its bends everywhere, for the picture: radians per 1/m of curvature (0 = flat). Added to

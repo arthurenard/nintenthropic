@@ -94,8 +94,8 @@ describe("the main-thread renderer", { timeout: 60_000 }, () => {
       stage();
       slices.push(performance.now() - t0);
     }
-    // (About 0.35 s and 0.1 s on a quiet laptop; the bounds leave room for a busy test run.)
-    expect(slices.reduce((a, b) => a + b, 0)).toBeLessThan(4000);
+    // (A piece is a second or two of work on a quiet laptop, the limiter the longest stage at a fraction of it; the bounds leave room for a busy test run.)
+    expect(slices.reduce((a, b) => a + b, 0)).toBeLessThan(12000);
     expect(Math.max(...slices)).toBeLessThan(1500);
   });
 });

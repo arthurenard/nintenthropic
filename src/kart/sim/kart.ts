@@ -11,9 +11,10 @@
 import { TICK, TICK_HZ, type DriveInput, type RacerSetup } from "../contract";
 import { WEIGHTS, weightOf } from "../characters";
 import { mulberry32 } from "../../engine/rules/rng";
-import { hazardAt } from "../track/hazards";
+import { hazardAt, hazardReach } from "../track/hazards";
 import type { TrackGeometry } from "../track/geometry";
 import { clamp, q3, q4, wrapAngle, type BotMemory, type EventBody, type KartState, type World } from "./state";
+import { AIR, arcAt, arcHeight, arcSlope, type ArcSite } from "./air";
 import { barrierDistance, gapAt, groundAt, isOpen, rescueSpot, tableAt, type RampSite } from "./terrain";
 import { ticks, TUNING } from "./tuning";
 
@@ -36,7 +37,7 @@ export type Emit = (event: EventBody) => void;
 export const NO_EMIT: Emit = () => {};
 
 const HOP_TICKS = ticks(H.time);
-const REVERSE_TICKS = ticks(D.reverseDelay);
+const BRAKE_FULL = ticks(D.brakeRamp * 6);
 const LEVEL_1 = ticks(DR.level1);
 const LEVEL_2 = ticks(DR.level2);
 const LEVEL_3 = ticks(DR.level3);
@@ -96,6 +97,7 @@ export function newKart(racer: RacerSetup, place: number, geo: TrackGeometry): K
     s,
     offset,
     offroad: false,
+    rub: false,
     progress: -behind,
     pad: 0,
     ground: "road",
@@ -302,8 +304,8 @@ function checkHazards(w: World, k: KartState, emit: Emit): void {
   const time = Math.max(0, (k.t - GO_TICK) / TICK_HZ);
   for (const hazard of hazards) {
     // Far down the road, and not one that roams that far: not worth the working out.
-    const reach = (hazard.motion === "roll" ? (hazard.span ?? 0.05) * geo.length : hazard.motion === "orbit" ? (hazard.span ?? 8) : 0) + hazard.radius + TUNING.kartRadius + 12;
-    if (Math.abs(geo.delta(k.s, hazard.at * geo.length)) > reach + (hazard.motion === "cross" ? (hazard.span ?? 12) : 0)) continue;
+    const reach = hazardReach(hazard, geo.length) + hazard.radius + TUNING.kartRadius + 12;
+    if (Math.abs(geo.delta(k.s, hazard.at * geo.length)) > reach) continue;
     const pose = hazardAt(geo, hazard, time);
     if (!pose.active) continue;
     const dx = pose.x - k.x;
@@ -348,6 +350,7 @@ export function placeOnTrack(w: World, k: KartState, emit: Emit, report: boolean
       half = p.sample.width / 2;
     }
   }
+  k.rub = false;
   let offset = p.offset;
   const side = offset > 0 ? 1 : -1;
   const open = isOpen(terrain, p.s, side);
@@ -362,6 +365,7 @@ export function placeOnTrack(w: World, k: KartState, emit: Emit, report: boolean
     offset = side * limit;
     const into = k.vx * rx + k.vz * rz;
     if (into > 0) {
+      k.rub = true;
       k.vx -= into * rx;
       k.vz -= into * rz;
       if (into >= W.minHit) {
@@ -529,7 +533,7 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
     if (k.hop > 0) k.hop--;
     if (k.boost > 0) k.boost--;
   } else if (k.flight > 0) {
-    flyControl(k, steerIn, driftIn, shook, emit);
+    flyControl(w, k, steerIn, driftIn, shook, emit);
   } else {
     // The wheel's open hands brake, but in a bend at speed (or already drifting) they hold the drift with the throttle
     // down instead: a brake into a bend is a slide, and closing the hands lets it go.
@@ -544,7 +548,10 @@ export function stepKart(w: World, k: KartState, input: DriveInput, emit: Emit):
   placeOnTrack(w, k, emit, true);
   if (k.rescue === 0 && !grounded) fly(w, k, emit);
   else if (k.rescue === 0) overCrest(w, k);
-  if (k.rescue === 0 && k.flight === 0) launchOffRamps(w, k, prevS, emit);
+  if (k.rescue === 0 && k.flight === 0) {
+    launchOffRamps(w, k, prevS, emit);
+    if (k.flight === 0) launchOffArcs(w, k, prevS, emit);
+  }
   if (k.rescue === 0) checkHazards(w, k, emit);
   k.t++;
   settle(k);
@@ -655,18 +662,21 @@ function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brak
     along = Math.sqrt(Math.max(0, speedAfter * speedAfter - across * across)) * (along >= 0 ? 1 : -1);
   }
 
-  // Speeding up, braking, coasting.
+  // Speeding up, braking, coasting. The brake pulls the speed toward a target below zero (the throttle's share of the top
+  // speed, less the reverse), harder the longer it is held: no stop at zero, the kart just carries on backwards.
   if (braking) {
-    if (along > 0) along = Math.max(0, along - D.brakeDecel * ground.brake * brakeIn * TICK);
-    if (along <= 0) {
-      if (along > -D.standstill) k.stand++;
-      else k.stand = REVERSE_TICKS;
-      if (k.stand >= REVERSE_TICKS) along += ((-D.reverseTop - along) / D.reverseTau) * TICK;
-    } else {
-      k.stand = 0;
+    // Slow or backing up, the pedal is already down: backing up from rest should not wait on the build-up.
+    if (along < D.brakeRampBelow) k.stand = BRAKE_FULL;
+    else if (k.stand < BRAKE_FULL) k.stand++;
+    const press = D.brakeFloor + (1 - D.brakeFloor) * (1 - Math.exp((-k.stand * TICK) / D.brakeRamp));
+    const target = (boosted ? 1 : throttle) * top - D.reverseTop * brakeIn;
+    if (along > target) {
+      along += (target - along) * (1 - Math.exp(-D.brakeRate * ground.brake * brakeIn * press * TICK));
+    } else if (throttle > 0 && along < target) {
+      along = Math.min(target, along + ((target - along) / (D.accelTau / (ground.accel * k.mods.acceleration))) * throttle * TICK);
     }
   } else {
-    k.stand = 0;
+    k.stand = Math.max(0, k.stand - D.brakeFade);
     const drive = boosted ? 1 : throttle;
     if (drive > 0) {
       const tau = boosted ? D.boostTau : D.accelTau / (ground.accel * k.mods.acceleration);
@@ -690,11 +700,11 @@ function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brak
  * carried over a crest keeps its slide). The hop gesture (drift pressed) or a
  * shake is a trick, once a jump; a shake right after the lip kicks it too.
  */
-function flyControl(k: KartState, steerIn: number, driftIn: boolean, shook: boolean, emit: Emit): void {
+function flyControl(w: World, k: KartState, steerIn: number, driftIn: boolean, shook: boolean, emit: Emit): void {
   const rising = driftIn && !k.prevDrift;
   k.prevDrift = driftIn;
-  if (k.flight === 2 && k.trick === 0 && (rising || shook)) {
-    if (shook && k.aloft <= KICK_AFTER) {
+  if ((k.flight === 2 || k.flight === 3) && k.trick === 0 && (rising || shook)) {
+    if (shook && k.flight === 2 && k.aloft <= KICK_AFTER) {
       kick(k, emit);
     } else {
       k.trick = 1;
@@ -703,11 +713,14 @@ function flyControl(k: KartState, steerIn: number, driftIn: boolean, shook: bool
   }
   if (k.flood > 0) k.flood--;
   k.steer += (steerIn - k.steer) * (1 - Math.exp(-S.response * TICK));
-  const turn = k.steer * R.airTurn * TICK;
+  const planned = k.flight >= 3;
+  const turn = k.steer * (k.flight === 4 ? AIR.turnGlide : planned ? AIR.turnCannon : R.airTurn) * TICK;
   k.heading = wrapAngle(k.heading - turn);
   const speed = Math.sqrt(k.vx * k.vx + k.vz * k.vz);
   if (speed > 0.5) {
-    const course = wrapAngle(Math.atan2(k.vx, k.vz) - turn);
+    let course = wrapAngle(Math.atan2(k.vx, k.vz) - turn);
+    // A planned flight follows the road by itself unless the wheel says otherwise.
+    if (planned) course = wrapAngle(course + clamp(wrapAngle(w.geo.heading(k.s + AIR.assistLook) - course) * AIR.assist, -1.2, 1.2) * TICK);
     k.vx = speed * Math.sin(course);
     k.vz = speed * Math.cos(course);
     if (k.drift === 0) k.heading = wrapAngle(course + wrapAngle(k.heading - course) * Math.exp(-R.airAlign * TICK));
@@ -732,6 +745,7 @@ function kick(k: KartState, emit: Emit): void {
  * boost, unless the kart came down in a gap or over an edge.
  */
 function fly(w: World, k: KartState, emit: Emit): void {
+  if (k.flight >= 3 && flyArc(w, k, emit)) return;
   k.air += k.vy * TICK;
   k.vy -= R.gravity * TICK;
   if (k.aloft < 255) k.aloft++;
@@ -743,7 +757,14 @@ function fly(w: World, k: KartState, emit: Emit): void {
   if (k.air > 0 || k.aloft < 2) return;
   // How fast it meets the road: its own fall against the road's rise under it.
   const terrain = w.plan.terrain;
-  const meets = tableAt(terrain, terrain.grade, k.s) * alongTrack(w, k) - k.vy;
+  touchDown(w, k, emit, tableAt(terrain, terrain.grade, k.s) * alongTrack(w, k) - k.vy, false);
+}
+
+/**
+ * Down on the road: the trick's boost, the landing's event, and the fall if it came down over an edge or in a gap.
+ * `onTarget`: a glide that came down close to the road's middle, for its boost.
+ */
+function touchDown(w: World, k: KartState, emit: Emit, meets: number, onTarget: boolean): void {
   const was = k.flight;
   const tricked = k.trick > 0;
   const kicked = k.prime < 0;
@@ -756,7 +777,89 @@ function fly(w: World, k: KartState, emit: Emit): void {
   checkFall(w, k, emit);
   if (was === 0 || k.rescue > 0) return;
   if (tricked) giveBoost(k, kicked ? R.kickBoost : R.trickBoost);
-  emit({ type: "land", kart: k.id, boost: tricked, strength: q3(clamp(meets / 10, 0, 1)) });
+  else if (onTarget) giveBoost(k, AIR.glideBoost);
+  emit({ type: "land", kart: k.id, boost: tricked || onTarget, strength: q3(clamp(meets / 10, 0, 1)) });
+}
+
+/**
+ * A planned flight (a cannon, a glide, a lip): the height is a function of how far along the road the kart has got
+ * since the pad (sim/air.ts). Returns false if the kart is somehow outside every flight (then it is an ordinary jump).
+ */
+function flyArc(w: World, k: KartState, emit: Emit): boolean {
+  const terrain = w.plan.terrain;
+  const site = arcAt(terrain.arcs, w.geo, k.s);
+  if (site === null) {
+    k.flight = 2;
+    return false;
+  }
+  // Steered out past an open edge: nothing under it, it falls (as a kart on the ground would).
+  if (Math.abs(k.offset) > w.geo.at(k.s).width / 2 + F.edge && isOpen(terrain, k.s, k.offset > 0 ? 1 : -1)) {
+    startFall(k, emit);
+    return true;
+  }
+  if (k.aloft < 255) k.aloft++;
+  if (k.trick > 0) k.trick = Math.min(k.trick + 1, 255);
+  const d = w.geo.delta(site.s, k.s);
+  if (d < site.length) {
+    // A hit or a spin that robs the kart of its speed in flight must not leave it hanging: the flight carries on at a floor speed.
+    const floor = site.kind === "lip" ? AIR.lipFloor : AIR.flightFloor;
+    const sp = Math.sqrt(k.vx * k.vx + k.vz * k.vz);
+    if (sp < floor) {
+      const c = w.geo.at(k.s);
+      const nx = sp > 0.5 ? k.vx / sp : c.tx;
+      const nz = sp > 0.5 ? k.vz / sp : c.tz;
+      k.vx = nx * floor;
+      k.vz = nz * floor;
+    }
+    const air = arcHeight(site, d);
+    k.vy = (air - k.air) / TICK;
+    k.air = air;
+    return true;
+  }
+  const along = alongTrack(w, k);
+  const meets = Math.max(0, -arcSlope(site, site.length - 0.5) * along);
+  const glide = k.flight === 4;
+  k.air = 0;
+  k.vy = 0;
+  k.prime = 0;
+  touchDown(w, k, emit, meets, glide && Math.abs(k.offset) <= AIR.glideTarget);
+  return true;
+}
+
+/** A kart that crossed a pad this tick is thrown into its flight. */
+function launchOffArcs(w: World, k: KartState, prevS: number, emit: Emit): void {
+  const arcs = w.plan.terrain.arcs;
+  if (arcs.length === 0 || k.spin > 0) return;
+  const half = w.geo.at(k.s).width / 2;
+  if (Math.abs(k.offset) > half) return;
+  for (let i = 0; i < arcs.length; i++) {
+    const site = arcs[i]!;
+    const before = w.geo.delta(prevS, site.s);
+    const after = w.geo.delta(k.s, site.s);
+    if (before <= 0 || after > 0 || before > 8 || k.offset < site.lo || k.offset > site.hi) continue;
+    launchArc(w, k, site, emit);
+    return;
+  }
+}
+
+function launchArc(w: World, k: KartState, site: ArcSite, emit: Emit): void {
+  const c = w.geo.at(k.s);
+  const along = alongTrack(w, k);
+  if (along < (site.kind === "lip" ? AIR.lipMinSpeed : site.kind === "cannon" ? AIR.cannonMinSpeed : AIR.minSpeed)) return;
+  if (site.kind === "cannon" && along < AIR.cannonSpeed) {
+    // The barrel throws it along the road, fast enough to carry.
+    k.vx = c.tx * AIR.cannonSpeed;
+    k.vz = c.tz * AIR.cannonSpeed;
+  }
+  k.flight = site.kind === "glide" ? 4 : 3;
+  k.air = 0;
+  k.vy = 0;
+  k.aloft = 0;
+  k.hop = 0;
+  k.trick = 0;
+  k.prime = 0;
+  if (k.drift !== 0) endDrift(k, true, emit);
+  emit({ type: "jump", kart: k.id, arc: site.kind });
 }
 
 /** Over a crest taken fast the road falls away quicker than gravity can bring the kart down after it: it leaves the road. */

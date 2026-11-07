@@ -43,14 +43,14 @@ export const THEME_LANDMARKS: Readonly<Record<string, readonly string[]>> = {
 };
 
 /** The hazard kinds each theme's tracks may use, with how each moves (hazards.ts). */
-export const THEME_HAZARDS: Readonly<Record<string, readonly { kind: string; motion: "cross" | "roll" | "bob" | "orbit" }[]>> = {
+export const THEME_HAZARDS: Readonly<Record<string, readonly { kind: string; motion: "cross" | "roll" | "bob" | "orbit" | "swing" | "crush" | "slide" }[]>> = {
   meadow: [],
-  canyon: [{ kind: "boulder", motion: "roll" }, { kind: "tumbleweed", motion: "cross" }],
+  canyon: [{ kind: "boulder", motion: "roll" }, { kind: "tumbleweed", motion: "cross" }, { kind: "rock-crusher", motion: "crush" }, { kind: "wrecking-ball", motion: "swing" }, { kind: "ore-cart", motion: "slide" }],
   harbour: [{ kind: "crab", motion: "cross" }, { kind: "forklift", motion: "cross" }],
   kitchen: [{ kind: "orange", motion: "roll" }, { kind: "pea", motion: "cross" }, { kind: "teacup", motion: "orbit" }],
-  snow: [{ kind: "penguin", motion: "cross" }, { kind: "snowball", motion: "roll" }, { kind: "yeti", motion: "bob" }],
+  snow: [{ kind: "penguin", motion: "cross" }, { kind: "snowball", motion: "roll" }, { kind: "yeti", motion: "bob" }, { kind: "icicle", motion: "crush" }, { kind: "arm-ball", motion: "orbit" }],
   volcano: [{ kind: "fireball", motion: "bob" }, { kind: "boulder", motion: "roll" }, { kind: "geyser", motion: "bob" }],
-  funfair: [{ kind: "teacup-ride", motion: "orbit" }, { kind: "bumper-car", motion: "cross" }],
+  funfair: [{ kind: "teacup-ride", motion: "orbit" }, { kind: "bumper-car", motion: "cross" }, { kind: "arm-ball", motion: "orbit" }, { kind: "mallet", motion: "crush" }, { kind: "funhouse-panel", motion: "slide" }, { kind: "swing-boat", motion: "swing" }],
   space: [{ kind: "asteroid", motion: "orbit" }, { kind: "comet", motion: "roll" }],
   palm: [{ kind: "crab", motion: "cross" }, { kind: "coconut", motion: "roll" }, { kind: "beach-ball", motion: "roll" }],
 };

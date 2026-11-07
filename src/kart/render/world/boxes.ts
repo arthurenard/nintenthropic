@@ -319,6 +319,16 @@ function shardGeometry(): BufferGeometry {
   return g;
 }
 
+// Scratch for the per-frame loops below (a frame made seven objects each time, for every box on the road).
+const _m = new Matrix4();
+const _q = new Quaternion();
+const _e = new Euler();
+const _p = new Vector3();
+const _s = new Vector3();
+const _colour = new Color();
+const _rgb: [number, number, number] = [0, 0, 0];
+const _zero = new Matrix4().makeScale(0, 0, 0);
+
 export class ItemBoxes {
   readonly group = new Group();
   private readonly back: InstancedMesh;
@@ -450,13 +460,13 @@ export class ItemBoxes {
   update(slots: readonly BoxSlot[], time: number, dt: number, glow?: (x: number, y: number, z: number, r: number, g: number, b: number) => void): void {
     this.frameNo++;
     for (const m of this.materials) m.uniforms.uTime!.value = time;
-    const m = new Matrix4();
-    const q = new Quaternion();
-    const e = new Euler();
-    const p = new Vector3();
-    const s = new Vector3();
-    const colour = new Color();
-    const rgb: [number, number, number] = [0, 0, 0];
+    const m = _m;
+    const q = _q;
+    const e = _e;
+    const p = _p;
+    const s = _s;
+    const colour = _colour;
+    const rgb = _rgb;
     const I = this.info.array as Float32Array;
     let n = 0;
     for (const slot of slots) {
@@ -527,13 +537,13 @@ export class ItemBoxes {
 
   /** Shards fly, tumble, bounce once off the road, shrink and fade; flashes swell and fade. */
   private stepShards(dt: number): void {
-    const m = new Matrix4();
-    const q = new Quaternion();
-    const e = new Euler();
-    const p = new Vector3();
-    const s = new Vector3();
-    const zero = new Matrix4().makeScale(0, 0, 0);
-    const rgb: [number, number, number] = [0, 0, 0];
+    const m = _m;
+    const q = _q;
+    const e = _e;
+    const p = _p;
+    const s = _s;
+    const zero = _zero;
+    const rgb = _rgb;
     const S = this.shardInfo.array as Float32Array;
     for (let i = 0; i < SHARDS; i++) {
       const age = this.sAge[i]!;
@@ -566,7 +576,7 @@ export class ItemBoxes {
       const fade = 1 - Math.max(0, (u - 0.55) / 0.45) ** 1.5;
       const size = this.sSize[i]! * (0.5 + 0.5 * fade) * (u < 0.08 ? u / 0.08 : 1);
       p.set(this.sPos[i * 3]!, this.sPos[i * 3 + 1]!, this.sPos[i * 3 + 2]!);
-      e.set(this.sRot[i * 3]!, this.sRot[i * 3 + 1]!, this.sRot[i * 3 + 2]!);
+      e.set(this.sRot[i * 3]!, this.sRot[i * 3 + 1]!, this.sRot[i * 3 + 2]!, "XYZ");
       q.setFromEuler(e);
       m.compose(p, q, s.set(size, size, size));
       this.shards.setMatrixAt(i, m);

@@ -56,8 +56,8 @@ export async function askForCamera(eye: boolean, trouble: (kind: Trouble) => voi
   setText(
     "prime-body",
     eye
-      ? `Super Claude Bros. needs your camera to see your hand, and in this game whether one eye is closed. The picture stays on ${thisDevice()}.`
-      : `Super Claude Bros. needs your camera to see your hand. The picture stays on ${thisDevice()}.`,
+      ? `Nintenthropic needs your camera to see your hand, and in this game whether one eye is closed. The picture stays on ${thisDevice()}.`
+      : `Nintenthropic needs your camera to see your hand. The picture stays on ${thisDevice()}.`,
   );
   setText("prime-mouse", pointerChoice());
   return new Promise((resolve) => {

@@ -20,6 +20,8 @@ import { AdditiveBlending, BufferGeometry, Group, LOD, Matrix4, Mesh, MeshBasicM
 import { CHARACTERS } from "../characters";
 import type { RacerSetup } from "../contract";
 import { hasArtKart, createArtKart, type ArtKit } from "./kartArt";
+import { brakeLights } from "./brakeLights";
+import { kartExtras } from "./kartExtras";
 import { createDriver, speciesOf, type Species } from "./drivers";
 import { MeshBuilder, mergeBaked, mixRgb, rgb, shapes, withDetail, xf, type Rgb } from "./kartBuilder";
 import { SURF, kartMaterial, withStudioFallback, type Surf } from "./kartMaterial";
@@ -509,7 +511,8 @@ function artKit(racer: Pick<RacerSetup, "id" | "colour" | "character" | "golden"
       b.as(SURF.plastic, () => digit(b, String((id % 9) + 1), 0, PLATE.y, PLATE.z - 0.008, 0.18, mixRgb(accent, [0, 0, 0], 0.55)));
       return b.build();
     },
-    driver: () => createDriver(species, racer.colour, [...DRIVER_AT], kartMaterial()),
+    extras: (accent, golden, weight) => kartExtras(species, accent, golden, weight),
+    driver: () => createDriver(species, racer.colour, [...DRIVER_AT], kartMaterial(), racer.id),
   };
 }
 
@@ -528,7 +531,14 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
   const species = shownSpecies(racer);
 
   // ── The near kart ──
-  const chassisGeo = buildChassis(accent, golden, racer.id, 0);
+  const chassisBase = buildChassis(accent, golden, racer.id, 0);
+  const extrasGeo = kartExtras(species, accent, golden);
+  const chassisGeo = extrasGeo ? mergeBaked([{ geometry: chassisBase, matrix: new Matrix4() }, { geometry: extrasGeo, matrix: new Matrix4() }]) : chassisBase;
+  if (extrasGeo) {
+    chassisBase.dispose();
+    extrasGeo.dispose();
+  }
+  const brake = brakeLights(null);
   const steeringGeo = steeringGeometry(accent);
   const frontGeo = wheelGeometry(WHEEL_FRONT, accent, 0, golden);
   const rearWheel = wheelGeometry(WHEEL_REAR, accent, 0, golden);
@@ -546,8 +556,9 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
   bodyGroup.add(chassis);
 
   // The driver pivots at the hip.
-  const driver = createDriver(species, racer.colour, [0, 0.9, -0.28], material);
+  const driver = createDriver(species, racer.colour, [0, 0.9, -0.28], material, racer.id);
   bodyGroup.add(driver.root);
+  if (brake) bodyGroup.add(brake.mesh);
 
   const wheelPivot = new Group();
   wheelPivot.position.set(0, 1.04, 0.24);
@@ -594,6 +605,8 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
     const parts: { geometry: BufferGeometry; matrix: Matrix4 }[] = [];
     const farChassis = withDetail(0.45, () => buildChassis(accent, golden, racer.id, 1));
     parts.push({ geometry: farChassis, matrix: new Matrix4() });
+    const farExtras = kartExtras(species, accent, golden);
+    if (farExtras) parts.push({ geometry: farExtras, matrix: new Matrix4() });
     const farFront = withDetail(0.45, () => wheelGeometry(WHEEL_FRONT, accent, 1, golden));
     const farRear = withDetail(0.45, () => wheelGeometry(WHEEL_REAR, accent, 1, golden));
     for (const sx of [-1, 1] as const) {
@@ -605,7 +618,7 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
       parts.push(r);
     }
     driverFar = withDetail(0.45, () => {
-      const d = createDriver(species, racer.colour, [0, 0.9, -0.28], material);
+      const d = createDriver(species, racer.colour, [0, 0.9, -0.28], material, racer.id);
       d.update({ time: 0, steer: 0, lean: 0, twirl: 0 });
       const g = d.bake();
       d.dispose();
@@ -636,7 +649,8 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
       bodyGroup.scale.set(1 + squash * 0.035, 1 - squash * 0.06, 1 + squash * 0.035);
       farBody.position.y = bodyGroup.position.y;
       farBody.rotation.copy(bodyGroup.rotation);
-      driver.update({ time: p.time ?? 0, steer: p.steer, lean: p.lean, twirl: p.twirl ?? 0, emote: p.emote, finished: p.finished, dizzy: p.dizzy });
+      driver.update({ time: p.time ?? 0, steer: p.steer, lean: p.lean, twirl: p.twirl ?? 0, emote: p.emote, finished: p.finished, dizzy: p.dizzy, lookBack: p.lookBack, rest: p.rest, shut: p.shut });
+      brake?.show(p.brake ?? 0);
       wheelRim.rotation.z = -p.steer * 1.5;
       for (const f of fronts) {
         f.pivot.rotation.y = -p.steer * 0.5;
@@ -654,7 +668,7 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
       }
     },
     dispose() {
-      for (const g of [chassisGeo, steeringGeo, frontGeo, rearGeo, flameGeo, farGeo]) g.dispose();
+      for (const g of [chassisGeo, steeringGeo, frontGeo, rearGeo, flameGeo, farGeo, brake?.mesh.geometry]) g?.dispose();
       for (const f of fronts) f.mesh.geometry.dispose();
       rearWheel.dispose();
       driver.dispose();

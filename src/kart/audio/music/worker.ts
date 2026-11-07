@@ -26,7 +26,10 @@ scope.onmessage = (event) => {
       scope.postMessage({ job: job.job, progress: (k + 1) / stages.length });
     });
     const result = renderer.finished();
-    scope.postMessage({ job: job.job, result }, [result.left.buffer as ArrayBuffer, result.right.buffer as ArrayBuffer]);
+    const transfer = [result.left, result.right, result.comet?.left, result.comet?.right, result.stinger?.left, result.stinger?.right]
+      .filter((a): a is Float32Array => !!a)
+      .map((a) => a.buffer as ArrayBuffer);
+    scope.postMessage({ job: job.job, result }, transfer);
   } catch (error) {
     scope.postMessage({ job: job.job, error: String(error) });
   }
