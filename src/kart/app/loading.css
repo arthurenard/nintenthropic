@@ -178,3 +178,39 @@
     width: 120px;
   }
 }
+
+/* The Party Rules card in play: its name and what it does, under the track's name. */
+.loading-rule {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  justify-content: center;
+  gap: 2px 8px;
+  margin: 2px 0 0;
+  padding: 10px 18px;
+  border-radius: 22px;
+  background: rgba(10, 20, 44, 0.42);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  text-shadow: none;
+}
+.loading-rule[hidden] {
+  display: none;
+}
+.loading-rule svg {
+  width: 20px;
+  height: 20px;
+  color: var(--gold);
+}
+.loading-rule-name {
+  font-size: 17px;
+  font-weight: 700;
+  text-align: left;
+}
+.loading-rule-line {
+  grid-column: 1 / -1;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 15px;
+  line-height: 1.35;
+  text-wrap: balance;
+}

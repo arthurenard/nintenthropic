@@ -649,7 +649,9 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
       bodyGroup.scale.set(1 + squash * 0.035, 1 - squash * 0.06, 1 + squash * 0.035);
       farBody.position.y = bodyGroup.position.y;
       farBody.rotation.copy(bodyGroup.rotation);
-      driver.update({ time: p.time ?? 0, steer: p.steer, lean: p.lean, twirl: p.twirl ?? 0, emote: p.emote, finished: p.finished, dizzy: p.dizzy, lookBack: p.lookBack, rest: p.rest, shut: p.shut });
+      // A scaled head (Big Heads) is only on the near kart: stay near at any distance.
+      lod.levels[1]!.distance = (p.headScale ?? 1) !== 1 ? Infinity : FAR_DISTANCE;
+      driver.update({ time: p.time ?? 0, steer: p.steer, lean: p.lean, twirl: p.twirl ?? 0, emote: p.emote, finished: p.finished, dizzy: p.dizzy, lookBack: p.lookBack, rest: p.rest, shut: p.shut, headScale: p.headScale });
       brake?.show(p.brake ?? 0);
       wheelRim.rotation.z = -p.steer * 1.5;
       for (const f of fronts) {

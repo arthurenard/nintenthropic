@@ -32,7 +32,7 @@ import { DriverScreen, driverAccess, type DriverChoice, type DriverSeat } from "
 import { HowToScreen } from "./howto";
 import { LobbyScreen, type ScreenChoice } from "./lobby";
 import { PadMenus } from "./padnav";
-import { crew, loadYou, playerCount, saveYou, wheelChecked, type You } from "./prefs";
+import { crew, loadRules, loadYou, playerCount, saveRules, saveYou, wheelChecked, type You } from "./prefs";
 import { RaceScreen, type RaceFailure } from "./race";
 import { trackById } from "../track/tracks";
 import { PodiumScreen } from "./podium";
@@ -112,6 +112,8 @@ export class KartApp {
   private finishTimer = 0;
   /** The host's screen has been made the big screen for this room (once, for three or four on the camera). */
   private bigScreenSet = false;
+  /** This room has been given the host's remembered Party Rules choice. */
+  private rulesSet = false;
   private racers: readonly RacerSetup[] = [];
   /** The finish-line photos of the race the race screen shows (`raceId`), by kart: this device's and the room's. */
   private photos = new Map<number, string>();
@@ -152,7 +154,11 @@ export class KartApp {
       {
         start: () => this.session?.start(),
         leave: () => this.leave(),
-        configure: (settings) => this.session?.configure(settings),
+        configure: (settings) => {
+          // The host's last Party Rules choice is kept for the next room.
+          if (settings.rules !== undefined) saveRules(settings.rules);
+          this.session?.configure(settings);
+        },
         screen: (choice) => {
           this.choice = choice;
           this.sendPlayers();
@@ -358,6 +364,7 @@ export class KartApp {
     this.ready = false;
     this.choice = null;
     this.bigScreenSet = false;
+    this.rulesSet = false;
     this.unlisten = [session.onLobby((lobby) => this.lobbyChanged(lobby)), session.onClosed((reason) => this.closed(reason))];
     if (session.onPhoto) this.unlisten.push(session.onPhoto((shot) => this.gotPhoto(shot)));
   }
@@ -579,6 +586,12 @@ export class KartApp {
     if (session.role === "host" && !this.bigScreenSet && playerCount(this.you) >= 3) {
       this.bigScreenSet = true;
       session.configure({ display: "host" });
+    }
+    // The room begins with the rules the host chose last time (a guest has no say in them).
+    if (session.role !== "guest" && !this.rulesSet) {
+      this.rulesSet = true;
+      const rules = loadRules();
+      if (rules !== "normal") session.configure({ rules });
     }
     const lobby = session.lobby();
     if (lobby.phase === "racing") this.enterRace(lobby);

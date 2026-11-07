@@ -18,6 +18,7 @@ import { photoFinish, resultLine, sofaLine, type PhotoFinish } from "./eggs";
 import { FinishGallery, type ShotCard } from "./finishGallery";
 import { clipType, shareClip, sharePhotos } from "./finishShare";
 import { cupById, pointsFor } from "../grandprix";
+import { cardById } from "../rules";
 import { lapsLabel, ordinal, raceTime } from "./format";
 import { hostName, standingRows, type StandingRow } from "./roster";
 import { colourDot, focusHeading } from "./ui";
@@ -105,9 +106,12 @@ export class ResultsScreen {
     const rows = standingRows(result, racers, lobby, session.device);
     const mine = rows.filter((row) => row.mine);
     const cup = grandPrix ? cupById(grandPrix.cup) : null;
+    // The twist the race was run under, if the host dealt one, is part of how it is remembered.
+    const twist = cardById(lobby.card);
     setText(
       "results-eyebrow",
-      cup && grandPrix ? `${cup.name} · Race ${grandPrix.race + 1} of ${cup.tracks.length} · ${trackName} · ${lapsLabel(laps)}` : `${trackName} · ${lapsLabel(laps)}`,
+      (cup && grandPrix ? `${cup.name} · Race ${grandPrix.race + 1} of ${cup.tracks.length} · ${trackName} · ${lapsLabel(laps)}` : `${trackName} · ${lapsLabel(laps)}`) +
+        (twist ? ` · ${twist.name}` : ""),
     );
     // One of us on this screen: say how it went. Two on a camera, or none shown: just the results.
     const only = mine.length === 1 ? mine[0]! : null;

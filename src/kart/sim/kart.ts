@@ -9,7 +9,8 @@
  * (race.ts, items.ts), which is also why `predict` can run `stepKart` alone.
  */
 import { TICK, TICK_HZ, type DriveInput, type RacerSetup } from "../contract";
-import { WEIGHTS, weightOf } from "../characters";
+import { WEIGHTS, weightOf, type WeightMods } from "../characters";
+import { NO_RULE, type RuleEffects } from "../rules";
 import { mulberry32 } from "../../engine/rules/rng";
 import { hazardAt, hazardReach } from "../track/hazards";
 import type { TrackGeometry } from "../track/geometry";
@@ -59,8 +60,15 @@ export function newBotMemory(): BotMemory {
   return { presses: 0, wait: 0, stuck: 0, back: 0, next: 0, freeze: 0, steer: 0, drifting: false, cut: 0 };
 }
 
+/** How the kart drives: its driver's weight class (or the card's), with the card's say in speed, pick-up and grip. */
+export function modsFor(racer: Pick<RacerSetup, "character">, rule: Readonly<RuleEffects>): WeightMods {
+  const base = WEIGHTS[rule.weight ?? weightOf(racer.character)];
+  if (rule.topSpeed === 1 && rule.acceleration === 1 && rule.grip === 1) return base;
+  return { ...base, topSpeed: base.topSpeed * rule.topSpeed, acceleration: base.acceleration * rule.acceleration, grip: base.grip * rule.grip };
+}
+
 /** A kart on the grid: left and right in turn, each a little further back than the one before, the first on pole. */
-export function newKart(racer: RacerSetup, place: number, geo: TrackGeometry): KartState {
+export function newKart(racer: RacerSetup, place: number, geo: TrackGeometry, rule: Readonly<RuleEffects> = NO_RULE): KartState {
   const race = TUNING.race;
   const behind = race.gridFirst + place * race.gridStep;
   const s = geo.wrap(-behind);
@@ -126,7 +134,9 @@ export function newKart(racer: RacerSetup, place: number, geo: TrackGeometry): K
     skill: clamp(racer.skill ?? 0.8, 0, 1),
     bot: newBotMemory(),
     band: 1,
-    mods: WEIGHTS[weightOf(racer.character)],
+    mods: modsFor(racer, rule),
+    size: rule.size,
+    turn: rule.turn,
   };
   settle(kart);
   return kart;
@@ -566,10 +576,23 @@ export function stepKart(world: World, k: KartState, input: DriveInput, emit: Em
   settle(k);
 }
 
+/** The kart is on ice, or on a road made as slippery by Ice Day: the bots then keep out of slides and cuts. */
+export function onIce(w: World, k: KartState): boolean {
+  return k.ground === "ice" || (w.rule.slippery && k.ground === "road");
+}
+
+/**
+ * What the kart drives on. Ice Day (rules.ts) makes the road as slippery as ice, for the top speed and the grip both; the
+ * verge, the boost strips and the track's own patches keep their ground.
+ */
+function groundOf(w: World, k: KartState): (typeof GROUND)[keyof typeof GROUND] {
+  return w.rule.slippery && k.ground === "road" ? GROUND.ice : GROUND[k.ground];
+}
+
 /** On the ground (or skimming a crest): the throttle, the brake, the wheel, the hop and the power-slide, the hills. */
 function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brakeIn: number, driftIn: boolean, shook: boolean, fwd: number, emit: Emit): void {
   // A Comet drives the rough as if it were road.
-  const ground = k.comet > 0 && GROUND[k.ground].rough ? GROUND.road : GROUND[k.ground];
+  const ground = k.comet > 0 && GROUND[k.ground].rough ? GROUND.road : groundOf(w, k);
   // The throttle, unless the engine is flooded.
   let throttle = throttleIn;
   if (k.flood > 0) {
@@ -622,7 +645,7 @@ function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brak
     const turn = DR.steerBase + DR.steerRange * own;
     const bite = Math.min(1, ground.gripDrift / GROUND.road.gripDrift) * k.mods.grip;
     const was = courseOf(k);
-    const course = wrapAngle(was - k.drift * turn * S.yawMax * turnShare(speed) * bite * TICK);
+    const course = wrapAngle(was - k.drift * turn * S.yawMax * turnShare(speed) * bite * k.turn * TICK);
     // The nose comes round with the way it goes, and its angle to it eases toward the slip the wheel asks for.
     k.heading = wrapAngle(k.heading + wrapAngle(course - was));
     const nose = course - k.drift * (DR.slip + DR.slipRange * own);
@@ -648,7 +671,7 @@ function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brak
     // Turning: the heading comes round, the velocity follows by the grip. Nose against the barrier, it comes round as at a
     // walking pace however slow the kart is.
     const turning = throttle > 0 && !braking && fwd < W.pivot && noseOnBarrier(w, k) ? W.pivot : fwd;
-    k.heading = wrapAngle(k.heading - yawRate(k.steer, turning) * TICK * (turning >= 0 ? 1 : -1));
+    k.heading = wrapAngle(k.heading - yawRate(k.steer, turning) * k.turn * TICK * (turning >= 0 ? 1 : -1));
     // A nose swung far from the way the kart goes (a slide let go, a shove) comes back toward it as the grip takes hold.
     const speed = Math.sqrt(k.vx * k.vx + k.vz * k.vz);
     if (speed > 2 && fwd > 0) {
@@ -700,7 +723,7 @@ function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brak
 
   k.vx = along * sin - across * cos;
   k.vz = along * cos + across * sin;
-  capSpeed(k, D.maxSpeed);
+  capSpeed(k, D.maxSpeed * Math.max(1, w.rule.topSpeed));
 }
 
 /**
@@ -714,7 +737,7 @@ function flyControl(w: World, k: KartState, steerIn: number, driftIn: boolean, s
   k.prevDrift = driftIn;
   if ((k.flight === 2 || k.flight === 3) && k.trick === 0 && (rising || shook)) {
     if (shook && k.flight === 2 && k.aloft <= KICK_AFTER) {
-      kick(k, emit);
+      kick(w, k, emit);
     } else {
       k.trick = 1;
       emit({ type: "trick", kart: k.id });
@@ -738,13 +761,13 @@ function flyControl(w: World, k: KartState, steerIn: number, driftIn: boolean, s
 }
 
 /** A shake at the lip: a trick, and the kart springs off higher and further. */
-function kick(k: KartState, emit: Emit): void {
+function kick(w: World, k: KartState, emit: Emit): void {
   k.trick = 1;
   k.prime = -1;
   k.vy += R.kickLift;
   k.vx *= R.kickSpeed;
   k.vz *= R.kickSpeed;
-  capSpeed(k, D.maxSpeed);
+  capSpeed(k, D.maxSpeed * Math.max(1, w.rule.topSpeed));
   emit({ type: "trick", kart: k.id, kick: true });
 }
 
@@ -917,7 +940,7 @@ function launch(w: World, k: KartState, ramp: RampSite, along: number, emit: Emi
   k.prime = 0;
   if (!fast) return;
   emit({ type: "jump", kart: k.id });
-  if (primed && ramp.trick && k.spin === 0) kick(k, emit);
+  if (primed && ramp.trick && k.spin === 0) kick(w, k, emit);
 }
 
 /**
@@ -942,7 +965,6 @@ function botStart(w: World, k: KartState, emit: Emit): void {
 /** Karts that touch push apart, the faster shoving harder; says which were moved. */
 export function bumpKarts(w: World, emit: Emit, moved: Set<number>): void {
   const karts = w.state.karts;
-  const reach = TUNING.kartRadius * 2;
   const B = TUNING.bump;
   for (let i = 0; i < karts.length; i++) {
     const a = karts[i]!;
@@ -956,6 +978,8 @@ export function bumpKarts(w: World, emit: Emit, moved: Set<number>): void {
       const dx = a.x - b.x;
       const dz = a.z - b.z;
       const d2 = dx * dx + dz * dz;
+      // Two karts touch when their circles do (a Tiny Kart's is smaller).
+      const reach = TUNING.kartRadius * (a.size + b.size);
       if (d2 >= reach * reach) continue;
       const d = Math.sqrt(d2);
       // The way from b to a; if exactly on top of each other, any way will do.

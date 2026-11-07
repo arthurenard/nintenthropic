@@ -68,6 +68,8 @@ export interface StartInfo {
   track: string;
   /** The track is flipped left for right (Mirror mode): guests rebuild it with mirrorTrack. Absent: not. */
   mirror?: boolean;
+  /** The Party Rules card dealt for this race (rules.ts card id). Absent: none. */
+  card?: string;
   laps: number;
   seed: number;
   racers: RacerSetup[];

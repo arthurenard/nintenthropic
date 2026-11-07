@@ -133,6 +133,8 @@ export interface RaceSetup {
   seed: number;
   /** In grid order: the first starts on pole. */
   racers: RacerSetup[];
+  /** The Party Rules card dealt for this race (rules.ts), or absent for none. Everything it changes is a function of the setup. */
+  rule?: string;
 }
 
 /** What spun a kart out: an item driven into or hit by, a Comet's touch. */
@@ -282,6 +284,8 @@ export interface RaceView {
   laps: number;
   track: TrackDef;
   racers: readonly RacerSetup[];
+  /** The Party Rules card this race runs under (the setup's), or absent. The picture reads sizes from it. */
+  rule?: string;
   karts: readonly KartView[];
   things: readonly ThingView[];
   /** What happened since the view before this one, oldest first: a sim's view() hands each event out once, so call it once a frame. */
@@ -462,6 +466,8 @@ export interface LobbySettings {
   cup?: string;
   /** Every track mirrored, left for right. */
   mirror?: boolean;
+  /** Party Rules (rules.ts): "normal", a card's id, "shuffle" or "daily". Absent means normal. */
+  rules?: string;
 }
 
 /** A Grand Prix under way: which race of the cup, and the points so far. */
@@ -512,6 +518,8 @@ export interface LobbyState {
   race?: number;
   /** Set while the host has stopped the race for everyone. */
   pause?: PauseState | null;
+  /** The Party Rules card dealt for the race being run (or last run): a card id from rules.ts, absent for none. */
+  card?: string;
 }
 
 /** A player this device brings to the room. */

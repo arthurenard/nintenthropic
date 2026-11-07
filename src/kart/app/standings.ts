@@ -9,6 +9,7 @@
 import type { GrandPrixState, LobbyState, Session } from "../contract";
 import { $, announce, element, setText } from "../../ui/dom";
 import { GP_STANDINGS_MS, cupById } from "../grandprix";
+import { cardById } from "../rules";
 import { ordinal } from "./format";
 import { hostName, localPlayers } from "./roster";
 import { calm, colourDot, focusHeading } from "./ui";
@@ -69,7 +70,8 @@ export class StandingsScreen {
     const host = session.role !== "guest";
     setText("gp-eyebrow", `${cup.name} · After Race ${gp.race + 1} of ${cup.tracks.length}`);
     setText("gp-title", last ? "Final Standings" : "Standings");
-    setText("gp-sub", trackName ? `Points after ${trackName}.` : "");
+    const twist = cardById(lobby.card);
+    setText("gp-sub", trackName ? `Points after ${trackName}${twist ? `, raced under ${twist.name}` : ""}.` : "");
     setText("gp-next-eyebrow", last ? "Then" : "Next Up");
     setText("gp-next-name", last ? "The Podium" : (nextTrackName ?? "The Next Race"));
     setText("gp-next", last ? "See the Podium" : "Next Race");

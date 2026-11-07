@@ -35,6 +35,7 @@ import {
   type Session,
   type SessionClosed,
 } from "../contract";
+import { cardById } from "../rules";
 import { raceTrack } from "../track/mirror";
 import { TickClock } from "./clock";
 import { EventFeed } from "./feed";
@@ -382,7 +383,13 @@ export class GuestSession implements Session {
 
   /** The host has started: build our copy of the race and our karts. */
   private begin(start: StartInfo): void {
-    const setup: RaceSetup = { track: raceTrack(start.track, start.mirror), laps: start.laps, seed: start.seed, racers: start.racers };
+    const setup: RaceSetup = {
+      track: raceTrack(start.track, start.mirror),
+      laps: start.laps,
+      seed: start.seed,
+      racers: start.racers,
+      ...(cardById(start.card) ? { rule: start.card } : {}),
+    };
     const race = this.env.createRace(setup);
     this.race = race;
     this.raceId = start.seed;

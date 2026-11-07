@@ -59,4 +59,6 @@ export interface DriverMotion {
   rest?: number;
   /** 0..1: how shut the eyes are, at least (a blink's own timing is the driver's). */
   shut?: number;
+  /** The head's size, as a multiple (1 when absent). */
+  headScale?: number;
 }

@@ -5,6 +5,7 @@
  * `spinOut`); a Comet is never hit.
  */
 import { TICK, type DriveInput, type HitCause, type ItemKind } from "../contract";
+import { STRONG_ITEMS } from "../rules";
 import { giveBoost, spinOut, type Emit } from "./kart";
 import { ITEM_KINDS, ITEM_USES, q3, wrapAngle, type KartState, type Puck, type Seeker, type Skyrocket, type Slick, type World } from "./state";
 import { barrierDistance, isOpen } from "./terrain";
@@ -33,6 +34,18 @@ function inHand(w: World, kind: ItemKind): boolean {
 function drawItem(w: World, place: number, racers: number): ItemKind {
   const weights = itemOdds(place, racers);
   const state = w.state;
+  // Party Rules: Item Frenzy deals the strongest items more often; Pucks Only only pucks.
+  const rule = w.rule;
+  if (rule.strongItems !== 1) {
+    for (const kind of STRONG_ITEMS) weights[ITEM_KINDS.indexOf(kind)]! *= rule.strongItems;
+  }
+  if (rule.itemsOnly) {
+    // The odds of the allowed items, and if the place's own odds hold none of them, an even chance of each.
+    const allowed = rule.itemsOnly.map((kind) => ITEM_KINDS.indexOf(kind));
+    const kept: number[] = weights.map((weight, i) => (allowed.includes(i) ? weight : 0));
+    if (!kept.some((weight) => weight > 0)) for (const i of allowed) kept[i] = 1;
+    weights.splice(0, weights.length, ...kept);
+  }
   if ((state.stormAt >= 0 && state.tick - state.stormAt < ticks(I.storm.cooldown)) || inHand(w, "storm")) weights[ITEM_KINDS.indexOf("storm")] = 0;
   if (state.skyrockets.length > 0 || inHand(w, "skyrocket")) weights[ITEM_KINDS.indexOf("skyrocket")] = 0;
   const total = weights.reduce((sum, weight) => sum + weight, 0);
@@ -413,7 +426,7 @@ export function stepItems(w: World, emit: Emit): void {
       // Every kart breaks the box it drives through, as in any kart racer,
       // but only a kart with empty hands that is still racing gets an item
       // from it (one already home drives on with nothing to use on the others).
-      state.boxes[b] = ticks(I.respawn);
+      state.boxes[b] = ticks(w.rule.boxRespawn ?? I.respawn);
       if (k.item !== null || k.roll > 0 || k.finished !== null) {
         emit({ type: "box", kart: k.id });
         break;

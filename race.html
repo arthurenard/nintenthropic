@@ -309,6 +309,13 @@
             <span class="visually-hidden" id="label-cup">Cup</span>
             <div class="cups" role="radiogroup" id="pick-cup" aria-labelledby="label-cup" aria-describedby="foot-mode"></div>
           </div>
+          <div class="setup-rules glass" id="row-rules">
+            <div class="rules-head">
+              <span class="control-label" id="label-rules">Rules</span>
+              <p class="rules-line" id="foot-rules" aria-live="polite"></p>
+            </div>
+            <div class="rules-pick" role="radiogroup" id="pick-rules" aria-labelledby="label-rules" aria-describedby="foot-rules"></div>
+          </div>
           <div class="setup-controls glass">
             <div class="control">
               <span class="control-label" id="label-laps">Laps</span>
@@ -364,6 +371,10 @@
       <button class="race-pause icon-button glass" id="race-pause" aria-label="Pause" title="Pause (Esc)">
         <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-pause" /></svg>
       </button>
+      <p class="rule-chip glass" id="rule-chip" role="status" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sparkles" /></svg>
+        <span class="rule-chip-words"><span class="rule-chip-name" id="rule-chip-name"></span><span class="rule-chip-line" id="rule-chip-line"></span></span>
+      </p>
       <p class="race-fps glass num" id="race-fps" aria-hidden="true" hidden></p>
       <div class="race-previews" id="race-previews"></div>
       <div class="view-notes" id="view-notes"></div>
@@ -387,6 +398,7 @@
         <div class="loading-card">
           <p class="eyebrow" id="loading-cup">Grip Prix</p>
           <h2 class="loading-track" id="loading-track">Getting ready…</h2>
+          <p class="loading-rule" id="loading-rule" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-sparkles" /></svg><span class="loading-rule-name" id="loading-rule-name"></span><span class="loading-rule-line" id="loading-rule-line"></span></p>
           <div class="progress" id="race-loading-bar" role="progressbar" aria-labelledby="race-loading-title" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span></span></div>
           <p class="loading-status num" id="race-loading-title">Getting ready…</p>
         </div>
