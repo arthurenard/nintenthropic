@@ -103,6 +103,7 @@ import {
   itemLatch,
   nitroTriple,
   nitroUse,
+  orbitHum,
   puckBounce,
   puckFire,
   rouletteTick,
@@ -207,6 +208,8 @@ export const KART_CUES: Record<string, CueSpec> = {
   kart_nitro_triple: { recipe: nitroTriple, pack: "kart", bus: "sfx", level: -4, priority: 3, maxInstances: 3, vary: 0.02, minGap: 0.05, reverb: 0.1, expect: [0.8, 1.3] },
   kart_puck_fire: { recipe: puckFire, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 3, vary: 0.03, minGap: 0.05, reverb: 0.08, expect: [0.3, 0.8] },
   kart_seeker_launch: { recipe: seekerLaunch, pack: "kart", bus: "sfx", level: -6, priority: 3, maxInstances: 2, vary: 0.02, minGap: 0.1, reverb: 0.1, expect: [0.4, 0.9] },
+  // Three pucks circling the player's kart that holds a triple puck.
+  kart_orbit: { recipe: orbitHum, pack: "kart", bus: "sfx", level: -15, loop: true, priority: 2, fadeIn: 0.15, fadeOut: 0.2, vary: 0, expect: [1.0, 1.4] },
   kart_seeker_lock: { recipe: seekerLock, pack: "kart", bus: "sfx", level: -8, priority: 3, maxInstances: 2, vary: 0.02, minGap: 0.1, reverb: 0.1, expect: [0.25, 0.6] },
   kart_puck_bounce: { recipe: puckBounce, pack: "kart", bus: "sfx", level: -7, priority: 2, maxInstances: 3, vary: 0.04, minGap: 0.04, reverb: 0.1, expect: [0.2, 0.6] },
   kart_slick_splat: { recipe: slickSplat, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 3, vary: 0.03, minGap: 0.05, reverb: 0.08, expect: [0.4, 1.1] },

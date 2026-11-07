@@ -47,7 +47,7 @@ describe("the kart pack", () => {
       // another kart going by close
       "kart_pass",
       // item boxes and items
-      "kart_box_smash", "kart_roulette_tick", "kart_item_ready", "kart_nitro", "kart_nitro_triple", "kart_puck_fire", "kart_puck_bounce", "kart_seeker_launch", "kart_seeker", "kart_seeker_lock", "kart_slick_splat", "kart_slick_skid",
+      "kart_box_smash", "kart_roulette_tick", "kart_item_ready", "kart_nitro", "kart_nitro_triple", "kart_puck_fire", "kart_puck_bounce", "kart_seeker_launch", "kart_seeker", "kart_orbit", "kart_seeker_lock", "kart_slick_splat", "kart_slick_skid",
       // what the roulette lands on: a chime for each item
       ...ITEM_KINDS.map((item) => `kart_get_${item}`),
       // the comet, the items that strike from afar, the decoy
@@ -72,7 +72,7 @@ describe("the kart pack", () => {
   });
 
   it("marks the loops as loops and the one-shots as not", () => {
-    const loops = [...ENGINE_CUES, "kart_engine_grit", "kart_idle", "kart_growl", "kart_drift", "kart_drift_sparks", "kart_seeker", "kart_drone", "kart_wind", ...Object.values(SURFACE_CUES), ...BEDS];
+    const loops = [...ENGINE_CUES, "kart_engine_grit", "kart_idle", "kart_growl", "kart_drift", "kart_drift_sparks", "kart_seeker", "kart_orbit", "kart_drone", "kart_wind", ...Object.values(SURFACE_CUES), ...BEDS];
     for (const cue of KART) expect(!!CUES[cue]!.loop, cue).toBe(loops.includes(cue));
   });
 
@@ -170,7 +170,7 @@ describe("the kart pack", () => {
   it("asks only for cues that exist: every name the code plays is in the table", () => {
     const names = new Set<string>([
       ...Object.values(SOUND_CUES), ...ENGINE_CUES, ...Object.values(SURFACE_CUES), ...AMBIENCE_CUES,
-      "kart_engine_grit", "kart_idle", "kart_growl", "kart_backfire", "kart_drift", "kart_drift_sparks", "kart_seeker", "kart_drone", "kart_roulette_tick", "kart_item_ready", "kart_flood",
+      "kart_engine_grit", "kart_idle", "kart_growl", "kart_backfire", "kart_drift", "kart_drift_sparks", "kart_seeker", "kart_orbit", "kart_drone", "kart_roulette_tick", "kart_item_ready", "kart_flood",
       "kart_duck", "kart_puck_bounce", "kart_wind", "kart_thud", "kart_place_up", "kart_place_down", "kart_slingshot", "kart_super_turbo", "kart_pass", "kart_flame_short", "kart_flame_long",
     ]);
     const scene = {

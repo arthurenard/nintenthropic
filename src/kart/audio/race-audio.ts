@@ -321,6 +321,8 @@ class RaceAudioImpl implements RaceAudio {
   private readonly surfaces = new Map<number, Looper>();
   private readonly seekers = new Map<number, Looper & { lastDistance: number }>();
   private readonly drones = new Map<number, Looper>();
+  /** The hum of the pucks orbiting a player's kart that holds a triple puck. */
+  private readonly orbits = new Map<number, Looper>();
   private readonly winds = new Map<number, Looper>();
   /** The place each of the player's own karts was last heard at. */
   private readonly places = new Map<number, { place: number; at: number }>();
@@ -830,6 +832,7 @@ class RaceAudioImpl implements RaceAudio {
     const drifts = new Set<number>();
     const surfaces = new Set<number>();
     const drones = new Set<number>();
+    const orbits = new Set<number>();
     const squeals: { id: number; own: boolean; distance: number; params: Required<LoopParams> }[] = [];
     for (const k of view.karts) {
       const own = localOf(scene, k.id);
@@ -871,6 +874,13 @@ class RaceAudioImpl implements RaceAudio {
         drones.add(k.id);
         this.drive(this.drones, k.id, "kart_drone", { rate: 1, volume: near * (own ? 1 : 0.8) * fx, pan: who.pan, distance: who.distance }, dt);
       }
+
+      // Three pucks circling the player's own kart hum as they go; a puck fewer is a voice fewer, higher.
+      if (own && k.item === "puck3" && !k.rolling && k.rescue <= 0) {
+        orbits.add(k.id);
+        const left = Math.max(1, Math.min(3, k.itemUses));
+        this.drive(this.orbits, k.id, "kart_orbit", { rate: 1 + 0.07 * (3 - left), volume: (0.55 + 0.15 * left) * fx * crowdTrim(scene.locals.length), pan: own.pan, distance: 0 }, dt);
+      }
     }
     // Every local kart's squeal, and the nearest few others': a whole pack drifting round a hairpin is a choir otherwise.
     squeals.sort((a, b) => (a.own === b.own ? a.distance - b.distance : a.own ? -1 : 1));
@@ -885,6 +895,7 @@ class RaceAudioImpl implements RaceAudio {
     }
     this.release(this.surfaces, surfaces);
     this.release(this.drones, drones);
+    this.release(this.orbits, orbits);
 
     // The wind round the player's own karts: started once it is worth hearing, kept until it has all but gone.
     const winds = new Set<number>();
@@ -980,7 +991,7 @@ class RaceAudioImpl implements RaceAudio {
   private stopLoops(): void {
     for (const v of this.engines.values()) this.silence(v);
     this.engines.clear();
-    for (const map of [this.drifts, this.surfaces, this.seekers, this.drones, this.winds] as Map<number, Looper>[]) {
+    for (const map of [this.drifts, this.surfaces, this.seekers, this.drones, this.orbits, this.winds] as Map<number, Looper>[]) {
       for (const l of map.values()) l.loop.stop();
       map.clear();
     }

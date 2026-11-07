@@ -669,6 +669,41 @@ describe("loops that follow state", () => {
     expect(bus.running("kart_drone")).toBe(0);
   });
 
+  it("keeps eight karts firing at once to a bounded number of sounds", () => {
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    const karts = Array.from({ length: 8 }, (_, i) => kart(i, { x: i * 3, z: 0 }));
+    const items = ["nitro", "puck", "seeker", "slick", "comet", "skyrocket", "puck3", "nitro3"] as const;
+    frame(karts, {}, [...karts.map((k, i) => ev("use", { kart: k.id, item: items[i]! })), ...karts.map((k) => ev("hit", { kart: k.id, by: null, cause: "slick" })), ...karts.map((k) => ev("pickup", { kart: k.id, item: "puck" }))]);
+    // Eight a frame from the others, plus what the player's own kart must hear (the cap spares priority 3).
+    expect(bus.played.length).toBeLessThanOrEqual(8 + 6);
+    // No cue sounds more than twice at the same instant but the player's own.
+    const count = new Map<string, number>();
+    for (const p of bus.played) count.set(p.cue, (count.get(p.cue) ?? 0) + 1);
+    for (const [cue, n] of count) expect(n, cue).toBeLessThanOrEqual(3);
+  });
+
+  it("hums while a player's kart holds the triple puck, higher for each puck fired, and stops when none is left", () => {
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    for (let i = 0; i < 5; i++) frame([kart(0, { item: "puck3", itemUses: 3 })]);
+    expect(bus.running("kart_orbit")).toBe(1);
+    const full = bus.lastSet("kart_orbit")!;
+    for (let i = 0; i < 30; i++) frame([kart(0, { item: "puck3", itemUses: 1 })]);
+    expect(bus.lastSet("kart_orbit")!.rate!).toBeGreaterThan(full.rate!);
+    // Not while the reel still turns, and not for a kart that is another's to hear.
+    frame([kart(0, { item: null, itemUses: 0 })]);
+    expect(bus.running("kart_orbit")).toBe(0);
+  });
+
+  it("sounds a cheer or a wave once, as the emote begins", () => {
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    frame([kart(0)]);
+    for (let i = 0; i < 20; i++) frame([kart(0, { emote: "cheer" })]);
+    expect(bus.cues.filter((c) => c === "kart_emote_cheer")).toHaveLength(1);
+    frame([kart(0, { emote: null })]);
+    frame([kart(0, { emote: "wave" })]);
+    expect(bus.cues.filter((c) => c === "kart_emote_wave")).toHaveLength(1);
+  });
+
   it("ticks the item roulette, slower and higher, and chimes when it lands", () => {
     const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
     for (let i = 0; i < 70; i++) frame([kart(0, { rolling: true })], {}, [], [], 1 / 60);

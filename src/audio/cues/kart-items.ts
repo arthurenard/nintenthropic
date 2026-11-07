@@ -319,6 +319,47 @@ export function seekerLock(t: Take): Mono {
   return out;
 }
 
+/**
+ * Three pucks circling a kart, a loop: a low hum of discs on their track,
+ * a doppler wobble as each comes round (three times a turn, the turn a
+ * second), a soft ping every time one passes the front and a whisper of
+ * air. Every partial is a whole number of cycles in the loop, so it is
+ * seamless; the game raises it a little as pucks are fired.
+ */
+export function orbitHum(t: Take): Mono {
+  const seconds = 1.2;
+  const n = t.n(seconds);
+  const out = new Float32Array(n);
+  const turns = 1;
+  for (let i = 0; i < n; i++) {
+    const u = i / n;
+    // Three discs round a circle: each one's level and pitch swing once a turn, a third of a turn apart.
+    let v = 0;
+    for (let k = 0; k < 3; k++) {
+      const a = 2 * Math.PI * (turns * u + k / 3);
+      const level = 0.65 + 0.35 * Math.cos(a);
+      v += level * Math.sin(2 * Math.PI * 156 * u + 1.1 * Math.sin(a) + k * 2.1);
+    }
+    out[i] = v / 3;
+  }
+  // 156 cycles in 1.2 s is a hum of 130 Hz (a C3), the discs' body; a fifth above it, 195 Hz, rides on it (whole cycles both).
+  const body = Float32Array.from(out);
+  for (let i = 0; i < n; i++) out[i]! += 0.35 * Math.sin((2 * Math.PI * 234 * i) / n + 0.5 * body[i]!) * (0.6 + 0.4 * Math.cos((2 * Math.PI * 3 * i) / n));
+  // The pings, one for each puck passing the front, with the tail wrapping round the seam.
+  for (let k = 0; k < 3; k++) {
+    const at = (k * seconds) / 3 + t.rng.range(0, 0.004);
+    const ring = t.canvas(0.25);
+    addMode(ring, t.sr, 0, midiHz(88), 0.5, 0.05, 0);
+    addMode(ring, t.sr, 0, midiHz(88) * 2.76, 0.18, 0.025, 1);
+    const start = Math.round(at * t.sr);
+    for (let i = 0; i < ring.length; i++) out[(start + i) % n]! += 0.4 * ring[i]!;
+  }
+  // The air: whole-cycle, slowly breathing.
+  const hush = bandNoise(n, t.sr, t.rng, 1500, 4500, 2);
+  for (let i = 0; i < n; i++) out[i]! += 0.03 * hush[i]! * (0.6 + 0.4 * Math.sin((2 * Math.PI * 3 * i) / n));
+  return out;
+}
+
 // --- slick -------------------------------------------------------------------------------------------------------
 
 /**
