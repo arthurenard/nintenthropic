@@ -787,7 +787,71 @@ that file exists (`render/art.ts`).
   so no frame turns through more than 1.9 rad of it, which keeps it a buzz at
   30 fps; none of this for Reduce Motion), a whole flat turn in the air for a
   trick; a blob shadow
-  (`render/kart.ts`). Up a ramp the kart stands on the picture's wedge; off
+  (`render/kart.ts`). **Three bodies and a livery** (`kartArt.ts`, `livery.ts`,
+  `art/kart/karts/build.py`). A driver's weight class picks the kart: the light
+  drivers (Bun, Pepper, Moss) a nimble open buggy (`kart.body.light`: a slim tub
+  on a painted roll cage with a dash arch, side rails and braces, a bare engine
+  with cooling fins and an air filter, an aerial with a pennant, a small nose
+  with one round lamp, springs out in the open, eight-spoke wheels), the middle
+  drivers (Kit, Juniper, Mango, Dabble) the classic sprint kart (`kart.body`, also
+  named `kart.body.middle`: rounded tub, wing on curved struts, chrome bumpers,
+  coil springs on the front dampers), the heavy drivers (Bramble, Rivet) a wide
+  muscle kart (`kart.body.heavy`: flared fenders over all four wheels, a hood
+  scoop, a grille and a deep bumper bar, twin stacks and big pipes, a ducktail
+  wing, a thick roll hoop, deep-dish wheels with lug nuts: `kart.wheel.heavy`). The
+  hubs, the exhaust mouths and the number plate are the same on all three, so the
+  wheels, the flames, the skid marks and the collisions do not change; a file
+  without the class bodies gives the sprint kart to everyone. Each driver's kart
+  also wears a **livery**: a pattern in a second colour on the flanks and the hood
+  (`kart.livery.<class>.<pattern>`, material "livery": spots Bun, waves Pepper,
+  tiger stripes Moss, flames Kit, diamonds Juniper, lightning Mango, chevrons
+  Bramble, checks Rivet, rally stripes Dabble; the pattern and the colour wanted
+  are in `characters.ts`). The paint is the player's colour; the pattern's colour
+  is the driver's own unless it would vanish into the paint (cream on yellow),
+  when it becomes near-black or white; on the golden kart it is cream. The
+  pattern is welded into the kart's body geometry when it is made: no draw call,
+  no shader. The far kart (34 m and beyond) is the whole kart welded, driver at rest, then thinned by
+  vertex clustering on a 0.2 m grid (`render/farLod.ts`, surfaces kept apart so chrome stays chrome and
+  paint stays paint): about 2 to 3k triangles against 22k welded, with its own brake-light skin. The coachwork below is placed
+  for the sprint kart and moves for the buggy and the muscle kart (`weight` in
+  `kartExtras`). **Faces and looks.** The modelled drivers' eyes are 14% bigger
+  with a larger glint (`EYE_GROW`), and their brows and mouths are drawn live
+  (`drivers/expression.ts`): determined while racing (brows slanted and low,
+  a small tight smile), gritted in a hard bend (steer over 0.72: low thick brows
+  over a slot of teeth), raised with an O when dizzy, arched over a wide open
+  grin with a tongue at a cheer or the finish, relaxed on the grid; a mood is held
+  0.22 s before a milder one replaces it, a hit or a cheer shows at once. The
+  face is welded onto the head's own geometry (one per mood, made when first
+  worn and shared by the species' brow and mouth shapes; the racing face is made when
+  the driver is), so it costs no draw call. Every modelled species has a mouth that
+  changes: the rabbit, fox, otter, bear, frog and cat draw a smile, a gritted slot,
+  an O and an open grin; the penguin and the duck part their beak in a dark gape
+  (open a little at the strain, wide when hit, curled at a cheer); the robot's
+  screen mouth is lit (dots, a bar, a zigzag, a ring, a smile). The code-built stand-ins keep their own fixed faces. Each driver blinks (`drivers/face.ts`:
+  one lid mesh in the face's colour that slides down over the bead eyes, every
+  2.2 to 5.4 s, now and then twice, about 0.2 s, each driver at its own
+  times; no draw call while the eyes are open) and shuts its eyes in a
+  grin, ^ ^, while cheering or after finishing, half shut and heavy when dizzy.
+  On the grid (stopped: speed under 2.5 m/s, eased) the driver breathes and the
+  head wanders over the track (`KartPose.rest`). A driver with another kart
+  2 to 11 m behind, within 3.5 m of its line, at over 6 m/s, glances back over
+  that side's shoulder for 0.75 s at most every 3.2 s (`KartPose.lookBack`;
+  each actor sees the others through a registry in `kart.ts`, so it needs
+  nothing from the sim or the wire, and a driver who asked for less motion
+  does not). The **brake lights** (`brakeLights.ts`) are a skin laid over the
+  tail lamps (the art's own: the vertices of material "tail"; or the code-built
+  kart's two bars) in one shared additive material: they flare, a little larger,
+  while the kart's eased deceleration is over 2.2 m/s² (full by 6.5), on the
+  ground and above 1.5 m/s, and go out in about 0.1 s (`KartPose.brake`, worked
+  out from the speed falling in `KartActor`). One extra draw call for a kart
+  while it brakes, none otherwise. **Coachwork** (`kartExtras.ts`): each driver's
+  kart carries its own touches welded into the body geometry (no draw calls): a
+  cotton-tail puff and carrot fins (Bun), a dorsal fin (Pepper), bulging eyes on
+  the bonnet (Moss), twin swept fins (Kit), a surfboard (Juniper), ears and
+  whiskers (Mango), a roll hoop and bull bar (Bramble), an aerial and dish
+  (Rivet), a bill and tail feathers (Dabble); the golden kart wears a crown. The
+  turntable (`render/dev.html?turntable=1`) shows them: `&brake=1`, `&back=1`,
+  `&shut=1`, `&rest=1` pose the new looks. Up a ramp the kart stands on the picture's wedge; off
   the lip it rides the sim's height, which starts at the wedge's top, so the
   two meet without a step. Effects:
   drift sparks (blue, then orange, then violet for the third charge, the charge

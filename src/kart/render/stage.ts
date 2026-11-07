@@ -385,6 +385,7 @@ export async function createDriverStage(canvas: HTMLCanvasElement, options: Stag
         slide: 0,
         time: calm ? 0 : clock,
         emote: !calm && t < WAVE_FOR ? "wave" : null,
+        rest: calm ? 0 : 1,
       });
       // The contact shadow follows the kart's footprint, its turn and its landing.
       contact.rotation.y = root.rotation.y;

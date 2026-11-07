@@ -39,8 +39,10 @@ import { buildPenguin } from "./penguin";
 import { buildRabbit } from "./rabbit";
 import { buildRobot } from "./robot";
 import { driverFromArt } from "./fromArt";
+import { EYE_GROW, Lids } from "./face";
+import { FACES, Face, moodOf } from "./expression";
 
-const BUILDERS: Record<Species, (l: Look) => DriverBuild> = {
+export const BUILDERS: Record<Species, (l: Look) => DriverBuild> = {
   rabbit: buildRabbit,
   penguin: buildPenguin,
   frog: buildFrog,
@@ -93,14 +95,22 @@ export class Driver {
   private readonly bits: { o: Object3D; bit: Bit }[] = [];
   private readonly geometries: BufferGeometry[] = [];
   private readonly base = new Vector3();
+  private readonly lids: Lids | null = null;
+  private face: Face | null = null;
+  /** How far the driver is looking back over a shoulder (-1..1, the side), eased; and how much at rest on the grid, eased. */
+  private back = 0;
+  private rest = 0;
+  private breathing = false;
+  private readonly phase: number;
   private last = Number.NaN;
   private cheer = 0;
   private wave = 0;
   private fin = 0;
   private dizzy = 0;
 
-  constructor(built: DriverBuild, base: V3 = [0, 0, 0], material: Material = kartMaterial()) {
+  constructor(built: DriverBuild, base: V3 = [0, 0, 0], material: Material = kartMaterial(), species?: Species, seed = 0, modelled = false) {
     this.base.set(base[0], base[1], base[2]);
+    this.phase = seed * 1.618;
     this.root.position.copy(this.base);
     this.root.scale.setScalar(DRIVER_SCALE);
     this.geometries.push(built.torso, built.head, built.arm);
@@ -109,8 +119,27 @@ export class Driver {
     const headAt = built.headAt ?? HEAD_AT;
     this.head.position.set(headAt[0], headAt[1], headAt[2]);
     this.head.rotation.order = "YXZ";
-    this.head.add(this.solid(built.head, material));
+    const headMesh = this.solid(built.head, material);
+    this.head.add(headMesh);
     this.root.add(this.head);
+    if (species) {
+      try {
+        this.lids = new Lids(species, built.head, material, seed, modelled ? EYE_GROW : 1);
+        this.head.add(this.lids.mesh);
+      } catch (e) {
+        if (import.meta.env?.DEV) console.warn(`no eyelids for ${species}`, e);
+        this.lids = null;
+      }
+    }
+    // The modelled heads carry no brows or mouth of their own: this draws them, so they can change.
+    if (species && modelled && FACES[species]) {
+      try {
+        this.face = new Face(species, built.head, headMesh);
+      } catch (e) {
+        if (import.meta.env?.DEV) console.warn(`no face for ${species}`, e);
+        this.face = null;
+      }
+    }
     for (const side of [1, -1] as const) {
       const group = new Group();
       const at = built.shoulderAt;
@@ -178,19 +207,31 @@ export class Driver {
     this.fin = to(this.fin, m.finished ? 1 : 0, 8);
     this.dizzy = to(this.dizzy, m.dizzy ? 1 : 0, 10);
     const happy = Math.max(this.cheer, this.fin * 0.85);
+    this.back = to(this.back, m.lookBack ?? 0, 7);
+    this.rest = to(this.rest, m.rest ?? 0, 4);
 
     // The body: bounces when happy, leans into the bend, twirls in a trick.
     const bounce = Math.abs(Math.sin(t * 9.5)) * 0.075 * happy + Math.abs(Math.sin(t * 6)) * 0.02 * this.wave;
+    // On the grid the driver breathes, and settles in the seat now and then.
+    const breath = Math.sin(t * 2.3 + this.phase) * 0.012 * this.rest;
     this.root.position.set(this.base.x, this.base.y + bounce, this.base.z);
-    this.root.rotation.set(0, m.twirl, m.lean);
+    this.root.rotation.set(0, m.twirl + this.back * 0.28, m.lean);
+    if (this.rest > 0.001 || this.breathing) {
+      this.root.scale.set(DRIVER_SCALE * (1 - breath * 0.4), DRIVER_SCALE * (1 + breath), DRIVER_SCALE);
+      this.breathing = this.rest > 0.001;
+    }
 
     // The head looks into the bend; dizzy, it rolls about.
     const sway = Math.sin(t * 7) * 0.1 * this.fin + Math.sin(t * 5) * 0.14 * this.wave;
+    // Waiting on the grid, the head wanders over the track and its neighbours; looking back, it turns over the shoulder.
+    const glance = (Math.sin(t * 0.7 + this.phase) * 0.55 + Math.sin(t * 1.9 + this.phase * 2) * 0.25) * this.rest;
     this.head.rotation.set(
-      Math.cos(t * 11) * 0.22 * this.dizzy - 0.08 * happy,
-      -m.steer * 0.4 + sway,
+      Math.cos(t * 11) * 0.22 * this.dizzy - 0.08 * happy + Math.sin(t * 0.9 + this.phase) * 0.05 * this.rest - Math.abs(this.back) * 0.06,
+      (-m.steer * 0.4 + sway + glance) * (1 - Math.abs(this.back)) + this.back * 1.5,
       -m.lean * 0.35 + Math.sin(t * 13) * 0.34 * this.dizzy,
     );
+    this.lids?.update(t, happy, this.dizzy, m.shut ?? 0);
+    this.face?.update(t, moodOf({ happy, dizzy: this.dizzy, steer: m.steer, rest: this.rest }));
     this.stars.visible = this.dizzy > 0.05;
     if (this.stars.visible) this.stars.rotation.y = t * 6;
 
@@ -230,6 +271,7 @@ export class Driver {
 
   dispose(): void {
     for (const g of this.geometries) g.dispose();
+    this.face?.dispose();
   }
 }
 
@@ -239,8 +281,11 @@ export function speciesOf(character: string | undefined, fallback: Species = "fo
 }
 
 /** The driver of this species in the kart's colour: from the modelled art (drivers.glb) when it is loaded, else built in code. */
-export function createDriver(species: Species, colour: string, base: V3 = [0, 0, 0], material?: Material): Driver {
+export function createDriver(species: Species, colour: string, base: V3 = [0, 0, 0], material?: Material, salt = 0): Driver {
   const l = look(colour);
   const code = BUILDERS[species](l);
-  return new Driver(driverFromArt(species, l, code) ?? code, base, material);
+  let seed = (salt * 131) % 997;
+  for (let i = 0; i < colour.length; i++) seed = (seed * 31 + colour.charCodeAt(i)) % 997;
+  const art = driverFromArt(species, l, code);
+  return new Driver(art ?? code, base, material, species, seed, art !== null);
 }

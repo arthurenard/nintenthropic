@@ -7,6 +7,7 @@
  *   ?character=bun      the driver (characters.ts id); ?golden=1 the golden kart
  *   ?art=0              the code-built kart, not the Blender one (art/kart/karts)
  *   ?all=1              all nine drivers at once, one viewport each (3 x 3)
+ *   ?row=bun,kit,bramble   those drivers side by side in one picture (each in their own colour), ?gap=3.6 apart
  *   ?emote=cheer|wave   the driver's gesture; ?finished=1 the finish bounce; ?dizzy=1 a spin-out
  *   ?t=1.2              freeze the clock there (for a steady picture)
  *   ?dist=9 ?elev=18 ?angle=0 ?look=0.85   the camera (look: the height it aims at)
@@ -58,11 +59,13 @@ function build(canvas: HTMLCanvasElement, params: URLSearchParams, theme: TrackT
   const golden = params.get("golden") === "1";
   const colours = [...PLAYER_COLOURS, ...BOT_COLOURS];
   const all = params.get("all") === "1";
-  const wanted = all ? CHARACTERS.map((c) => c.id) : [params.get("character") ?? undefined];
+  const row = params.get("row")?.split(",").filter(Boolean) ?? null;
+  const gap = Number(params.get("gap") ?? 3.6);
+  const wanted = all ? CHARACTERS.map((c) => c.id) : row ?? [params.get("character") ?? undefined];
   const karts: { model: KartModel; x: number; z: number }[] = wanted.map((character, i) => {
-    const model = createProceduralKart({ id: i, colour: all ? colours[i % colours.length]! : (params.get("colour") ?? "#FF453A"), character, golden });
-    // Far apart, so the other karts are out of each viewport's picture.
-    const x = all ? ((i % 3) - 1) * 40 : 0;
+    const model = createProceduralKart({ id: i, colour: all || row ? colours[i % colours.length]! : (params.get("colour") ?? "#FF453A"), character, golden });
+    // Far apart, so the other karts are out of each viewport's picture (or, in a row, side by side).
+    const x = all ? ((i % 3) - 1) * 40 : row ? (i - (row.length - 1) / 2) * gap : 0;
     const z = all ? (Math.floor(i / 3) - 1) * 70 : 0;
     model.root.position.set(x, 0, z);
     scene.add(model.root);
@@ -83,6 +86,10 @@ function build(canvas: HTMLCanvasElement, params: URLSearchParams, theme: TrackT
   const emote = (params.get("emote") as Emote | null) ?? null;
   const finished = params.get("finished") === "1";
   const dizzy = params.get("dizzy") === "1";
+  const brake = Number(params.get("brake") ?? 0);
+  const lookBack = Number(params.get("back") ?? 0);
+  const shut = Number(params.get("shut") ?? 0);
+  const rest = Number(params.get("rest") ?? 0);
   const frozen = params.has("t") ? Number(params.get("t")) : null;
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -111,9 +118,13 @@ function build(canvas: HTMLCanvasElement, params: URLSearchParams, theme: TrackT
         emote,
         finished,
         dizzy,
+        brake,
+        lookBack,
+        shut,
+        rest,
       });
       // Angle 0 is behind the kart (it faces +z, so behind is -z).
-      const lx = props ? Number(params.get("lx") ?? 9) : x;
+      const lx = props ? Number(params.get("lx") ?? 9) : row ? 0 : x;
       camera.position.set(lx + Math.sin(a + Math.PI) * dist * Math.cos(elev), 1 + Math.sin(elev) * dist, z + Math.cos(a + Math.PI) * dist * Math.cos(elev));
       camera.lookAt(lx, look, z);
       if (all) {
