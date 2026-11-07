@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { TICK_HZ, type TrackDef } from "../contract";
 import { GO_TICK } from "../sim/kart";
 import { planFor } from "../sim/plan";
+import { trackStats } from "../sim/trackStats";
 import { input, patch, race, racers, run, toGo } from "../sim/testing";
 import { TrackGeometry, type HazardDef } from "./geometry";
 import { CRUSH, hazardAt } from "./hazards";
@@ -160,5 +161,20 @@ describe("mirror mode", () => {
         expect(b.warn).toBe(a.warn);
       }
     }
+  });
+});
+
+describe("the bots", () => {
+  it("read the beat: eight of them lap a track of a stomper row, a sweeper, a pendulum and a cart with few hits and nobody stuck", { timeout: 60000 }, () => {
+    const def = track([
+      ...stomperRow({ at: 0.08, lanes: [-5, 0, 5], period: 4.4, stagger: 0.22 }),
+      ...sweeper({ at: 0.2, length: 8, period: 6.5, both: true }),
+      pendulum({ at: 0.35, reach: 4.5, period: 3.2 }),
+      crosser({ at: 0.5, reach: 10, period: 6 }),
+    ]);
+    const stats = trackStats({ ...def, id: "pieces-bots", points: points.map((p) => ({ ...p, z: p.z })) }, { seed: 4, laps: 2 });
+    expect(stats.finished).toBe(true);
+    expect(stats.stuck).toBeLessThan(5);
+    expect(stats.hazardHits / (8 * 2), JSON.stringify(stats.hitsBy)).toBeLessThan(0.6);
   });
 });
