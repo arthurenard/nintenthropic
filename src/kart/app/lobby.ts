@@ -19,7 +19,7 @@ import { MAX_PLAYERS, type LobbyPlayer, type LobbySettings, type LobbyState, typ
 import { $, element, icon, setText, toast } from "../../ui/dom";
 import { cupById } from "../grandprix";
 import { relayReady } from "../net/ice";
-import { CHOICES, DAILY, cleanChoice, dailyCard, cardById, todayKey } from "../rules";
+import { CHOICES, cleanChoice, rulesLine } from "../rules";
 import { CUPS, TRACKS, trackById } from "../track/tracks";
 import { isUnlocked, loadUnlocks } from "../unlocks";
 import { duckTracks } from "./eggs";
@@ -53,14 +53,6 @@ export function earnedTracks(): { id: string; name: string }[] {
   const all = { duckTracks: duckTracks(), cups: CUPS.map((cup) => cup.id) };
   if (!isUnlocked("secret-track", loadUnlocks(), all)) return [];
   return TRACKS.filter((track) => track.secret).map((track) => ({ id: track.id, name: track.name }));
-}
-
-/** What the picker says about the chosen rules: the card's line, and for Today's Card which card today's is. */
-export function rulesLine(choice: string, day: string = todayKey()): string {
-  const line = CHOICES.find((c) => c.id === choice)?.line ?? "";
-  if (choice !== DAILY) return line;
-  const today = cardById(dailyCard(day));
-  return today ? `Today’s card is ${today.name}: ${today.line}` : line;
 }
 
 /** One racer's card, kept between renders so only what changed moves. */

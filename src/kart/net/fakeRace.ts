@@ -208,6 +208,7 @@ class FakeRace implements Race {
       laps: this.setup.laps,
       track: this.setup.track,
       racers: this.setup.racers,
+      ...(this.setup.rule ? { rule: this.setup.rule } : {}),
       karts,
       things,
       events: [],

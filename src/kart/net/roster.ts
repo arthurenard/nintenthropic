@@ -14,7 +14,7 @@ import {
   type LobbySettings,
   type LobbyState,
 } from "../contract";
-import { cleanChoice } from "../rules";
+import { cleanChoice, isChoice } from "../rules";
 import { CUPS, TRACKS } from "../track/tracks";
 import { clamp } from "./util";
 import type { WirePlayer } from "./protocol";
@@ -42,7 +42,7 @@ export function mergeSettings(current: LobbySettings, patch: Partial<LobbySettin
   const mode = patch.mode === "race" || patch.mode === "grand-prix" ? patch.mode : current.mode;
   const cup = typeof patch.cup === "string" && CUPS.some((c) => c.id === patch.cup) ? patch.cup : current.cup;
   const mirror = typeof patch.mirror === "boolean" ? patch.mirror : current.mirror;
-  const rules = patch.rules === undefined ? cleanChoice(current.rules) : cleanChoice(patch.rules);
+  const rules = isChoice(patch.rules) ? patch.rules : cleanChoice(current.rules);
   return { track, laps, racers, display, bots: typeof patch.bots === "boolean" ? patch.bots : current.bots, mode, cup, mirror, rules };
 }
 

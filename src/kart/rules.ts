@@ -130,9 +130,13 @@ export const CHOICES: readonly { id: string; name: string; line: string; icon: s
   { id: DAILY, name: "Today’s Card", line: "One card for the whole day, the same for everyone who plays it today.", icon: "flag" },
 ];
 
+export function isChoice(choice: unknown): choice is string {
+  return typeof choice === "string" && CHOICES.some((c) => c.id === choice);
+}
+
 /** A choice this build knows, or "normal" (a guest's garbage, or a newer host's card, cannot break the room). */
 export function cleanChoice(choice: unknown): string {
-  return typeof choice === "string" && CHOICES.some((c) => c.id === choice) ? choice : NORMAL;
+  return isChoice(choice) ? choice : NORMAL;
 }
 
 /** Today's date as the daily card's seed: the calendar date in UTC, so the whole world has the same card on the same date. */
@@ -178,4 +182,12 @@ export function dealCard(choice: string | undefined, seed: number, day: string, 
 /** What the lobby, intro and results call the host's choice: the card's name, or the choice's. */
 export function choiceName(choice: string | undefined): string {
   return CHOICES.find((c) => c.id === cleanChoice(choice))?.name ?? "Normal";
+}
+
+/** What the lobby's picker says under the chosen rules: the card's line, and for Today's Card which card today's is. */
+export function rulesLine(choice: string, day: string = todayKey()): string {
+  const line = CHOICES.find((c) => c.id === choice)?.line ?? "";
+  if (choice !== DAILY) return line;
+  const today = cardById(dailyCard(day));
+  return today ? `Today’s card is ${today.name}: ${today.line}` : line;
 }
