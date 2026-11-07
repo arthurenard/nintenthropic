@@ -12,6 +12,8 @@
 //   npx vite --port 5191 --strictPort &
 //   node tools/perf/split.mjs --base http://127.0.0.1:5191 --players 1,2,3,4 --tracks canyon-run,fun-fair --camera script,real
 //   --seconds 20 (default)   --out file.json   --tier high|medium|low (default: Auto)
+//   --dpr 2 --size 1920x1080   a bigger, sharper window (a weaker GPU pays per pixel)   --soft   draw on SwiftShader (the worst GPU)
+//   --cpu n   the main thread n times slower, from the green light   --level n   start the load governor at step n (-1: off)
 import { createRequire } from "node:module";
 import { writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -38,6 +40,8 @@ const TRACKS = (args.tracks ?? "canyon-run").split(",");
 const CAMERAS = (args.camera ?? "script").split(",");
 const SECONDS = Number(args.seconds ?? 20);
 const TIER = args.tier ?? null;
+const [VW, VH] = String(args.size ?? "1440x900").split("x").map(Number);
+const DPR = Number(args.dpr ?? 1);
 const SHOTS = args.shots ?? "/private/tmp/claude-501/-Users-arthurenard-Developer-Handy/d18cfbe0-3cc8-4b21-b42c-935d881c3da7/scratchpad/shots/perf";
 const NAMES = { "canyon-run": "Canyon Run", "fun-fair": "Fun Fair", "meadow-loop": "Meadow Loop", "glacier-pass": "Glacier Pass" };
 const FIXTURE = resolve(ROOT, "node_modules/.cache/super-claude-bros-e2e/hand.y4m");
@@ -85,7 +89,7 @@ function pct(a, p) {
 const r1 = (x) => Math.round(x * 10) / 10;
 
 async function once(browser, players, track, camera) {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+  const ctx = await browser.newContext({ viewport: { width: VW, height: VH }, deviceScaleFactor: DPR });
   const you = JSON.stringify({ name: "Maya", drive: "wheel", players });
   await ctx.addInitScript(
     ([v, tier]) => {
@@ -102,7 +106,7 @@ async function once(browser, players, track, camera) {
   page.setDefaultTimeout(40000);
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto(`${BASE}/race.html?net=local&input=script${camera === "real" ? "&camera=real" : ""}`);
+  await page.goto(`${BASE}/race.html?net=local&input=script&perf=1${args.level ? `&load=${args.level}` : ""}${camera === "real" ? "&camera=real" : ""}`);
   const poses = Array.from({ length: players }, (_, i) => ({ angle: 0, centre: [(i + 0.5) / players, 0.5], span: 0.2 }));
   await page.waitForFunction(() => window.gripTest?.wheel);
   await page.evaluate((p) => window.gripTest.wheel(p), poses);
@@ -115,11 +119,17 @@ async function once(browser, players, track, camera) {
   await page.locator("#screen-howto").waitFor({ state: "visible", timeout: 120000 });
   await page.locator("#howto-continue").click();
   await page.locator("#lobby-players").waitFor();
-  await page.getByRole("radio", { name: new RegExp(NAMES[track] ?? track) }).first().click();
+  await page.getByRole("radio", { name: new RegExp(NAMES[track] ?? track.replace(/-/g, " "), "i") }).first().click();
   await page.getByRole("radio", { name: "1", exact: true }).click();
   await page.getByRole("button", { name: "Start Race" }).click();
   await page.waitForFunction(() => window.gripTest.state()?.race, null, { timeout: 120000 });
   await page.locator("#race-loading").waitFor({ state: "hidden", timeout: 120000 });
+  // Programs linked from here on (the countdown too) are hitches: the pre-warm should have built them all.
+  await page.evaluate(() => {
+    window.__perf.armed = true;
+    window.__perf.programs.length = 0;
+    window.__perf.calls.length = 0;
+  });
   await page.evaluate((p) => window.gripTest.wheel(null), poses);
   await page.waitForFunction(() => window.gripTest.state()?.race?.phase === "racing", null, { timeout: 60000 });
   await page.evaluate((p) => window.gripTest.wheel(p), poses);
@@ -128,7 +138,6 @@ async function once(browser, players, track, camera) {
     const P = window.__perf;
     P.frames.length = 0;
     P.long.length = 0;
-    P.programs.length = 0;
     P.calls.length = 0;
     P.heap.length = 0;
     P.armed = true;
@@ -150,10 +159,13 @@ async function once(browser, players, track, camera) {
   }
   // The karts weave a little so the bots, items and bumps happen.
   const t0 = Date.now();
+  const trace = [];
   let k = 0;
   while (Date.now() - t0 < SECONDS * 1000) {
     const angles = poses.map((p, i) => ({ ...p, angle: Math.sin((k + i) / 3) * 25 }));
     await page.evaluate((p) => window.gripTest.wheel(p), angles).catch(() => {});
+    const st = await page.evaluate(() => window.__gripStats?.()).catch(() => null);
+    if (st) trace.push(`${st.loadLevel}/${st.resolutionScale}`);
     k++;
     await page.waitForTimeout(250);
   }
@@ -187,7 +199,7 @@ async function once(browser, players, track, camera) {
     console.log(`-- ${players} players ${track}: garbage ${Math.round(total / 1024 / SECONDS)} KB/s sampled; top allocators (KB per second)`);
     for (const [k, v] of [...by].sort((a, b) => b[1] - a[1]).slice(0, 25)) console.log(`   ${Math.round(v / 1024 / SECONDS)}  ${k}`);
   }
-  const out = await page.evaluate(() => ({ P: window.__perf, views: window.gripTest.state().views?.length, t1: performance.now() }));
+  const out = await page.evaluate(() => ({ P: window.__perf, views: window.gripTest.state().views?.length, t1: performance.now(), end: window.__gripStats?.() ?? null }));
   await page.screenshot({ path: `${SHOTS}/split-${players}-${track}-${camera}.png` }).catch(() => {});
   await ctx.close();
   const P = out.P;
@@ -214,7 +226,7 @@ async function once(browser, players, track, camera) {
     gcDrops: drops, garbageKBps: Math.round(allocated / 1024 / secs),
     programsLinked: P.programs.length,
     callsMedian: pct(P.calls, 50), callsP99: pct(P.calls, 99),
-    worst, errors: errors.slice(0, 3),
+    worst, errors: errors.slice(0, 3), end: out.end && { tier: out.end.tier, level: out.end.loadLevel, scale: out.end.resolutionScale, pr: out.end.pixelRatio, calls: out.end.drawCalls, tris: out.end.triangles, programs: out.end.programs }, trace: trace.filter((x, i) => x !== trace[i - 1]).join(" "),
   };
 }
 
@@ -222,7 +234,7 @@ const browser = await chromium.launch({
   channel: "chrome",
   headless: true,
   args: [
-    "--use-angle=metal", "--ignore-gpu-blocklist", "--enable-gpu", "--mute-audio", "--enable-precise-memory-info",
+    ...(args.soft ? ["--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] : ["--use-angle=metal", "--ignore-gpu-blocklist", "--enable-gpu"]), "--mute-audio", "--enable-precise-memory-info",
     "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream",
     `--use-file-for-fake-video-capture=${FIXTURE}`,
   ],

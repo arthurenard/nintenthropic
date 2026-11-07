@@ -151,7 +151,7 @@ export class GradeEffect extends Effect {
   private readonly rush: Vector4[] = [new Vector4(), new Vector4(), new Vector4(), new Vector4()];
 
   /** `taps`: samples along the rush's line (0 leaves the rush out). */
-  constructor(taps = 6) {
+  constructor(private readonly taps = 6) {
     super("GripGrade", GRADE, {
       blendFunction: BlendFunction.SET,
       // The rush reads the picture around the pixel, not only under it.
@@ -175,6 +175,11 @@ export class GradeEffect extends Effect {
     });
     (this.uniforms.get("uTiles") as Uniform).value = this.tiles;
     (this.uniforms.get("uRush") as Uniform).value = this.rush;
+  }
+
+  /** The most samples along the rush's line, 0 to what the tier was built with (the shader's loop breaks on the uniform; no new program). */
+  setTaps(taps: number): void {
+    (this.uniforms.get("uRushTaps") as Uniform).value = Math.max(0, Math.min(this.taps, taps));
   }
 
   /** View `index`'s rush: 0..1, streaming out from (x, y), fractions of the view from its bottom left. */
@@ -243,6 +248,11 @@ export class PostChain {
 
   setTiles(tiles: readonly { x: number; y: number; w: number; h: number }[], width: number, height: number): void {
     this.grade.setTiles(tiles, width, height);
+  }
+
+  /** The most samples along the rush's streaks: fewer is cheaper (the load governor). */
+  setRushTaps(taps: number): void {
+    this.grade.setTaps(taps);
   }
 
   /** View `index`'s rush (the camera's `rush` and `focus`): 0 is none. */

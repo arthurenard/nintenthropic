@@ -47,7 +47,7 @@ export interface Scenery {
   /** Called every frame with the clock in seconds. */
   update(time: number): void;
   /** View `view` is about to be drawn: its instanced scenery shows only what `frustum` reaches (see cull.ts). */
-  cull(view: number, frustum: Frustum): void;
+  cull(view: number, frustum: Frustum, eye?: { x: number; y: number; z: number }, reach?: number): void;
   /** Every instance again, for a draw that is not one of the views. */
   uncull(): void;
   dispose(): void;
@@ -584,8 +584,8 @@ export function buildScenery(
     update(time: number) {
       for (const f of animated) f(time);
     },
-    cull(view: number, frustum: Frustum) {
-      for (const c of culls) c.select(view, frustum);
+    cull(view: number, frustum: Frustum, eye?: { x: number; y: number; z: number }, reach?: number) {
+      for (const c of culls) c.select(view, frustum, eye, reach);
     },
     uncull() {
       for (const c of culls) c.all();

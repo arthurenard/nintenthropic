@@ -2,7 +2,10 @@
  * What each quality tier costs and buys. The tier comes from the engine's GPU
  * guess (tier.ts) unless the page asks for one; dynamic resolution then
  * corrects the pixel count from frame to frame, so these are about geometry
- * and effects, which cannot be traded frame by frame.
+ * and effects, which cannot be traded frame by frame. What can be traded in the
+ * middle of a race without building anything (shared shadow passes, welded karts
+ * sooner, thinner particles, nearer scenery) is the load governor's (loadGovernor.ts),
+ * a few steps below each tier's own settings.
  *
  *  - high: a MacBook with an M-series chip, four views at 60 fps. 4x MSAA on
  *    an HDR target, kart shadows in a 2048 map, the world's sun shadow baked
