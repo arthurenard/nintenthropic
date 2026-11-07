@@ -481,16 +481,9 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
               const lamp = style?.post !== false && (!style?.bare || lampOwner.has(def));
               if (building && lamp) cube(ex, gy + 1.6, ez, 0.25, 3.2, 0.25, 0, POST);
               flush(pose.warn, time, tint);
-              if (style?.lamp) {
-                const on = pose.warn > 0 ? (calm ? 0.85 : 0.6 + 0.4 * Math.sin(time * 16)) : 0;
-                const [ir, ig, ib] = style.lamp.idle;
-                const [wr, wg, wb] = style.lamp.warn;
-                tint.setRGB(ir + (wr - ir) * on, ig + (wg - ig) * on, ib + (wb - ib) * on);
-              } else {
-                tint.r = tint.r * 0.35 + (pose.warn > 0 ? 2.2 * (calm ? 0.8 : 0.5 + 0.5 * Math.sin(time * 16)) : 0.1);
-                tint.g = pose.warn > 0 ? 0.1 : 0.12;
-                tint.b = pose.warn > 0 ? 0.08 : 0.12;
-              }
+              tint.r = tint.r * 0.35 + (pose.warn > 0 ? 2.2 * (calm ? 0.8 : 0.5 + 0.5 * Math.sin(time * 16)) : 0.1);
+              tint.g = pose.warn > 0 ? 0.1 : 0.12;
+              tint.b = pose.warn > 0 ? 0.08 : 0.12;
               if (!building && lamp) cube(ex, gy + 3.35, ez, 0.7, 0.55, 0.7, 0, tint);
               if (!hidden) blobShadow(x, roadY, z, def.radius * 2.2, shade.setRGB(0.03, 0.04, 0.09));
               break;

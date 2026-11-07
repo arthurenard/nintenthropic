@@ -1306,7 +1306,6 @@ export const FIVE_FINGER_CIRCUIT: TrackDef = {
     { kind: "surfboard", at: 0.29, offset: 24 },
     { kind: "palm-tree", at: 0.3658, offset: -24, scale: 1.2 },
     { kind: "beach-hut", at: 0.4219, offset: 28 },
-    { kind: "sandcastle", at: 0.4989, offset: -27.5 },
     { kind: "palm-tree", at: 0.4767, offset: 67.5 },
     { kind: "beach-towel", at: 0.5653, offset: 22 },
     { kind: "palm-tree", at: 0.6028, offset: 28 },

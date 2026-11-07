@@ -1852,9 +1852,10 @@ front of them (or a laptop), and the TV is the host's screen.
   mid-air cannot leave a kart hanging over the track, it carries on and lands. `sim/airTracks.test.ts` checks each air
   track (and its mirror): landing run straight, no hazard, item row or boost pad under a flight, bots fly every
   section, never fall, and finish across three seeds.
-  **Not built** (kept for the timed moving set pieces engine of the Track features section, or later): the
-  loop-the-loop ribbon, trick walls, vertical twists, the crumbling bridge over the lava, rock rain with a visible
-  build-up (Volcano's eruption is the paired lava bombs on a 7 s period), and the Five Finger beach waves.
+  **Not built** (later): the loop-the-loop ribbon, trick walls, vertical twists (a ribbon rolls only as far as the
+  road may lean, 0.35 rad, and two stretches of road never cross over one another: a road is found by the nearest centre
+  line), and a crumbling floor (a bridge that gives way on a timer: the sim has no floor that comes and goes). The rock rain,
+  the swell of lava over the Volcano's bridge and the Five Finger tide are built (the second pass's pieces, below).
 - **Drops** (`drops`): edges with no barrier. Over the edge (or into lava,
   a sink, space) the kart **falls**, and a **rescue drone** (a little
   propeller drone with a hook, Grip Prix's own) lifts it back to the road a
@@ -1896,7 +1897,18 @@ front of them (or a laptop), and the TV is the host's screen.
   Mirror mode negates the `span` of a swing or slide (or flips `dir` when a
   slide has no span) so they stay in step with the flipped road.
   The bots read the same poses a couple of seconds ahead, as for any hazard,
-  and wait (slow to 55%) or gamble (a tighter line) by skill. Not built yet:
+  and wait (slow to 55%) or gamble (a tighter line) by skill.
+  **The second pass's pieces** (`render/world/pieces2C.ts` models and `track/pieces2C.ts` helpers, no new motion: all are
+  the motions above under new names): `ember-rock` (Volcano) and `meteor` (Starlight) are "crush" hazards that fall out of
+  the sky (`rockRain`: rows of rocks across the road, each row a beat behind the last, each leaving a lane clear). A falling
+  rock has no piston or gantry: nothing is drawn until it warns; then its shadow grows and reddens on the road for
+  a second or more (a bomb comes in from on high, glowing, bigger as it nears), it falls, lies a moment and cools into the
+  road. `lava-surge` (Volcano's bridge) and `tide-wave` (Five Finger's wrist) are "slide" hazards
+  (`front`: a few pieces side by side that sweep the road together, from out of sight on one side to out of sight on the other,
+  the way round alternating): they have no rails and no lamp post (nowhere to stand on a bridge or a beach), and the
+  telegraph is the thing itself rising out of the lake or appearing at the road's edge as foam, growing for the last fifth of
+  the cycle before it runs. `plasma-orb` (Starlight) is a ball of `sweeper`. A branch road's own timed pieces are drawn too (the
+  comet trail's meteors): `world/index.ts` hands a route's pieces to `buildPieces` as the main road's. Not built yet:
   turntable platforms that carry a kart, floors and gates that rise. Also
   not built, from the round's wish list: the Canyon mine tunnel through the
   mesa and a swaying rope bridge, a Fun Fair funhouse of mirrors and a Ferris
@@ -1982,6 +1994,15 @@ front of them (or a laptop), and the TV is the host's screen.
   track maps draw the branches, and mirror mode mirrors them (`mirrorRoute`).
   A kart-lap that takes the shortcut should save about 1.5 to 2.5 s over a
   40 to 62 s lap; tracks.test.ts holds the best lap to its 40 s floor with them.
+  *Laying one out* (from the second pass): the two roads share ground where they lie close (the barrier opens between them, or on an
+  open edge the verge runs on to the other road's), and the picture's ground there follows the nearer centre line's height and
+  lean, so where the roads are closer than about 20 m they must have the same height (within half a metre) and the same bank
+  (the sum of the points' `bank` and, on a track that sets `bank`, the curvature's lean: a branch that kinks into the main
+  road gets a sudden lean). The corridor test says exactly where it fails. Put the junctions where the main road is flat and
+  straight (or leans the way the branch does); the branch's first and last waypoints belong on the main road a few tens of
+  metres out and the curve between them should be a smooth S (a sine, not a kink). On an open-edged road (space) give the branch the
+  same `drops`, or the camera finds a barrier where the ribbon has none. A solid landmark on a branch (a tunnel, an arch) must
+  stand 30 m clear of the main road, because its walls are the margin's business; the corridor test measures that too.
 
 ### What each theme can build
 
@@ -1992,10 +2013,10 @@ front of them (or a laptop), and the TV is the host's screen.
 | harbour | crane, lighthouse, ship, ship-deck (span: a cargo ship's deck with a gantry crane), containers, warehouse, buoy | crab, forklift, swing-box (orbit: a crane's container) |
 | kitchen | teapot, fruit-bowl, toaster, grater (span: a tunnel), salt-shaker, pepper-mill, drawer (span: a drawer pulled out of the counter, cutlery across it), cookbook, cereal-box, mug, fork-arch (span), spoon-arch (span), sink, window, wall-clock | orange (roll), pea (cross), teacup (orbit), toast (bob: pops from the toaster) |
 | snow | igloo, cabin, snowman, ice-arch (span), ice-cave (span: a tunnel), pine-snow, gondola, ski-jump | penguin (cross), snowball (roll), yeti (bob), icicle (crush) |
-| volcano | volcano, lava-fall, basalt-columns, stone-bridge (span), obsidian-arch (span), hot-spring | fireball (bob), boulder (roll), geyser (bob) |
+| volcano | volcano, lava-fall, basalt-columns, stone-bridge (span), obsidian-arch (span), hot-spring, lava-tube (span: a tunnel through the crater's rock) | fireball (bob), boulder (roll), geyser (bob), ember-rock (crush: falls from the sky), lava-surge (slide: a swell of lava) |
 | funfair | ferris-wheel, carousel, big-top (span: a tunnel), rollercoaster (span: over the road), entrance-arch (span), food-stall, balloon-stand, hook-a-duck, helter-skelter, fireworks | teacup-ride (orbit), bumper-car (cross), arm-ball (orbit: a carousel's bar), funhouse-panel (slide), mallet (crush), swing-boat (swing) |
-| space | ringed-planet, ring-gate (span), asteroid, satellite, space-station, nebula | asteroid (orbit), comet (roll) |
-| palm | palm-tree, beach-hut, surfboard, sandcastle, beach-towel, giant-ring (span), wristwatch (span: the start gantry) | crab (cross), coconut (roll), beach-ball (roll) |
+| space | ringed-planet, ring-gate (span), asteroid, satellite, space-station, nebula | asteroid (orbit), comet (roll), meteor (crush: falls from the sky), plasma-orb (orbit: a sweeper's arm) |
+| palm | palm-tree, beach-hut, surfboard, sandcastle, beach-towel, giant-ring (span), wristwatch (span: the start gantry), tiki-arch (span: a gate of carved bamboo) | crab (cross), coconut (roll), beach-ball (roll), tide-wave (slide: a breaker) |
 
 ## The tracks
 
@@ -2109,43 +2130,59 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    (an avalanche you read and slip between, then straight into the jump).
    The lake's kicker is the first wow moment, the corkscrew the second, the
    cave the third, the ski-jump over the crevasse the fourth.
-7. **Volcano Rush** (volcano): black rock and rivers of lava (drops). Up the
+7. **Volcano Rush** (volcano): black rock and rivers of lava (drops), and the volcano is erupting. Up the
    volcano's flank in switchbacks (two banked hairpins, boulders rolling down
    the first leg at you); on the second leg a **geyser cannon** (`air` cannon,
    82 m, 8 m up) fires you across a tongue of lava that has eaten 66 m of the
-   road (a `gap`: there is no way across on the ground); a ridge twenty-two
-   metres up that weaves between lava on the outside of its bends, where the
-   **eruption** goes off on the race clock: a pair of lava bombs leaps from
-   either side every seven seconds (the middle is clear), the next pair half
-   a beat later; then off the brow on a **glide** (140 m, 11 m up, a parasol)
+   road (a `gap`: there is no way across on the ground); round the second hairpin onto the
+   **crater's rim**, twenty-five metres up and banked hard, where the **eruption** goes off
+   on the race clock; then off the brow on a **glide** (140 m, 11 m up, a parasol)
    down the mountain over the open lava fields, steering for the rings painted
    where the road comes back (the boost), and the stone bridge over the lava
-   lake with nothing either side, a boost strip along its left half only. The
-   volcano smokes behind it all; the duck relaxes in a hot spring beside the
-   second hairpin. *Design note:* the old jump over a lava gap became the
-   glide, because a ramp can only throw a kart one way and the brow is the
-   best view on the track; the cannon is the flank's wow moment and the
-   eruption the ridge's; the glide's landing is a straight, level run before
-   the last bends.
+   lake, where the lake swells up and runs across the deck. The volcano smokes behind it all; the duck relaxes in a hot
+   spring beside the second hairpin.
+   *Design note (round two).* The lap as a story: a quiet straight, the flank (the first set piece is
+   the cannon: the wow of the first half), the rim where the volcano erupts, the glide (the second wow) and the bridge
+   where the lake comes up to meet you, then home. Three engines together. **Timed pieces:** the eruption is three rows of
+   lava bombs (`rockRain`, `ember-rock`) falling on the rim's first straight, each row a beat behind the last and each leaving
+   a lane clear (outside, inside, middle): every bomb's shadow grows and reddens for a second and a half
+   before it lands, so the rows are a slalom you read; beyond them, on the lip, fireballs leap from the lava on either side in
+   turn. On the bridge two swells of lava (`lava-surge`, one each way, half a beat apart) rise out of the lake beside the deck
+   and sweep it. **Route:** the **lava tube** is a shortcut that leaves the rim's first straight and runs under the crater's lip
+   (a tunnel through the rock, black on the outside and lit orange from two channels of lava along its walls; narrow, a strip of
+   boost down it, about 50 m shorter than the rim: two seconds) and out onto the rim's exit; it skips the fireballs, and the bombs fall on the road it
+   leaves, so the choice is made with the shadows already growing. **Air:** the cannon and the glide as before. *Reshaped:* the old ridge
+   that weaved between the lava is the crater's rim, a sweeping, banked left-hander round the cone with open lava on
+   its outside; the leg-two cannon and the brow-and-glide stay where their straight run-ups and landings need them. Not built:
+   the crumbling bridge (no timed floors), so the bridge's danger is the lake instead. The tube leaves where the rim is flat and
+   joins where it has begun to straighten out, so its ground and lean match the rim's.
 8. **Starlight Ribbon** (space): the finale. A glowing ribbon of road high
-   over a ringed planet: up the twist, where the ribbon rolls one way and
+   over a ringed planet: off the line the ribbon **splits**, then up the twist, where the ribbon rolls one way and
    then the other, two crests with **low-gravity lips** (`air` lip, 64 m, 5 m
    up: a slow, floaty arc each, a trick boosts on landing), a banked carousel
-   round the far end that falls all the way, with a **meteor shower** down it
+   round the far end that falls nine metres, with a **meteor shower** down it
    (two comets a beat apart, one each side) and an asteroid circling it, back
-   along a lower ribbon and down it on a **solar-sail glide** (70 m, 7 m up,
+   along a lower ribbon past a **plasma arm** and down it on a **solar-sail glide** (70 m, 7 m up,
    landing rings) and into the **cannon between two ribbons** (88 m, 9 m up,
    over 56 m of nothing). Almost no barriers (fall and the drone brings you
    back), boost strips, ring gates. The duck floats in an astronaut's helmet by
-   a satellite. *Design note:* the lips replace the natural crest jumps so the
-   floaty arcs are always the same, the asteroid moved off the dip so that
-   nothing waits where the lips land, and glide then cannon on one straight is
-   the finale's crescendo (a kart that lands the glide on its mark has speed
-   for the cannon).
-
+   a satellite.
+   *Design note (round two).* The lap as a story: the split at the start (a choice between two ribbons), the twist (the roll),
+   the crests (the float), the carousel (the fall, under the shower), the plasma arm (a gate to time) and the glide and the cannon in
+   a row (the wow, a crescendo: a kart that lands the glide on its mark has speed for the cannon). **Route:** the ribbon splits
+   into the **aurora** (the main ribbon: wide, a strip of boost, a comet rolling down it) and the **comet trail** (narrower and a
+   couple of metres lower at its swing, open to the void like the ribbon, three rows of meteors striking it, each row's shadow
+   growing for more than a second; an asteroid beside it and a ring gate over it), about the same length: a split with two
+   characters, 50-50 for the bots. **Timed pieces:** the meteors (`rockRain`, `meteor`, drawn on the branch by the route's own
+   piece layer) and the plasma arm (`sweeper` of `plasma-orb`, one arm of 8.4 m turning every 6.2 s across the 20 m ribbon: wait for
+   it or slip by its far side). **Air:** the lips, the glide, the cannon, as before. *Reshaped:* the carousel falls nine metres
+   instead of five and the lower ribbon, glide and cannon run lower, so the lap has more height to lose; the curvature lean
+   (the track's `bank`) is gone and every bend is banked by its own points, so that the split's junctions can be flat; the twist is
+   later on the first ribbon (after the split rejoins). Not built: a loop-the-loop and a ribbon that twists right over (see the
+   air sections), so the twist is a roll of 0.3 rad.
 **Secret: Five Finger Circuit** (palm): an island shaped like an open hand,
 seen from above — the hand you play with. The road runs up and down every finger
-(the fingertips are hairpins), round the thumb, across the palm and back
+(the fingertips are banked hairpins), round the thumb, across the palm and back
 along the wrist, where a giant wristwatch is the start gantry; a ring to
 drive through on the straight by the wrist (the fingers are too close to one
 another for anything to stand between them); palm trees, beach huts, crabs, coconuts.
@@ -2153,11 +2190,19 @@ A **wrist cannon** (36 m, 5 m up) on the first diagonal hops a kart up from the 
 toward the first finger, a **fingertip lip** (34 m, 3.5 m up) hops the first finger's
 long leg, and the **thumb glide** (95 m, 8 m up, a parasol) takes a kart off the thumb's
 tip and down to the wrist over the water, to rings painted at the foot of the thumb.
-*Design note:* the fingers are too close together and the legs too short for long
-flights (a cannon needs 20 m of road after it before a hard bend), so the hand gets
-short hops and one long glide down the thumb, the one long straight on the map; waves
-washing the beach road on a timer are not built (see the timed set pieces). The
-minimap is a hand, tilted: every finger climbs to its tip and back. The duck
-sunbathes, in sunglasses, in the middle of the palm.
+*Design note (round two).* The lap as a story: the wrist and the cannon (the start), the
+fingers, one by one, each a climb and a hairpin and a drop (the middle finger the highest, six metres up), the
+**palm trail** (the choice), the thumb and its glide (the wow), the wrist's beach where the tide comes in, and home.
+The hand is tilted and now climbs more: every finger rises to its tip and back (twice as high
+as before) and the tips are banked hairpins. **Route:** the **palm trail** is a shortcut that leaves
+the pinky's side of the first valley, runs straight on across the sand of the palm under the ring finger (a **tiki arch**
+at its mouth, carved bamboo posts with chevrons, lanterns and torches; a strip of boost; a coconut rolling down it) and
+comes up onto the middle finger's long leg: narrower, flat, and a little shorter than going over the ring finger.
+(It had to run under the fingers, not across them: a road is found by the nearest centre line, so no road may cross another, and
+a zig-zag has no chord that skips a finger without crossing a leg.) **Timed pieces:** the **tide**, two sets of breakers (`tide-wave`) that
+wash up the wrist's beach road from the sea, one each side of the first bend, half a beat apart: each shows as foam at the
+road's edge and grows before it runs across. **Air:** the cannon, the lip and the glide, as before. The fingers are too close together
+and the legs too short for long flights (a cannon needs 20 m of road after it before a hard bend), so the hand gets short hops and one
+long glide down the thumb. The minimap is a hand, tilted. The duck sunbathes, in sunglasses, in the middle of the palm, below the trail.
 Unlocked by winning both cups (or, for those who know, the Konami code on the
 start screen).

@@ -34,8 +34,6 @@ export interface PieceStyle2C {
   noFlush?: boolean;
   /** A lamp post at its way in (default true; false where there is nowhere to stand: a bridge, a beach). */
   post?: boolean;
-  /** The lamp's colour while it waits (steady) and when it is about to come, as linear RGB. */
-  lamp?: { idle: Rgb; warn: Rgb };
 }
 
 const LAVA_HOT: Rgb = [1.9, 1.2, 0.3];
