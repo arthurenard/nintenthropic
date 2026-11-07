@@ -137,7 +137,7 @@ function unpackKart(k: KartState, a: readonly number[], w: World): void {
   m.cut = a[KART_AT.botCut]!;
   k.air = a[KART_AT.air]!;
   k.vy = a[KART_AT.vy]!;
-  k.flight = a[KART_AT.flight]! as 0 | 1 | 2;
+  k.flight = a[KART_AT.flight]! as 0 | 1 | 2 | 3 | 4;
   k.trick = a[KART_AT.trick]!;
   k.rescue = a[KART_AT.rescue]!;
   k.immune = a[KART_AT.immune]!;

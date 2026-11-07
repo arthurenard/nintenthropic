@@ -696,7 +696,7 @@ export const VOLCANO_RUSH: TrackDef = {
   theme: "volcano",
   laps: 3,
   width: 14,
-  blurb: "Black rock and rivers of lava: switchback up the volcano's flank, weave along the ridge, then dive off the brow, over a lava gap and across the stone bridge.",
+  blurb: "Black rock and rivers of lava: switchback up the flank, get fired over a lava tongue by the geyser cannon, weave the erupting ridge, then glide off the brow and down the mountain to the stone bridge.",
   points: [
     // The start straight, then left onto the volcano's flank.
     { x: 0, z: 0 },
@@ -767,15 +767,19 @@ export const VOLCANO_RUSH: TrackDef = {
   itemRows: [0.036, 0.141, 0.47, 0.805],
   boostPads: [
     { at: 0.1207, offset: 2 },
-    { at: 0.2655, offset: -2 },
-    { at: 0.6436, offset: 0 },
+    { at: 0.2395, offset: 0 },
+    { at: 0.603, offset: 0 },
     { at: 0.957, offset: 2 },
   ],
-  ramps: [
-    { at: 0.6935, lift: 7.5 },
+  // The geyser cannon throws a kart over a gap in the road (a lava tongue) on the flank; the glide takes it off the
+  // brow and down the mountain over the open lava fields.
+  air: [
+    { kind: "cannon", at: 0.251, length: 82, height: 8 },
+    { kind: "glide", at: 0.6211, length: 140, height: 11 },
   ],
   drops: [
-    { from: 0.6947, to: 0.7052, side: "both", gap: true },
+    { from: 0.259, to: 0.3121, side: "both", gap: true },
+    { from: 0.6235, to: 0.7365, side: "both" },
     { from: 0.4344, to: 0.4545, side: "right" },
     { from: 0.469, to: 0.4883, side: "left" },
     { from: 0.5036, to: 0.5229, side: "right" },
@@ -785,11 +789,14 @@ export const VOLCANO_RUSH: TrackDef = {
     { from: 0.8215, to: 0.885, kind: "boost", offset: -3.5, width: 7 },
   ],
   hazards: [
-    { kind: "fireball", motion: "bob", period: 5.6, radius: 2, offset: 3.4, at: 0.444 },
-    { kind: "fireball", motion: "bob", period: 5.6, phase: 0.45, radius: 2, offset: -3.4, at: 0.4787 },
-    { kind: "fireball", motion: "bob", period: 6.2, phase: 0.2, radius: 2, offset: 3.4, at: 0.513 },
-    { kind: "boulder", motion: "roll", period: 5.4, radius: 2.5, offset: -2.8, at: 0.3178, span: 0.035 },
-    { kind: "boulder", motion: "roll", period: 5.4, phase: 0.5, radius: 2.5, offset: -2.8, at: 0.3178, span: 0.035 },
+    // The eruption, on the race clock: a pair of lava bombs leaps from either side of the ridge every 7 s (the middle is
+    // clear), and the next pair, half a beat later, a little farther on.
+    { kind: "fireball", motion: "bob", period: 7, radius: 1.7, offset: 4.6, at: 0.452 },
+    { kind: "fireball", motion: "bob", period: 7, radius: 1.7, offset: -4.6, at: 0.452 },
+    { kind: "fireball", motion: "bob", period: 7, phase: 0.5, radius: 1.7, offset: 4.6, at: 0.4925 },
+    { kind: "fireball", motion: "bob", period: 7, phase: 0.5, radius: 1.7, offset: -4.6, at: 0.4925 },
+    { kind: "boulder", motion: "roll", period: 5.4, radius: 2.5, offset: -2.8, at: 0.145, span: 0.035 },
+    { kind: "boulder", motion: "roll", period: 5.4, phase: 0.5, radius: 2.5, offset: -2.8, at: 0.145, span: 0.035 },
     { kind: "geyser", motion: "bob", period: 6.8, radius: 2.4, offset: 0, at: 0.7723 },
   ],
   landmarks: [
@@ -826,7 +833,7 @@ export const STARLIGHT_RIBBON: TrackDef = {
   theme: "space",
   laps: 3,
   width: 20,
-  blurb: "The finale, a ribbon of light over a ringed planet: roll through the twist, fly two crests, swing round the banked carousel, leap between two ribbons.",
+  blurb: "The finale, a ribbon of light over a ringed planet: roll through the twist, float over two crests, swing round the carousel under a meteor shower, glide down and get fired across the gap between two ribbons.",
   bank: 8,
   points: [
     // Off the line and up into the twist: the ribbon rolls one way, then the other, as it climbs.
@@ -885,30 +892,37 @@ export const STARLIGHT_RIBBON: TrackDef = {
     { x: 0, z: -50, y: 0.2 },
     { x: 0, z: -25 },
   ],
-  itemRows: [0.0372, 0.2399, 0.4633, 0.8257],
+  itemRows: [0.0372, 0.2234, 0.4633, 0.8257],
   boostPads: [
     { at: 0.3078, offset: 4 },
     { at: 0.5427, offset: -4 },
     { at: 0.8993, offset: 0 },
   ],
-  ramps: [
-    { at: 0.7653, lift: 9 },
+  // Low-gravity lips on the two crests (long floaty arcs, a trick boosts on landing), a solar-sail glide down the lower
+  // ribbon to its landing mark, and the cannon that fires a kart across the gap between the two ribbons.
+  air: [
+    { kind: "lip", at: 0.2482, length: 64, height: 5 },
+    { kind: "lip", at: 0.3159, length: 64, height: 5 },
+    { kind: "glide", at: 0.6718, length: 70, height: 7 },
+    { kind: "cannon", at: 0.7399, length: 88, height: 9 },
   ],
   drops: [
-    { from: 0.7665, to: 0.7814, side: "both", gap: true },
-    { from: 0.0414, to: 0.757, side: "both" },
+    { from: 0.7595, to: 0.8066, side: "both", gap: true },
+    { from: 0.0414, to: 0.7595, side: "both" },
     { from: 0.7942, to: 0.9514, side: "both" },
   ],
   surfaces: [
     { from: 0.0951, to: 0.1365, kind: "boost" },
     { from: 0.5543, to: 0.5957, kind: "boost" },
-    { from: 0.6867, to: 0.7405, kind: "boost" },
   ],
   hazards: [
-    { kind: "asteroid", motion: "orbit", period: 5.6, radius: 3, offset: 0, at: 0.2978, span: 6.4 },
+    { kind: "asteroid", motion: "orbit", period: 5.6, radius: 3, offset: 0, at: 0.425, span: 6.4 },
     { kind: "asteroid", motion: "orbit", period: 6.4, phase: 0.4, radius: 3, offset: 0, at: 0.5791, span: 6.4 },
     { kind: "asteroid", motion: "orbit", period: 5.9, phase: 0.7, radius: 3, offset: 0, at: 0.6991, span: 6.4 },
     { kind: "comet", motion: "roll", period: 5.2, radius: 3, offset: -2, at: 0.1655, span: 0.0496 },
+    // A meteor shower down the carousel's far side: two streaks, a beat apart, one each side of the ribbon.
+    { kind: "comet", motion: "roll", period: 5.5, radius: 2.0, offset: -5.5, at: 0.521, span: 0.04 },
+    { kind: "comet", motion: "roll", period: 5.5, phase: 0.5, radius: 2.0, offset: 5.5, at: 0.521, span: 0.04 },
   ],
   landmarks: [
     { kind: "ringed-planet", at: 0.0662, offset: 50, scale: 3.2 },
@@ -945,7 +959,7 @@ export const FIVE_FINGER_CIRCUIT: TrackDef = {
   theme: "palm",
   laps: 3,
   width: 13,
-  blurb: "An island shaped like an open hand: up and down every finger, round the thumb, and back along the wrist.",
+  blurb: "An island shaped like an open hand: up and down every finger, a cannon off the wrist, and a glide from the thumb's tip down to the water.",
   secret: true,
   points: [
     { x: 0, z: 0 },
@@ -1042,16 +1056,24 @@ export const FIVE_FINGER_CIRCUIT: TrackDef = {
     { x: 3.8, z: -54 },
     { x: 0, z: -40 },
   ],
-  itemRows: [0.0417, 0.2466, 0.4545, 0.5977],
+  itemRows: [0.0324, 0.2466, 0.4545, 0.5977],
   boostPads: [
-    { at: 0.127, offset: 0 },
+    { at: 0.096, offset: 0 },
     { at: 0.3914, offset: 1.5 },
     { at: 0.6181, offset: -1.5 },
     { at: 0.8845, offset: 0 },
   ],
+  // The wrist launcher fires a kart up the first diagonal; the fingertip lip hops the first finger; the thumb glide
+  // takes a kart off the thumb's tip and down to the wrist over the sea, to a landing mark in the lagoon.
+  air: [
+    { kind: "cannon", at: 0.0461, length: 36, height: 5 },
+    { kind: "lip", at: 0.1092, length: 34, height: 3.5 },
+    { kind: "glide", at: 0.7186, length: 95, height: 8 },
+  ],
+  drops: [{ from: 0.7211, to: 0.798, side: "both" }],
   hazards: [
-    { kind: "crab", motion: "cross", period: 5.6, radius: 1.3, at: 0.052, span: 6 },
-    { kind: "coconut", motion: "roll", period: 4.6, radius: 1.5, offset: -2.6, at: 0.1613, span: 0.0393 },
+    { kind: "crab", motion: "cross", period: 5.6, radius: 1.3, at: 0.093, span: 6 },
+    { kind: "coconut", motion: "roll", period: 4.6, radius: 1.5, offset: -2.6, at: 0.18, span: 0.03 },
     { kind: "beach-ball", motion: "roll", period: 5, radius: 1.9, offset: 2.6, at: 0.653, span: 0.0478 },
     { kind: "crab", motion: "cross", period: 6.2, phase: 0.4, radius: 1.3, at: 0.888, span: 6 },
   ],

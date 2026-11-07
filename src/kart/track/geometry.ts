@@ -64,6 +64,28 @@ export interface Ramp {
 }
 
 /**
+ * A launch or air section (sim/air.ts): a pad across the road that throws a kart into a planned flight over `length`
+ * metres of road, landing where the flight ends. The flight is a function of how far along the road the kart has got,
+ * so it replays exactly and every screen draws the same. "cannon": a barrel pad that fires the kart up in an arc of
+ * `height` metres (tricks boost on landing; a kart too slow is still thrown, at a speed that carries it). "glide": a
+ * big lift-off after which the kart deploys a parasol and floats down in a long shallow slope, steering well and
+ * choosing where to land; landing close to the middle of the road gives a short boost. "lip": a half-pipe lip, a short
+ * arc with a trick boost guaranteed.
+ */
+export interface AirSection {
+  kind: "cannon" | "glide" | "lip";
+  /** Where the pad is, a fraction of the lap. */
+  at: number;
+  /** Metres of road the flight covers. */
+  length: number;
+  /** The arc's top above the road, metres. */
+  height: number;
+  /** The pad's middle, metres right of the centre line, and its width (default: the whole road). */
+  offset?: number;
+  width?: number;
+}
+
+/**
  * Something that moves on its own and spins out a kart it touches. Where
  * it is is a pure function of the race's time (`hazardAt` in hazards.ts),
  * so the sim and every screen agree without sending it.
@@ -174,6 +196,8 @@ export interface TrackDef {
   /** Patches that drive differently, across the road from `offset - width/2` to `offset + width/2` (the whole road if unset). */
   surfaces?: (Stretch & { kind: Surface; offset?: number; width?: number })[];
   hazards?: HazardDef[];
+  /** Cannons, glides and lips: the launch and air sections (see AirSection). */
+  air?: AirSection[];
   landmarks?: Landmark[];
   /** Where the rubber duck hides (every Nintenthropic game has one). */
   duck?: { at: number; offset: number; y?: number };

@@ -161,8 +161,8 @@ export type RaceEvent = { id: number; tick: number } & (
   | { type: "lap"; kart: number; lap: number }
   | { type: "final-lap"; kart: number }
   | { type: "finish"; kart: number; place: number; time: number }
-  /** Off a ramp's lip into the air, or (`crest`) off the top of a hill taken fast. */
-  | { type: "jump"; kart: number; crest?: boolean }
+  /** Off a ramp's lip into the air, or (`crest`) off the top of a hill taken fast, or (`arc`) thrown by a cannon, a glide's lift-off or a half-pipe lip. */
+  | { type: "jump"; kart: number; crest?: boolean; arc?: "cannon" | "glide" | "lip" }
   /**
    * A trick in the air (it boosts on landing): the drift button or a shake.
    * `kick`: a shake right at a ramp's lip, which also throws the jump higher and further.
@@ -225,6 +225,8 @@ export interface KartView {
   surface: Surface | "road";
   /** Seconds since a trick began in the air (for its animation), 0 when none. */
   trick: number;
+  /** 1 while gliding under a parasol (a glide section, sim/air.ts), else 0. Optional: none is 0. */
+  glide?: number;
   /**
    * Seconds left of a rescue (0 when none): it fell, the drone lifts it
    * back to the road and lets it go. The picture draws it falling for the

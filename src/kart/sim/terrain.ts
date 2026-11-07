@@ -9,6 +9,7 @@
 import { inStretch, type HazardDef, type Stretch, type Surface, type TrackDef, type TrackGeometry } from "../track/geometry";
 import type { Ground } from "./state";
 import { TUNING } from "./tuning";
+import { buildArcs, type ArcSite } from "./air";
 
 /** A part of the lap in metres along it; `from` > `to` wraps over the line. */
 export interface Span {
@@ -38,6 +39,8 @@ export interface Terrain {
   length: number;
   spacing: number;
   ramps: RampSite[];
+  /** Cannons, glides and lips (sim/air.ts). */
+  arcs: ArcSite[];
   gaps: Span[];
   patches: Patch[];
   hazards: HazardDef[];
@@ -112,7 +115,7 @@ export function buildTerrain(def: TrackDef, geo: TrackGeometry): Terrain {
     const lift = ramp.lift ?? R.lift;
     return { s: geo.wrap(ramp.at * length), lift, trick: ramp.trick !== false, length: R.length, height: (R.height * lift) / R.lift };
   });
-  return { length, spacing: geo.spacing, ramps, gaps, patches, hazards: def.hazards ?? [], openLeft, openRight, barrierLeft, barrierRight, groundLeft, groundRight, ...hills(geo) };
+  return { length, spacing: geo.spacing, ramps, arcs: buildArcs(def, geo), gaps, patches, hazards: def.hazards ?? [], openLeft, openRight, barrierLeft, barrierRight, groundLeft, groundRight, ...hills(geo) };
 }
 
 /** The road's grade, its crests and dips, and how steep the descent just behind each place is: the hills the karts feel. */

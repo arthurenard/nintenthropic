@@ -55,11 +55,12 @@ export function mirrorTrack(def: TrackDef): TrackDef {
     verges: def.verges?.map((verge) => ({ ...verge, side: swapSide(verge.side) })),
     surfaces: def.surfaces?.map((surface) => withDefined({ ...surface }, "offset", flipped(surface.offset))),
     hazards: def.hazards?.map((hazard) => mirrorHazard(hazard)),
+    air: def.air?.map((section) => withDefined({ ...section }, "offset", flipped(section.offset))),
     landmarks: def.landmarks?.map((landmark) => withDefined({ ...landmark, offset: flip(landmark.offset) }, "turn", flipped(landmark.turn))),
     duck: def.duck ? { ...def.duck, offset: flip(def.duck.offset) } : undefined,
   };
   // Optional fields the original did not have stay absent, not undefined.
-  for (const key of ["boostPads", "drops", "verges", "surfaces", "hazards", "landmarks", "duck"] as const) {
+  for (const key of ["boostPads", "drops", "verges", "surfaces", "hazards", "air", "landmarks", "duck"] as const) {
     if (mirrored[key] === undefined) delete mirrored[key];
   }
   mirrors.set(def, mirrored);
