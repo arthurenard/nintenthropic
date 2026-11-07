@@ -764,7 +764,31 @@ that file exists (`render/art.ts`).
   so no frame turns through more than 1.9 rad of it, which keeps it a buzz at
   30 fps; none of this for Reduce Motion), a whole flat turn in the air for a
   trick; a blob shadow
-  (`render/kart.ts`). Up a ramp the kart stands on the picture's wedge; off
+  (`render/kart.ts`). **Faces and looks.** Each driver blinks (`drivers/face.ts`:
+  one lid mesh in the face's colour that slides down over the bead eyes, every
+  2.2 to 5.4 s, now and then twice, about 0.2 s, each driver at its own
+  times; no draw call while the eyes are open) and shuts its eyes in a
+  grin, ^ ^, while cheering or after finishing, half shut and heavy when dizzy.
+  On the grid (stopped: speed under 2.5 m/s, eased) the driver breathes and the
+  head wanders over the track (`KartPose.rest`). A driver with another kart
+  2 to 11 m behind, within 3.5 m of its line, at over 6 m/s, glances back over
+  that side's shoulder for 0.75 s at most every 3.2 s (`KartPose.lookBack`;
+  each actor sees the others through a registry in `kart.ts`, so it needs
+  nothing from the sim or the wire, and a driver who asked for less motion
+  does not). The **brake lights** (`brakeLights.ts`) are a skin laid over the
+  tail lamps (the art's own: the vertices of material "tail"; or the code-built
+  kart's two bars) in one shared additive material: they flare, a little larger,
+  while the kart's eased deceleration is over 2.2 m/s² (full by 6.5), on the
+  ground and above 1.5 m/s, and go out in about 0.1 s (`KartPose.brake`, worked
+  out from the speed falling in `KartActor`). One extra draw call for a kart
+  while it brakes, none otherwise. **Coachwork** (`kartExtras.ts`): each driver's
+  kart carries its own touches welded into the body geometry (no draw calls): a
+  cotton-tail puff and carrot fins (Bun), a dorsal fin (Pepper), bulging eyes on
+  the bonnet (Moss), twin swept fins (Kit), a surfboard (Juniper), ears and
+  whiskers (Mango), a roll hoop and bull bar (Bramble), an aerial and dish
+  (Rivet), a bill and tail feathers (Dabble); the golden kart wears a crown. The
+  turntable (`render/dev.html?turntable=1`) shows them: `&brake=1`, `&back=1`,
+  `&shut=1`, `&rest=1` pose the new looks. Up a ramp the kart stands on the picture's wedge; off
   the lip it rides the sim's height, which starts at the wedge's top, so the
   two meet without a step. Effects:
   drift sparks (blue, then orange, then violet for the third charge, the charge
