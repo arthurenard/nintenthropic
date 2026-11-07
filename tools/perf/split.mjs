@@ -134,6 +134,8 @@ async function once(browser, players, track, camera) {
     P.armed = true;
     P.t0 = performance.now();
   });
+  // --cpu n: the main thread n times slower (a weaker laptop), from the green light on.
+  if (args.cpu) await (await ctx.newCDPSession(page)).send("Emulation.setCPUThrottlingRate", { rate: Number(args.cpu) });
   // --profile: the main thread's own time by function (V8's sampling profiler over the measured seconds), top 25.
   const cdp = args.profile ? await ctx.newCDPSession(page) : null;
   if (cdp) {
