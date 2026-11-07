@@ -336,7 +336,7 @@ test("Copy System Info copies what a bug report needs", async ({ page, context }
   await page.getByRole("button", { name: "Copy System Info" }).click();
   await expect(page.locator("#toast")).toHaveText("Copied.");
   const copied = await page.evaluate(() => navigator.clipboard.readText());
-  expect(copied).toMatch(/^Super Claude Bros\. \d+\.\d+\.\d+\n/);
+  expect(copied).toMatch(/^Nintenthropic \d+\.\d+\.\d+\n/);
   expect(copied).toContain("Browser: Mozilla/5.0");
   expect(copied).toContain("Graphics: ");
   expect(copied).toContain("Screen: ");
@@ -371,7 +371,7 @@ test("Reset Everything asks first, then forgets everything and starts afresh on 
   // Afresh, as on a first visit: the landing, though the reset was done in the arcade.
   await expect(page.locator("#landing")).toBeVisible();
   await expect(page.locator("#settings")).toBeHidden();
-  await expect(page.locator("#tile-arcade").getByRole("link", { name: "Play" })).toBeFocused();
+  await expect(page.locator("#tile-grip").getByRole("link", { name: "Play" })).toBeFocused();
   expect(new URL(page.url()).hash).toBe("");
   expect(await storedKeys(page)).toEqual([]);
   expect(await page.evaluate(() => localStorage.getItem("someone-else"))).toBe('"theirs"');

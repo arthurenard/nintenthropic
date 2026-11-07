@@ -1,4 +1,4 @@
-// The front door of Super Claude Bros. and the arcade behind it. The landing shows the two
+// The front door of Nintenthropic and the arcade behind it. The landing shows the two
 // families side by side - the four shooters of Finger Guns, and Grip Prix, a page
 // of its own - and the arcade is the shooters' own space: the chosen game as
 // a full-bleed hero, the row of games to choose from (by click, by keyboard as
@@ -98,7 +98,7 @@ test("the browser's Back in a game pauses it, and never leaves the page with the
   page.on("pageerror", (error) => errors.push(error.message));
   await returningVisitor(page, { "handy.control.v1": "mouse" });
   await page.goto("/");
-  await page.getByRole("link", { name: "Play" }).click();
+  await page.locator("#tile-arcade").getByRole("link", { name: "Play" }).click();
   await card(page, "Dead of Night").click();
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("play");
@@ -129,7 +129,7 @@ test("the browser's Back while a game gets ready cancels it, to where the addres
     await route.continue().catch(() => {});
   });
   await page.goto("/");
-  await page.getByRole("link", { name: "Play" }).click();
+  await page.locator("#tile-arcade").getByRole("link", { name: "Play" }).click();
   await card(page, "High Noon").click();
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).view).toBe("game");
@@ -143,7 +143,7 @@ test("the browser's Back while a game gets ready cancels it, to where the addres
   expect(errors).toEqual([]);
 });
 
-test("the landing: two equal tiles, and the way into each", async ({ page }) => {
+test("the landing: Grip Prix large and first, Finger Guns slim, and the way into each", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await returningVisitor(page, { "handy.game.v1": "dead-of-night" });
@@ -153,7 +153,7 @@ test("the landing: two equal tiles, and the way into each", async ({ page }) => 
   expect((await snapshot(page)).view).toBe("landing");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Games you play with your hands.");
 
-  // Two tiles of one size, side by side: each with its name, a line, and the one thing to do.
+  // Two tiles side by side, the kart game first and about four times as wide: each with its name, a line, and the one thing to do.
   const arcade = page.locator("#tile-arcade");
   const grip = page.locator("#tile-grip");
   await expect(arcade.getByRole("heading", { name: "Finger Guns" })).toBeVisible();
@@ -162,12 +162,14 @@ test("the landing: two equal tiles, and the way into each", async ({ page }) => 
   await expect(grip).toContainText("Up to 4 Players");
   await expect(grip).toContainText("Grip the wheel. Race your friends.");
   const [a, g] = [(await arcade.boundingBox())!, (await grip.boundingBox())!];
-  expect(Math.abs(a.width - g.width)).toBeLessThan(2);
   expect(Math.abs(a.height - g.height)).toBeLessThan(2);
   expect(Math.abs(a.y - g.y)).toBeLessThan(2);
-  expect(g.x).toBeGreaterThan(a.x + a.width);
+  expect(a.x).toBeGreaterThan(g.x + g.width);
+  expect(g.width / a.width).toBeGreaterThan(3);
+  // Grip Prix first for the keyboard too: its Race is the first button in the page's order.
+  expect(await page.locator("#landing .tile-go").first().getAttribute("href")).toBe("race.html");
   // Grip Prix goes to its own page; Finger Guns' Play opens the arcade, not a game.
-  await expect(grip.getByRole("link", { name: "Race" })).toHaveAttribute("href", "race.html");
+  await expect(grip.getByRole("link", { name: "Play" })).toHaveAttribute("href", "race.html");
   await expect(arcade.getByRole("link", { name: "Play" })).toHaveAttribute("href", "#finger-guns");
 
   // Its picture arrives over its sunny backdrop, which is also what stands in until it does (or if it never does).
@@ -184,8 +186,8 @@ test("the landing: two equal tiles, and the way into each", async ({ page }) => 
   await expect(page.getByRole("heading", { name: "Racing" })).toHaveCount(0);
   await expect(card(page, "Grip Prix")).toHaveCount(0);
 
-  // The bar: Super Claude Bros. leads back to the landing, standing on the Finger Guns tile; Back and Forward walk the same way.
-  await page.getByRole("link", { name: "Super Claude Bros." }).click();
+  // The bar: Nintenthropic leads back to the landing, standing on the Finger Guns tile; Back and Forward walk the same way.
+  await page.getByRole("link", { name: "Nintenthropic" }).click();
   await expect(page.locator("#landing")).toBeVisible();
   await expect(page.locator("#arcade")).toBeHidden();
   expect(hash(page)).toBe("");
@@ -230,27 +232,27 @@ test("Grip Prix, and the way home from it", async ({ page }) => {
   page.on("pageerror", (error) => errors.push(error.message));
   await returningVisitor(page);
   await page.goto("/");
-  await page.locator("#tile-grip").getByRole("link", { name: "Race" }).click();
+  await page.locator("#tile-grip").getByRole("link", { name: "Play" }).click();
   await expect(page).toHaveURL(/\/race\.html$/);
   await expect(page.getByRole("heading", { name: "Grip Prix" })).toBeVisible();
 
-  // Its Super Claude Bros. link: the landing, Grip Prix's tile in hand (by its address, or by what the page remembers of where you were).
-  await page.getByRole("link", { name: "Super Claude Bros." }).click();
+  // Its Nintenthropic link: the landing, Grip Prix's tile in hand (by its address, or by what the page remembers of where you were).
+  await page.getByRole("link", { name: "Nintenthropic" }).click();
   await expect(page).toHaveURL(/\/(index\.html)?(#grip-prix)?$/);
   await expect(page.locator("#landing")).toBeVisible();
   await expect(page.locator("#arcade")).toBeHidden();
-  await expect(page.locator("#tile-grip").getByRole("link", { name: "Race" })).toBeFocused();
+  await expect(page.locator("#tile-grip").getByRole("link", { name: "Play" })).toBeFocused();
 
   // The same by address: the landing, not a game card, and the arcade's own cards untouched.
   for (const address of ["/#grip-prix", "/?game=grip-prix"]) {
     await page.evaluate(() => localStorage.removeItem("handy.space.v1"));
     await page.goto(address);
     await expect(page.locator("#landing")).toBeVisible();
-    await expect(page.locator("#tile-grip").getByRole("link", { name: "Race" })).toBeFocused();
+    await expect(page.locator("#tile-grip").getByRole("link", { name: "Play" })).toBeFocused();
   }
   // And the arcade, once visited, is where the landing stands next time.
   await page.goto("/#arcade");
-  await page.getByRole("link", { name: "Super Claude Bros." }).click();
+  await page.getByRole("link", { name: "Nintenthropic" }).click();
   await expect(page.locator("#tile-arcade").getByRole("link", { name: "Play" })).toBeFocused();
   expect(errors).toEqual([]);
 });
@@ -362,7 +364,7 @@ test("the landing and the arcade at every size", async ({ page }, info) => {
   ] as const;
   for (const [width, height] of sizes) {
     await page.setViewportSize({ width, height });
-    // The landing: side by side, whole in the window; stacked on a phone, wide as the page.
+    // The landing: side by side, Grip Prix large and first, whole in the window; stacked on a phone, Grip Prix on top, wide as the page.
     await page.goto("/");
     await expect(page.locator("#landing")).toBeVisible();
     await page.mouse.move(1, 1);
@@ -370,11 +372,12 @@ test("the landing and the arcade at every size", async ({ page }, info) => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     if (width > 860) {
       expect(Math.abs(a.y - g.y)).toBeLessThan(2);
-      expect(Math.abs(a.width - g.width)).toBeLessThan(2);
+      expect(g.width).toBeGreaterThan(a.width * 3);
       expect(a.y + a.height).toBeLessThanOrEqual(height);
     } else {
-      expect(g.y).toBeGreaterThan(a.y + a.height - 1);
-      expect(a.width).toBeGreaterThan(width - 40);
+      expect(a.y).toBeGreaterThan(g.y + g.height - 1);
+      expect(g.width).toBeGreaterThan(width - 40);
+      expect(g.height).toBeGreaterThan(a.height * 2.5);
     }
     await page.waitForTimeout(700);
     await shot(page, info, `landing-${width}x${height}`, 0);

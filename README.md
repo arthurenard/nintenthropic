@@ -1,8 +1,10 @@
-# Super Claude Bros.
+# Nintenthropic
 
-**An arcade you play with your hand.** Point your finger at the screen, fold
-your thumb to fire. It runs in your browser, sees your hand through your
-webcam, and never sends the picture anywhere.
+**Games you play with your hands.** Grip Prix, a kart race for up to four,
+steered by holding your fists like a wheel; and Finger Guns, shooters you play
+by pointing your finger at the screen and folding your thumb to fire. It runs in
+your browser, sees your hands through your webcam, and never sends the picture
+anywhere.
 
 **Play it at https://nintenthropic.arthurenard.workers.dev**
 
@@ -103,8 +105,7 @@ for your hand and for a mouse or touch screen (which is far easier to aim).
 The arcade shows the one to beat under Play; the results say when you beat
 it, and by how much.
 
-Super Claude Bros. can be installed as an app from the browser (Install Super
-Claude Bros., or Add to Dock / Add to Home Screen); it opens full screen.
+Nintenthropic can be installed as an app from the browser (Install Nintenthropic, or Add to Dock / Add to Home Screen); it opens full screen.
 
 ## Play Grip Prix
 
@@ -171,7 +172,7 @@ through the scope); only the two eyes' blink scores are kept, only in that
 game (and in Settings' Eye Test, which shows your own picture on your own
 screen), and they never leave the device either. To fit the scope to you, two
 numbers - how far your eye reads open and shut - are remembered in your
-browser. Super Claude Bros. has no analytics, and its one server-side piece is a
+browser. Nintenthropic has no analytics, and its one server-side piece is a
 small function that hands Grip Prix rooms a login for Cloudflare's relay; the
 only files it downloads are its own, Grip Prix's rooms meet through the
 public PeerJS broker (see above), and players who can't reach each other
@@ -180,7 +181,7 @@ and the race, never a camera picture.
 
 ## Requirements
 
-A computer with a webcam and a current browser with WebGL 2. Super Claude Bros.
+A computer with a webcam and a current browser with WebGL 2. Nintenthropic
 is built and tested in Google Chrome on macOS; current Edge, Safari and Firefox
 should work but haven't been played through yet. Overwatch Ridge, played with
 your hand, also needs your face in view to scope with an eye, and downloads
@@ -261,7 +262,7 @@ each game's design beside them: [High Noon](docs/HIGH_NOON.md), [Dead of
 Night](docs/DEAD_OF_NIGHT.md), [Orbital Decay](docs/ORBITAL_DECAY.md),
 [Overwatch Ridge](docs/OVERWATCH_RIDGE.md), [Grip Prix](docs/GRIP_PRIX.md).
 
-Super Claude Bros. was called Handy, then Handheld, and began as a Python
+Nintenthropic was called Handy, then Handheld, and began as a Python
 desktop app; that version is kept in git under the tag `python-final`.
 
 ## Licence

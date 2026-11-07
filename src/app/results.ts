@@ -224,10 +224,20 @@ export async function drawShareCard(result: Result): Promise<HTMLCanvasElement> 
     context.letterSpacing = "0px";
     return context.measureText(words).width;
   };
-  // The mark (public/icons/icon-192.png, from tools/icons/).
-  const mark = await loadImage(siteUrl("icons/icon-192.png"));
-  if (mark) context.drawImage(mark, 62, 56, 44, 44);
-  text("Super Claude Bros.", 112, 90, 32, 700, "#fff", -0.3);
+  // The wordmark (public/assets/brand/, from art/brand/): its white pill on the picture's dark, with a soft shadow.
+  const mark = await loadImage(siteUrl("assets/brand/wordmark-600.png"));
+  if (mark) {
+    const high = 46;
+    const wide = (mark.naturalWidth / mark.naturalHeight) * high;
+    context.save();
+    context.shadowColor = "rgba(0,0,0,0.45)";
+    context.shadowBlur = 18;
+    context.shadowOffsetY = 4;
+    context.drawImage(mark, 62, 52, wide, high);
+    context.restore();
+  } else {
+    text("Nintenthropic", 64, 90, 32, 700, "#fff", -0.3);
+  }
   const { stats } = result;
   // From the score up: the note's lines, the outcome, the game's name.
   setFont(24, 400);
@@ -254,5 +264,5 @@ export async function shareResult(result: Result): Promise<void> {
   const canvas = await drawShareCard(result);
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
   if (!blob) return;
-  await shareOrSave(blob, shareFileName(result.game.title), `Super Claude Bros. · ${result.game.title}`);
+  await shareOrSave(blob, shareFileName(result.game.title), `Nintenthropic · ${result.game.title}`);
 }

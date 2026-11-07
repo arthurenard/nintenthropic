@@ -22,7 +22,7 @@ export function titleCase(text: string): string {
     .join(" ");
 }
 
-/** A file name for a game's share card: super-claude-bros-high-noon.png. */
+/** A file name for a game's share card: nintenthropic-high-noon.png. */
 export function shareFileName(title: string): string {
-  return `super-claude-bros-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.png`;
+  return `nintenthropic-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.png`;
 }

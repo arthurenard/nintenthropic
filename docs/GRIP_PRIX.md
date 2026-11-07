@@ -7,7 +7,7 @@ back up. Every player brings their own camera — a laptop, a phone propped on
 the table — and the race is shown on each player's screen, or all together on
 one big screen in split screen, or both.
 
-It is the second kind of game in Super Claude Bros. The four shooting games aim
+It is the second kind of game in Nintenthropic. The four shooting games aim
 a finger pistol; Grip Prix holds a wheel. It lives on its own page, `race.html`,
 and has its own tile on the landing, beside Finger Guns.
 
@@ -210,7 +210,7 @@ Everything is under `src/kart/`. Each part is built against
 | Input | `input/` + `src/tracking/` | `wheelControl(...)`, `keyboardControl()`, `gamepadControl()` → `DriverControl`; the wheel's picture (`WheelPreview`); every hand the tracker sees. |
 | Render | `render/` | `createRaceRenderer(canvas, hudRoot, options): RaceRenderer`: the world, the karts, split screen, chase cameras, effects, each viewport's HUD, the minimap. |
 | App | `app/`, `main.ts`, `/race.html` | The screens: start, you, choose your driver, the wheel check, how to drive, lobby, race, results, standings, podium. |
-| Sound | `src/audio/cues/` pack `kart`, `src/kart/audio/` | An engine for each weight (and Rivet's motor), in two layers pitched by its revs and roughened by how hard it works; other karts heard going by (stereo, Doppler); the tyres on the road and every surface; the drift's squeal and its sparks' fizz through the three levels; the wind at speed, in the air and in a slipstream; boosts, landings, items, hits, a place won or lost, the countdown and the finish; each track's place, very quietly — synthesised like every Super Claude Bros. sound ("Sound" below). |
+| Sound | `src/audio/cues/` pack `kart`, `src/kart/audio/` | An engine for each weight (and Rivet's motor), in two layers pitched by its revs and roughened by how hard it works; other karts heard going by (stereo, Doppler); the tyres on the road and every surface; the drift's squeal and its sparks' fizz through the three levels; the wind at speed, in the air and in a slipstream; boosts, landings, items, hits, a place won or lost, the countdown and the finish; each track's place, very quietly — synthesised like every Nintenthropic sound ("Sound" below). |
 
 ### Coordinates
 
@@ -1184,7 +1184,7 @@ tight type, springy motion; a white pill is the one main action of a screen;
    Practice; "Up to 4 players" under it. Where the art is missing or not
    fetched, the page's own meadow and road stand in. A phone that came with
    a `?join=` link does not fetch the art at all (it is on its way to a room).
-   The back link goes to the Super Claude Bros. landing (`./`). `race.html`
+   The back link is the Nintenthropic wordmark (a white pill with a soft shadow in the glass back link) and goes to the landing (`./`); the loading screen carries the same wordmark at its head. `race.html`
    carries `assets/kart/icon-180.png` as its icon and Apple touch icon.
 2. **Who's Driving?** (`you.ts`). One calm card: your name (a friendly default), how you
    drive as three tiles (Wheel, Keyboard, Gamepad), the wheel's steering, and

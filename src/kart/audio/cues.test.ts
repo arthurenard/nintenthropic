@@ -83,7 +83,7 @@ describe("the kart pack", () => {
     // (It renders every take of the pack, which a busy machine takes a while over.)
   }, 120_000);
 
-  it("is never louder than the revolver of High Noon, the loudest thing in Super Claude Bros.", () => {
+  it("is never louder than the revolver of High Noon, the loudest thing in Nintenthropic", () => {
     for (const cue of KART) expect(CUES[cue]!.level, cue).toBeLessThanOrEqual(0);
   });
 

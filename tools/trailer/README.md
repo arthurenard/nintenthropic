@@ -1,4 +1,4 @@
-# The Super Claude Bros. trailer
+# The Nintenthropic trailer
 
 A 40-second film for X: 1920x1080, 60 fps, H.264 + AAC (about -14 LUFS, true
 peak under -1 dBTP), cut to a 120 BPM score. A beat is 0.5 s (30 frames) and a
@@ -16,7 +16,7 @@ on the cuts.
 sight (the app's mark) snaps in and locks on. Bang: the four Finger Guns
 shooters in quick cuts. "Now grab the wheel.": the sight's ring stays and its
 ticks swing into the spokes of a steering wheel, which turns. Go: Grip Prix,
-four karts, four players on one camera. Then the mark: **Super Claude Bros.
+four karts, four players on one camera. Then the mark: **Nintenthropic.
 Games you play with your hands.**
 
 No hand is drawn anywhere in the film: the words, the sight and the real games
@@ -35,7 +35,7 @@ Bars of 2 s, on the trailer's clock; `edl.mjs` is the cut itself.
 | 9-10 | 0:16-0:20 | Overwatch Ridge: the scope rises and the long shot lands; then the headshot in slow motion | Half time on bar 10, a riser into 20.0 |
 | 11 | 0:20-0:22 | **Turn** card: the sight becomes a steering wheel, "Now grab the wheel.", the wheel turns; white by 22.0 | The break: the pad and the motif alone, a riser and a reverse swell |
 | 12-17 | 0:22-0:34 | Grip Prix: GO on 22.0, a drift that lets go in flames, four players on one split screen, the pack in the air, the volcano erupting beside it, then half-bar cuts (a night track, an item) into the finish | **Second drop** at 22.0, bigger than the first; the climax on bars 16-17, a snare roll into 34.0 |
-| 18-20 | 0:34-0:40 | **End** card: the app icon, "Super Claude Bros.", "Games you play with your hands.", Finger Guns and Grip Prix, "In your browser. No controller."; it fades to black from 39.3 | The last hit on 34.0, the resolution and a long tail, faded out by 40.0 |
+| 18-20 | 0:34-0:40 | **End** card: the app icon, "Nintenthropic", "Games you play with your hands.", Finger Guns and Grip Prix, "In your browser. No controller."; it fades to black from 39.3 | The last hit on 34.0, the resolution and a long tail, faded out by 40.0 |
 
 Each game's title sits over its first bar, an eyebrow over a name ("Finger
 Guns" over "High Noon", "Up to 4 Players" over "Grip Prix"), and "Up to 4

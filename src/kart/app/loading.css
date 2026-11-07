@@ -158,3 +158,23 @@
     transform: none;
   }
 }
+
+/* The Nintenthropic wordmark at the head of the loading screen, a white pill with a soft shadow. */
+.loading-brand {
+  position: absolute;
+  z-index: 1;
+  top: max(24px, calc(env(safe-area-inset-top) + 16px));
+  left: 50%;
+  display: block;
+  width: 168px;
+  height: auto;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 4px 14px rgba(2, 10, 30, 0.45));
+  pointer-events: none;
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .loading-brand {
+    top: 12px;
+    width: 120px;
+  }
+}

@@ -71,7 +71,7 @@ export const TROUBLES: Record<Trouble, TroubleSheet> = {
   insecure: {
     icon: "camera",
     title: "Camera Unavailable",
-    body: "Your browser only shares the camera with secure pages. Open Super Claude Bros. from its https address.",
+    body: "Your browser only shares the camera with secure pages. Open Nintenthropic from its https address.",
     primary: "Use Mouse or Trackpad",
     secondary: "Choose a Game",
   },

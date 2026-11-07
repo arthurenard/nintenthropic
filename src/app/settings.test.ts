@@ -17,7 +17,7 @@ describe("Copy System Info", () => {
   it("says the version, the browser, the graphics, the tracker, the timings and the screen", () => {
     expect(formatSystemInfo(FACTS)).toBe(
       [
-        "Super Claude Bros. 0.3.0",
+        "Nintenthropic 0.3.0",
         `Browser: ${FACTS.userAgent}`,
         "Graphics: ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version) (high, 100% resolution)",
         "Hand tracking: worker, GPU",
