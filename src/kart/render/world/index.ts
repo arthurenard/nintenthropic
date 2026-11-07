@@ -167,20 +167,25 @@ export async function createWorld(
   // The track.
   const bank = new Bank(geometry);
   const meshes = buildTrackMeshes(geometry, style, terrain, quality, ground.metres);
-  for (const g of meshes.road) addStatic(g, roadMat, space ? 1 : 0);
-  for (const g of meshes.deco) addStatic(g, deco);
-  if (!space) for (const g of meshes.verge) addStatic(g, ground.material);
-  if (meshes.pools) {
-    const mat = own(new MeshBasicMaterial({ vertexColors: true, blending: AdditiveBlending, transparent: true, depthWrite: false, fog: false })) as Material;
-    addStatic(meshes.pools, mat, 3);
-  }
-  if (meshes.additive) addStatic(meshes.additive, additiveMaterial(disposables), 3);
-  for (const p of meshes.patches) addStatic(p.geometry, patchMaterial(p.kind, quality, disposables, bake), 2);
+  // The branch roads (alternate routes) are built by the same code, each with its own features.
+  const routeMeshes = geometry.routes.map((road) => buildTrackMeshes(road, style, terrain, quality, ground.metres, terrain.routeFeatures[road.route - 1]));
   const chevrons = own(chevronTexture(quality.anisotropy)) as CanvasTexture;
   chevrons.wrapT = RepeatWrapping;
-  if (meshes.pads) {
-    const padMat = own(new MeshBasicMaterial({ map: chevrons, color: new Color(2.1, 2.1, 2.3), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })) as Material;
-    addStatic(meshes.pads, padMat, 1);
+  let padMat: Material | null = null;
+  for (const m of [meshes, ...routeMeshes]) {
+    for (const g of m.road) addStatic(g, roadMat, space ? 1 : 0);
+    for (const g of m.deco) addStatic(g, deco);
+    if (!space) for (const g of m.verge) addStatic(g, ground.material);
+    if (m.pools) {
+      const mat = own(new MeshBasicMaterial({ vertexColors: true, blending: AdditiveBlending, transparent: true, depthWrite: false, fog: false })) as Material;
+      addStatic(m.pools, mat, 3);
+    }
+    if (m.additive) addStatic(m.additive, additiveMaterial(disposables), 3);
+    for (const p of m.patches) addStatic(p.geometry, patchMaterial(p.kind, quality, disposables, bake), 2);
+    if (m.pads) {
+      padMat ??= own(new MeshBasicMaterial({ map: chevrons, color: new Color(2.1, 2.1, 2.3), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 })) as Material;
+      addStatic(m.pads, padMat, 1);
+    }
   }
 
   // The gantry's banner and the start lights.
@@ -230,9 +235,30 @@ export async function createWorld(
   const pieces: HazardLayer = buildPieces(env, hazardDefs, mats, shadowTex);
   own(pieces);
   group.add(pieces.group);
+  // What stands beside, and moves on, each branch road.
+  const routeLayers = geometry.routes.map((road) => {
+    const feats = terrain.routeFeatures[road.route - 1]!;
+    const routeEnv = {
+      track: road,
+      style,
+      bank: Bank.of(road),
+      groundAt,
+      wall: (s: number, side: -1 | 1) => {
+        const i = Math.max(0, Math.min(road.samples.length - 1, Math.round((s - road.origin) / road.spacing)));
+        return (side < 0 ? feats.wallLeft : feats.wallRight)[i]!;
+      },
+    };
+    const layer = buildLandmarks(routeEnv, [...(road.def.landmarks ?? [])], mats);
+    own(layer);
+    group.add(layer.group);
+    const moving = buildHazards(routeEnv, road.def.hazards ?? [], mats, shadowTex);
+    own(moving);
+    group.add(moving.group);
+    return { layer, moving };
+  });
 
   // Glows: lamps (static) and the three start lights (changing).
-  const staticGlows = meshes.glows;
+  const staticGlows = [...meshes.glows, ...routeMeshes.flatMap((m) => m.glows)];
   const glowPoints: Points = makePoints(staticGlows.length + meshes.startLights.length, true);
   own({
     dispose() {
@@ -284,7 +310,8 @@ export async function createWorld(
   await breathe();
 
   // Scenery, kept clear of the landmarks.
-  const scenery: Scenery = buildScenery(style, terrain, quality, deco, 1234, landmarks.keepOut, bake);
+  const keepOut = [...landmarks.keepOut, ...routeLayers.flatMap((r) => r.layer.keepOut)];
+  const scenery: Scenery = buildScenery(style, terrain, quality, deco, 1234, keepOut, bake);
   own(scenery);
   group.add(scenery.group);
   // Tufts and flowers beyond the barriers, within reach of the track.
@@ -293,7 +320,7 @@ export async function createWorld(
     let maxX = -Infinity;
     let minZ = Infinity;
     let maxZ = -Infinity;
-    for (const smp of geometry.samples) {
+    for (const smp of [...geometry.samples, ...geometry.routes.flatMap((road) => road.samples)]) {
       minX = Math.min(minX, smp.x);
       maxX = Math.max(maxX, smp.x);
       minZ = Math.min(minZ, smp.z);
@@ -301,7 +328,7 @@ export async function createWorld(
     }
     return { minX: minX - 55, maxX: maxX + 55, minZ: minZ - 55, maxZ: maxZ + 55 };
   })();
-  const foliage = buildFoliage(style, terrain, quality, bake, landmarks.keepOut, reach);
+  const foliage = buildFoliage(style, terrain, quality, bake, keepOut, reach);
   if (foliage) {
     own(foliage);
     group.add(foliage.group);
@@ -364,7 +391,7 @@ export async function createWorld(
     let maxZ = -Infinity;
     let minY = Infinity;
     let maxY = -Infinity;
-    for (const smp of geometry.samples) {
+    for (const smp of [...geometry.samples, ...geometry.routes.flatMap((road) => road.samples)]) {
       minX = Math.min(minX, smp.x);
       maxX = Math.max(maxX, smp.x);
       minZ = Math.min(minZ, smp.z);
@@ -395,7 +422,7 @@ export async function createWorld(
     boxes,
     bank,
     features: meshes.features,
-    cameraSpace: createCameraSpace(geometry, terrain, meshes.features, landmarks.roofs, bank),
+    cameraSpace: createCameraSpace(geometry, terrain, meshes.features, landmarks.roofs, bank, routeLayers.map((r) => r.layer.roofs)),
     look,
     sun,
     bake,
@@ -411,6 +438,10 @@ export async function createWorld(
       landmarks.update(time);
       hazards.update(raceTime, dt);
       pieces.update(raceTime, dt);
+      for (const r of routeLayers) {
+        r.layer.update(time);
+        r.moving.update(raceTime, dt);
+      }
     },
     install(scene) {
       scene.fog = fog;
@@ -459,8 +490,10 @@ export async function createWorld(
       let proj = geometry.project(x, z, hint ?? near);
       if (Math.hypot(proj.sample.x - x, proj.sample.z - z) > 40) proj = geometry.project(x, z);
       near = proj.s;
-      const ramp = Math.abs(proj.offset) < proj.sample.width / 2 ? rampHeight(meshes.features.ramps, proj.s, geometry.length) : 0;
-      return { lift: bank.lift(proj.s, proj.offset) + ramp, ramp, s: proj.s, offset: proj.offset };
+      // On a branch road: its own banking and ramps.
+      const there = proj.route === 0 ? meshes : routeMeshes[proj.route - 1]!;
+      const ramp = Math.abs(proj.offset) < proj.sample.width / 2 ? rampHeight(there.features.ramps, proj.s, geometry.length) : 0;
+      return { lift: there.bank.lift(proj.s, proj.offset) + ramp, ramp, s: proj.s, offset: proj.offset };
     },
     dispose() {
       envTexture?.dispose();

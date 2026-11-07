@@ -58,7 +58,7 @@ export function racecraft(w: World, k: KartState, style: Style, aim: number, lef
   let shove = 0;
   const near = (range + 3) * (range + 3);
   for (const o of w.state.karts) {
-    if (o.id === k.id || o.rescue > 0) continue;
+    if (o.id === k.id || o.rescue > 0 || o.route !== k.route) continue;
     // Far off as the crow flies is far off along the road too: not worth the working out.
     if ((o.x - k.x) ** 2 + (o.z - k.z) ** 2 > near) continue;
     const ds = geo.delta(k.s, o.s);

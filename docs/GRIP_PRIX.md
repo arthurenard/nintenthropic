@@ -1953,14 +1953,44 @@ front of them (or a laptop), and the TV is the host's screen.
   height along the lap under the map, steep stretches in red and crests sharp
   enough to fly over marked, and the lean.
 
+- **Alternate routes** (`routes`, `RouteDef`): a branch road that leaves the
+  main road at `from` and rejoins it at `to` (fractions of the lap, never across
+  the start line). Either a **shortcut** (narrower, over rough ground or a jump,
+  shorter than what it replaces; a fall costs more than it saves) or a **split**
+  (two ways of much the same length, one high and one low). Any track can use
+  one; a branch is a road of its own: its own `points` (the junctions come from
+  the main road, the curve leaves and joins along its heading), `width`, `flare`
+  (metres over which it widens to the main road's width at each end, lying on it),
+  `ramps`, `drops`, `verges`, `surfaces`, `boostPads`, `hazards` and `landmarks`,
+  all in fractions of the BRANCH. `track/geometry.ts` builds each as a `RouteRoad`
+  (an open `TrackGeometry` whose samples are in the lap's metres, so `s` means
+  the same on every road). Races: a kart is on whichever road its centre is
+  nearest, keeping its own unless the other is clearly nearer (`project(x, z,
+  near, route)`; never kept in a snapshot, so the wire is unchanged), and every
+  part of the sim reads "the track" through `onRoute` (sim/routes.ts): terrain,
+  plan, falls, jumps, hills and the bots' line are the branch's own. Progress is
+  in the lap's metres on every road, so places stay right and a kart passing from
+  one road to the other never jumps (under 10 m once, the angle the branch leaves
+  at). The barrier opens at the junctions (`junctionGates`: each road's wall
+  stands out to the other's far edge where the two lie close, easing back to the
+  usual 6 m as they part) and the picture draws no wall where the other road's
+  ground is. Bots steer by the branch only within 14 m of its junction (until
+  then the main road's own ramps and speeds hold) and choose by temperament: the
+  aggressive take a shortcut 95% of laps, the careful 12%, scaled by the route's
+  `appeal` and (for a shortcut) the bot's skill; a die rolled by seed, kart, lap
+  and route, so every device agrees and nothing new is sent. The minimap and the
+  track maps draw the branches, and mirror mode mirrors them (`mirrorRoute`).
+  A kart-lap that takes the shortcut should save about 1.5 to 2.5 s over a
+  40 to 62 s lap; tracks.test.ts holds the best lap to its 40 s floor with them.
+
 ### What each theme can build
 
 | Theme | Landmarks | Hazards |
 | --- | --- | --- |
-| meadow | windmill, barn, pond, hay-bales, hot-air-balloon, sheep, flower-field | — |
+| meadow | windmill, barn, barn-run (span: a shortcut through a barn), pond, hay-bales, hot-air-balloon, sheep, flower-field | — |
 | canyon | mesa, rock-arch (span), cactus-grove, water-tower, mine-cart | boulder, tumbleweed, ore-cart (slide), wrecking-ball (swing), rock-crusher (crush) |
-| harbour | crane, lighthouse, ship, containers, warehouse, buoy | crab, forklift |
-| kitchen | teapot, fruit-bowl, toaster, grater (span: a tunnel), salt-shaker, pepper-mill, cookbook, cereal-box, mug, fork-arch (span), spoon-arch (span), sink, window, wall-clock | orange (roll), pea (cross), teacup (orbit) |
+| harbour | crane, lighthouse, ship, ship-deck (span: a cargo ship's deck with a gantry crane), containers, warehouse, buoy | crab, forklift, swing-box (orbit: a crane's container) |
+| kitchen | teapot, fruit-bowl, toaster, grater (span: a tunnel), salt-shaker, pepper-mill, drawer (span: a drawer pulled out of the counter, cutlery across it), cookbook, cereal-box, mug, fork-arch (span), spoon-arch (span), sink, window, wall-clock | orange (roll), pea (cross), teacup (orbit), toast (bob: pops from the toaster) |
 | snow | igloo, cabin, snowman, ice-arch (span), ice-cave (span: a tunnel), pine-snow, gondola, ski-jump | penguin (cross), snowball (roll), yeti (bob), icicle (crush) |
 | volcano | volcano, lava-fall, basalt-columns, stone-bridge (span), obsidian-arch (span), hot-spring | fireball (bob), boulder (roll), geyser (bob) |
 | funfair | ferris-wheel, carousel, big-top (span: a tunnel), rollercoaster (span: over the road), entrance-arch (span), food-stall, balloon-stand, hook-a-duck, helter-skelter, fireworks | teacup-ride (orbit), bumper-car (cross), arm-ball (orbit: a carousel's bar), funhouse-panel (slide), mallet (crush), swing-boat (swing) |
@@ -1978,6 +2008,16 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    one way then the other, through a hollow and over a low hill to the pond
    by the banked hairpin (the duck); hay bales, a hot-air balloon drifting
    over.
+   *Design note (the redesign).* The windmill's hill is taller (ten metres) with
+   a boost line on the inside of its left-hander for whoever hugs it. Two
+   alternate routes: the **creek road**, a split off the start straight that
+   winds low through the hollow south of the windmill and fords the creek (wet
+   stones as slippery as ice) to the S-bend, against the high hill road; and
+   the **barn cut**, a shortcut across the inside of the big U-turn: up a
+   hay-bale ramp, a creek to fly over (a gap, no wall), in one door of the red
+   barn through a muddy floor and out of the other onto a strip of boost.
+   Narrow, and a fall costs more than it saves. The wow of the lap is the
+   barn.
 2. **Kitchen Rally** (kitchen): toy-sized karts on a giant kitchen counter
    in late-afternoon sun through the window. A chopping-board start
    straight; round the fruit bowl; a chicane between salt and pepper; under
@@ -1987,10 +2027,31 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    sweeping curve (the bends lean into their turns, that one highest on its
    open outside); oranges roll down the counter; a teacup spins. Everything is
    enormous: the teapot is thirty metres tall.
+   *Design note (the redesign).* The road now climbs onto the cooker (four
+   metres up, banked at its highest, a line of boost across the hob rings on the
+   inside of the turn) and down off it. The **cutlery drawer** is a shortcut
+   across the inside of the big sweeping curve: down a ramp into a drawer pulled
+   right out of the counter (walnut walls, felt underfoot, spoons and forks laid
+   across overhead), a pea rolling across its middle, a line of boost down it,
+   and up onto the road again; a third shorter than the curve, narrow, and a
+   fall into the counter's edge is the price. The sink's jump and the oranges
+   stay. The toaster pops: two slices spring up out of the road beside it in
+   turn (a bob hazard, harmless while down).
 3. **Harbour Lights** (harbour): night on the quay, cranes and ships, a
    humpback bridge over a dock and a swing bridge on the back straight to fly
    over, right angles that lean a little into their turns, crabs scuttling
    across the chicane.
+   *Design note (the redesign).* A split on the first straight: the **quay** is
+   the quick, plain way; the other goes up a gangway onto the **deck of a moored
+   cargo ship** (three and a half metres over the water, no barrier either side
+   between the gangways, stacks of containers and a gantry crane striding over
+   it) and down a gangway at the far end, a line of boost down the deck to pay
+   for the longer way if nobody goes over the side. It parts from the quay far
+   enough (and climbs late enough) that the ground between the two is never a
+   step for a kart. Also on the quay: the **ferry ramp**, a gap where the long
+   straight meets the water with a trick lip to fly it, and a crane's container
+   that swings round over the dock road on the race clock. (A drawbridge needs
+   the moving set-pieces engine, not built here.)
 4. **Canyon Run** (canyon): the steep climb (sixteen metres), the ridge road,
    a jump over a gap in the ridge, a lip to fly off into the tumble down
    S-bends that lean one way and the other, boulders rolling down the

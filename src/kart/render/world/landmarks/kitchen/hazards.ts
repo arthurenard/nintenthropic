@@ -125,3 +125,25 @@ export const teacup: HazardSpec = {
     };
   },
 };
+
+/** A slice of toast that shoots up out of the toaster's slot and drops back, on a spring: harmless while it is down. */
+export const toast: HazardSpec = {
+  build(ctx) {
+    const b = new MeshBuilder();
+    const crust = lift("#b9722c", 1.3);
+    const crumb = lift("#f0cf8a", 1.3);
+    b.box(0, 1.0, 0, 1.6, 2.0, 0.3, ramp(crust, crumb));
+    b.blob(0, 2.0, 0, 0.8, 0.45, 0.15, crust, 1);
+    b.box(0, 1.0, 0.16, 1.2, 1.6, 0.05, lift("#e0a850", 1.4));
+    const root = new Group();
+    root.add(new Mesh(b.build(), ctx.lit));
+    return {
+      root,
+      radius: 1,
+      update(s) {
+        root.rotation.z = Math.sin(s.time * 1.7) * 0.08;
+        root.rotation.y = Math.sin(s.cycle * Math.PI * 4) * 0.35;
+      },
+    };
+  },
+};

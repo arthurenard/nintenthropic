@@ -99,10 +99,11 @@ export function count(events: RaceEvent[], type: RaceEvent["type"], kart?: numbe
 /**
  * How far from the centre line a kart can be at this place of the track
  * before it is past the barrier (the usual 6 m beyond the edge, or a verge's),
- * or, on an open edge, past the point where it falls (about a metre over).
+ * or, on an open edge, past the point where it falls (about a metre over). `route` is the road (0 the loop, 1.. a branch).
  */
-export function reach(track: TrackDef, s: number, offset: number): number {
-  const plan = planFor(track);
+export function reach(track: TrackDef, s: number, offset: number, route = 0): number {
+  // On a branch road (alternate routes), that road's own.
+  const plan = route === 0 ? planFor(track) : planFor(track).routes[route - 1]!;
   const side = offset > 0 ? 1 : -1;
   const half = plan.geo.at(s).width / 2;
   return half + (isOpen(plan.terrain, s, side) ? TUNING.fall.edge + 1 : barrierDistance(plan.terrain, s, side));

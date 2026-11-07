@@ -10,7 +10,7 @@
  * twice gives the same object (the sim's and the picture's per-track caches
  * are keyed by it). Its id is the original's plus MIRROR_SUFFIX.
  */
-import type { HazardDef, TrackDef } from "./geometry";
+import type { HazardDef, RouteDef, TrackDef } from "./geometry";
 import { trackById } from "./tracks";
 
 export const MIRROR_SUFFIX = "-mirror";
@@ -43,6 +43,20 @@ function mirrorHazard(hazard: HazardDef): HazardDef {
 }
 
 /** The track as seen in a mirror. */
+function mirrorRoute(route: RouteDef): RouteDef {
+  const out: RouteDef = {
+    ...route,
+    points: route.points.map((point) => withDefined({ ...point, x: flip(point.x) }, "bank", flipped(point.bank))),
+  };
+  if (route.boostPads) out.boostPads = route.boostPads.map((pad) => ({ ...pad, offset: flip(pad.offset) }));
+  if (route.drops) out.drops = route.drops.map((drop) => (drop.side === "both" ? { ...drop } : { ...drop, side: swapSide(drop.side) }));
+  if (route.verges) out.verges = route.verges.map((verge) => ({ ...verge, side: swapSide(verge.side) }));
+  if (route.surfaces) out.surfaces = route.surfaces.map((surface) => withDefined({ ...surface }, "offset", flipped(surface.offset)));
+  if (route.hazards) out.hazards = route.hazards.map((hazard) => withDefined({ ...hazard }, "offset", flipped(hazard.offset)));
+  if (route.landmarks) out.landmarks = route.landmarks.map((landmark) => withDefined({ ...landmark, offset: flip(landmark.offset) }, "turn", flipped(landmark.turn)));
+  return out;
+}
+
 export function mirrorTrack(def: TrackDef): TrackDef {
   const known = mirrors.get(def);
   if (known) return known;
@@ -58,9 +72,10 @@ export function mirrorTrack(def: TrackDef): TrackDef {
     air: def.air?.map((section) => withDefined({ ...section }, "offset", flipped(section.offset))),
     landmarks: def.landmarks?.map((landmark) => withDefined({ ...landmark, offset: flip(landmark.offset) }, "turn", flipped(landmark.turn))),
     duck: def.duck ? { ...def.duck, offset: flip(def.duck.offset) } : undefined,
+    routes: def.routes?.map(mirrorRoute),
   };
   // Optional fields the original did not have stay absent, not undefined.
-  for (const key of ["boostPads", "drops", "verges", "surfaces", "hazards", "air", "landmarks", "duck"] as const) {
+  for (const key of ["boostPads", "drops", "verges", "surfaces", "hazards", "air", "landmarks", "duck", "routes"] as const) {
     if (mirrored[key] === undefined) delete mirrored[key];
   }
   mirrors.set(def, mirrored);

@@ -114,6 +114,9 @@ export interface KartState {
   presses: number;
 
   // On the track.
+  /** The road it is on: 0 the main road, 1.. a branch (`geo.routes[route - 1]`). Worked out from where it is, so not kept in a snapshot. */
+  route: number;
+  /** Metres along the lap (on a branch, the lap's metre it stands for). */
   s: number;
   offset: number;
   offroad: boolean;
@@ -260,6 +263,8 @@ export interface World {
   laps: number;
   geo: TrackGeometry;
   plan: TrackPlan;
+  /** Set on the view of the race from a branch road (`onRoute`): `geo` and `plan` are the branch's and this is the race itself. */
+  main?: World;
   state: SimState;
   /** A kart by its id. */
   kart(id: number): KartState | undefined;

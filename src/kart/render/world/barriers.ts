@@ -9,6 +9,7 @@
  * road's edge (6 by default, farther where the track has a verge) and not at
  * all where that edge is open (a drop).
  */
+import type { TrackGeometry } from "../../track/geometry";
 import { MeshBuilder, mixRgb, rgb, scaleRgb, shapes, xf, type Rgb, type V3 } from "./builder";
 import { hash1, type TrackBuild } from "./trackContext";
 
@@ -27,11 +28,30 @@ export const SOFT_PUSH = { snowbank: 0.8, basalt: 0.55 } as const;
  * (less its inset), so a piece of barrier that the nearest road sees more than a metre inside its own wall stands on a kart's ground
  * (the inside of a tight U-turn, where the barrier line folds over the other leg, or the first metres of a wide verge).
  */
-function onKartGround(b: TrackBuild, x: number, z: number): boolean {
-  const p = b.track.project(x, z);
+export function onKartGround(b: TrackBuild, x: number, z: number): boolean {
+  const track = b.track;
+  const p = track.open ? track.projectOpen(x, z) : track.projectLoop(x, z);
   const side = p.offset > 0 ? 1 : -1;
-  const k = Math.round(p.s / b.spacing);
-  return Math.abs(p.offset) - p.sample.width / 2 < b.wall(k, side) - 1;
+  const k = Math.round((track.open ? p.s - track.origin : p.s) / b.spacing);
+  if (Math.abs(p.offset) - p.sample.width / 2 < b.wall(k, side) - 1) return true;
+  // Nor on another road of the track: a branch's barrier does not stand on the road it leaves, nor the road's on the branch.
+  const others = track.open ? [(track as unknown as { main: TrackGeometry }).main] : track.routes;
+  for (const other of others) {
+    const q = other.open ? other.projectOpen(x, z) : other.projectLoop(x, z);
+    if (Math.abs(q.offset) < q.sample.width / 2 + 2.4) return true;
+  }
+  return false;
+}
+
+/** Is (x, z) on the surface of another road of the track (a branch's kerb or barrier on the road it leaves, or the road's on the branch)? */
+export function onAnotherRoad(b: TrackBuild, x: number, z: number, slack = 0.3): boolean {
+  const track = b.track;
+  const others = track.open ? [(track as unknown as { main: TrackGeometry }).main] : track.routes;
+  for (const other of others) {
+    const q = other.open ? other.projectOpen(x, z) : other.projectLoop(x, z);
+    if (Math.abs(q.offset) < q.sample.width / 2 + slack) return true;
+  }
+  return false;
 }
 
 /** Walks one side's wall line at an even spacing, calling `emit` at each stop; breaks wherever the edge is open. */

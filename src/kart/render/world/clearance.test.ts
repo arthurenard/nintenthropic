@@ -10,32 +10,41 @@ import { KartSpace } from "./kartSpace";
 import { Terrain } from "./terrain";
 import { styleFor } from "./themes";
 
-/** `Clearance.at` as it was first written: every stretch of every bucket in reach, its distance worked out in full. */
-function plainAt(terrain: Terrain, buckets: Map<number, number[]>, reach: number, x: number, z: number, r: number, enough: number): number {
-  const samples = terrain.track.samples;
-  const features = terrain.features;
-  const n = samples.length;
+/** One road's stretches, filed in buckets of 16 m (the loop, or a branch, which is open at its ends). */
+interface PlainRoad {
+  samples: TrackGeometry["samples"];
+  features: Terrain["features"];
+  open: boolean;
+  buckets: Map<number, number[]>;
+}
+
+/** `Clearance.at` as it was first written: every stretch of every bucket of every road in reach, its distance worked out in full. */
+function plainAt(roads: PlainRoad[], reach: number, x: number, z: number, r: number, enough: number): number {
   const look = enough + r + reach;
   let best = enough;
-  for (let i = Math.floor((x - look) / 16); i <= Math.floor((x + look) / 16); i++) {
-    for (let j = Math.floor((z - look) / 16); j <= Math.floor((z + look) / 16); j++) {
-      for (const k of buckets.get(i * 100003 + j) ?? []) {
-        const a = samples[k]!;
-        const b = samples[(k + 1) % n]!;
-        const ex = b.x - a.x;
-        const ez = b.z - a.z;
-        const len2 = ex * ex + ez * ez || 1;
-        const f = Math.min(1, Math.max(0, ((x - a.x) * ex + (z - a.z) * ez) / len2));
-        const dx = x - (a.x + ex * f);
-        const dz = z - (a.z + ez * f);
-        const d = Math.hypot(dx, dz);
-        if (d - r - reach >= best) continue;
-        const len = Math.sqrt(len2);
-        const lateral = (dx * -ez + dz * ex) / len;
-        const left = Math.max(features.wallLeft[k]!, features.wallLeft[(k + 1) % n]!);
-        const right = Math.max(features.wallRight[k]!, features.wallRight[(k + 1) % n]!);
-        const wall = Math.abs(lateral) < r ? Math.max(left, right) : lateral > 0 ? right : left;
-        best = Math.min(best, d - r - Math.max(a.width, b.width) / 2 - wall);
+  for (const { samples, features, open, buckets } of roads) {
+    const n = samples.length;
+    for (let i = Math.floor((x - look) / 16); i <= Math.floor((x + look) / 16); i++) {
+      for (let j = Math.floor((z - look) / 16); j <= Math.floor((z + look) / 16); j++) {
+        for (const k of buckets.get(i * 100003 + j) ?? []) {
+          if (open && k >= n - 1) continue;
+          const a = samples[k]!;
+          const b = samples[(k + 1) % n]!;
+          const ex = b.x - a.x;
+          const ez = b.z - a.z;
+          const len2 = ex * ex + ez * ez || 1;
+          const f = Math.min(1, Math.max(0, ((x - a.x) * ex + (z - a.z) * ez) / len2));
+          const dx = x - (a.x + ex * f);
+          const dz = z - (a.z + ez * f);
+          const d = Math.hypot(dx, dz);
+          if (d - r - reach >= best) continue;
+          const len = Math.sqrt(len2);
+          const lateral = (dx * -ez + dz * ex) / len;
+          const left = Math.max(features.wallLeft[k]!, features.wallLeft[(k + 1) % n]!);
+          const right = Math.max(features.wallRight[k]!, features.wallRight[(k + 1) % n]!);
+          const wall = Math.abs(lateral) < r ? Math.max(left, right) : lateral > 0 ? right : left;
+          best = Math.min(best, d - r - Math.max(a.width, b.width) / 2 - wall);
+        }
       }
     }
   }
@@ -100,13 +109,18 @@ describe("the search for the nearest stretch (clearance.ts)", () => {
       const geo = TrackGeometry.build(def);
       const terrain = Terrain.build(geo, styleFor(def.theme), QUALITY.high.cell);
       const clearance = new Clearance(terrain);
-      const buckets = new Map<number, number[]>();
       let reach = 0;
-      geo.samples.forEach((s, i) => {
-        const key = Math.floor(s.x / 16) * 100003 + Math.floor(s.z / 16);
-        buckets.set(key, [...(buckets.get(key) ?? []), i]);
-        reach = Math.max(reach, s.width / 2 + Math.max(terrain.features.wallLeft[i]!, terrain.features.wallRight[i]!));
-      });
+      const roads: PlainRoad[] = [
+        { samples: geo.samples, features: terrain.features, open: false, buckets: new Map() },
+        ...geo.routes.map((road, r) => ({ samples: road.samples, features: terrain.routeFeatures[r]!, open: true, buckets: new Map<number, number[]>() })),
+      ];
+      for (const road of roads) {
+        road.samples.forEach((s, i) => {
+          const key = Math.floor(s.x / 16) * 100003 + Math.floor(s.z / 16);
+          road.buckets.set(key, [...(road.buckets.get(key) ?? []), i]);
+          reach = Math.max(reach, s.width / 2 + Math.max(road.features.wallLeft[i]!, road.features.wallRight[i]!));
+        });
+      }
       const rnd = seededRandom(def.id.length * 17 + 5);
       const near = pointsNear(geo, 700, 3);
       // And some from anywhere on the map, mostly far from the road.
@@ -114,7 +128,7 @@ describe("the search for the nearest stretch (clearance.ts)", () => {
       for (const [x, z] of near) {
         const r = rnd() < 0.4 ? 0 : 0.3 + rnd() * 7;
         const enough = [1, 8, 30, 40, terrain.clearAt(x, z)][Math.floor(rnd() * 5)]!;
-        expect(clearance.at(x, z, r, enough), `${def.id} at (${x.toFixed(2)}, ${z.toFixed(2)}) r ${r.toFixed(2)} enough ${enough.toFixed(2)}`).toBe(plainAt(terrain, buckets, reach, x, z, r, enough));
+        expect(clearance.at(x, z, r, enough), `${def.id} at (${x.toFixed(2)}, ${z.toFixed(2)}) r ${r.toFixed(2)} enough ${enough.toFixed(2)}`).toBe(plainAt(roads, reach, x, z, r, enough));
       }
     }, 120_000);
   }

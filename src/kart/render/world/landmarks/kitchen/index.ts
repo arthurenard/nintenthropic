@@ -15,8 +15,9 @@ import type { HazardSpec, LandmarkSpec } from "../types";
 import { sink, toaster } from "./appliances";
 import { mug, teapot } from "./crockery";
 import { fruitBowl } from "./fruit";
-import { orange, pea, teacup } from "./hazards";
+import { orange, pea, teacup, toast } from "./hazards";
 import { cerealBox, cookbook, pepperMill, saltShaker } from "./shelf";
+import { drawer } from "./drawer";
 import { forkArch, grater, spoonArch } from "./spans";
 import { wallClock, windowWall } from "./wall";
 
@@ -25,6 +26,7 @@ export const LANDMARKS: Record<string, LandmarkSpec> = {
   "fruit-bowl": fruitBowl,
   toaster,
   grater,
+  drawer,
   "salt-shaker": saltShaker,
   "pepper-mill": pepperMill,
   cookbook,
@@ -37,4 +39,4 @@ export const LANDMARKS: Record<string, LandmarkSpec> = {
   "wall-clock": wallClock,
 };
 
-export const HAZARDS: Record<string, HazardSpec> = { orange, pea, teacup };
+export const HAZARDS: Record<string, HazardSpec> = { orange, pea, teacup, toast };

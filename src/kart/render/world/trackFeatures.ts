@@ -325,7 +325,7 @@ export function buildRamps(b: TrackBuild): void {
   const lap = b.track.length;
   for (const r of b.features.ramps) {
     const skin = rampSkin(b.style.id);
-    const lipIndex = Math.round(r.lip / b.spacing);
+    const lipIndex = Math.round((r.lip - b.track.origin) / b.spacing);
     const first = lipIndex - Math.round(r.length / b.spacing);
     const cols = 12;
     const lift = 0.05;
