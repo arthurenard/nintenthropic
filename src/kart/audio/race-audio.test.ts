@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { AudioBus, CueOptions } from "../../engine/types";
 import type { LoopControl, LoopParams, SteerableAudio } from "../../audio/types";
 import type { KartView, RaceEvent, RaceView, ThingView, TrackDef } from "../contract";
-import { REV_HI, REV_LO } from "./engines";
+import { REV_HI, REV_LO, engineTarget, gearFactor, gridFlare } from "./engines";
 import { createRaceAudio, type LocalKart, type RaceAudio } from "./race-audio";
 import { localKarts } from "./scene";
 import { FINAL_LAP, type MusicRenderer } from "./music/loader";
@@ -161,12 +161,44 @@ const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
 // --- tests ---------------------------------------------------------------------------------------------
 
+describe("gears and the start", () => {
+  it("climbs through each gear and falls back a little at the change, joining the plain curve at both ends", () => {
+    expect(gearFactor(0)).toBe(1);
+    expect(gearFactor(1)).toBe(1);
+    expect(gearFactor(0.2999)).toBeGreaterThan(1.04);
+    expect(gearFactor(0.3001)).toBeLessThan(0.96);
+    expect(gearFactor(0.5199)).toBeGreaterThan(1.04);
+    expect(gearFactor(0.5201)).toBeLessThan(0.96);
+    for (let f = 0; f <= 1.2; f += 0.01) expect(Math.abs(gearFactor(f) - 1)).toBeLessThanOrEqual(0.0601);
+  });
+
+  it("revs the grid in the last second before Go and not after", () => {
+    expect(gridFlare({ phase: "countdown", countdown: 3 })).toBe(0);
+    expect(gridFlare({ phase: "countdown", countdown: 0.6 })).toBeGreaterThan(0.4);
+    expect(gridFlare({ phase: "countdown", countdown: 0.2 })).toBeGreaterThan(0.9);
+    expect(gridFlare({ phase: "racing", countdown: 0 })).toBe(0);
+    const still = kart(0, { speed: 0 });
+    const calm = engineTarget(still, 0, 0);
+    const revved = engineTarget(still, 0, 1);
+    expect(revved.revs).toBeGreaterThan(calm.revs * 1.5);
+    expect(revved.engine).toBeGreaterThan(0.5);
+    expect(calm.engine).toBe(0);
+    // A kart already moving is not on the grid: the blip fades with speed.
+    expect(engineTarget(kart(0, { speed: 10 }), 0, 1).revs).toBeCloseTo(engineTarget(kart(0, { speed: 10 }), 0, 0).revs, 5);
+  });
+});
+
 describe("the countdown", () => {
   it("beeps low three times and high on go, centred", () => {
     const { bus, frame } = setup();
     for (const n of [3, 2, 1, 0] as const) frame([kart(0), kart(1)], { phase: "countdown", countdown: n }, [ev("countdown", { n })]);
-    expect(bus.cues).toEqual(["kart_beep_low", "kart_beep_low", "kart_beep_low", "kart_beep_high"]);
+    expect(bus.cues).toEqual(["kart_beep_low", "kart_beep_low", "kart_beep_low", "kart_beep_high", "kart_cheer"]);
     expect(bus.played.every((p) => p.options.pan === 0)).toBe(true);
+    // 3, 2, 1 climb the A major triad: the same beep at A4, C#5 and E5.
+    const rates = bus.played.slice(0, 3).map((p) => p.options.rate ?? 1);
+    expect(rates[0]).toBeCloseTo(1, 3);
+    expect(rates[1]).toBeCloseTo(Math.pow(2, 4 / 12), 2);
+    expect(rates[2]).toBeCloseTo(Math.pow(2, 7 / 12), 2);
   });
 
   it("hears each event once, however many times the view is given", () => {
@@ -334,7 +366,9 @@ describe("engines", () => {
       for (let i = 0; i < 30; i++) frame([kart(0, { speed: s })]);
       revs.push(bus.revs());
     }
-    for (let i = 1; i < revs.length; i++) expect(revs[i]!).toBeGreaterThan(revs[i - 1]!);
+    // The revs climb with speed, but fall back a little at a gear change (never by more than 12 %).
+    for (let i = 1; i < revs.length; i++) expect(revs[i]!).toBeGreaterThan(revs[i - 1]! * 0.88);
+    expect(revs.at(-1)!).toBeGreaterThan(revs[0]! * 2);
     expect(revs[0]!).toBeGreaterThan(0.6);
     expect(revs.at(-1)!).toBeGreaterThan(1.6);
     expect(revs.at(-1)!).toBeLessThan(2);

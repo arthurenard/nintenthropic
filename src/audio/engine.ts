@@ -82,6 +82,9 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
   private readonly master: GainNode;
   private readonly reverbIn: GainNode;
   private readonly reverbReturn: GainNode;
+  private readonly convolver: ConvolverNode;
+  /** The reverb return's level before a slow-motion swell: REVERB_RETURN until a game sets its own place. */
+  private reverbLevel = REVERB_RETURN;
   private music: GainNode | null = null;
   private voices: Voice[] = [];
   private readonly loops = new Set<LoopState>();
@@ -157,6 +160,7 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
     ir.copyToChannel(l as Float32Array<ArrayBuffer>, 0);
     ir.copyToChannel(r as Float32Array<ArrayBuffer>, 1);
     convolver.buffer = ir;
+    this.convolver = convolver;
     this.reverbIn = ctx.createGain();
     this.reverbReturn = ctx.createGain();
     this.reverbReturn.gain.value = REVERB_RETURN;
@@ -428,6 +432,20 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
     return this.music;
   }
 
+  /**
+   * Swap the reverb's room for a game's own (a track's place): an impulse response (energy-normalised, any
+   * length) and the return's level. The sends already in flight keep ringing in the new room.
+   */
+  setImpulse(left: Float32Array, right: Float32Array, level = REVERB_RETURN): void {
+    if (this.closed) return;
+    const ir = this.ctx.createBuffer(2, left.length, this.ctx.sampleRate);
+    ir.copyToChannel(left as Float32Array<ArrayBuffer>, 0);
+    ir.copyToChannel(right as Float32Array<ArrayBuffer>, 1);
+    this.convolver.buffer = ir;
+    this.reverbLevel = level;
+    this.applyFilters();
+  }
+
   setFilter(name: "hurt" | "slowmo", amount: number): void {
     if (this.closed) return;
     const x = clamp(amount, 0, 1);
@@ -678,7 +696,7 @@ export class WebAudioEngine implements AudioEngine, SteerableAudio {
     this.muffle.frequency.setTargetAtTime(Math.min(h.cutoff, s.cutoff), now, 0.06);
     this.muffle.Q.setTargetAtTime(h.q, now, 0.06);
     this.duck.gain.setTargetAtTime(h.duck, now, 0.08);
-    this.reverbReturn.gain.setTargetAtTime(REVERB_RETURN * s.reverb, now, 0.2);
+    this.reverbReturn.gain.setTargetAtTime(this.reverbLevel * s.reverb, now, 0.2);
     if (Math.abs(s.rate - this.rate) > 1e-4) {
       const stretch = this.rate / s.rate;
       this.rate = s.rate;

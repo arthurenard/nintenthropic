@@ -150,69 +150,69 @@ export const KART_CUES: Record<string, CueSpec> = {
   kart_surf_grass: { recipe: surfaceGrass, pack: "kart", bus: "sfx", level: -19, loop: true, priority: 1, fadeIn: 0.2, fadeOut: 0.25, vary: 0, expect: [1.4, 1.8] },
 
   // --- sparks and boosts ----------------------------------------------------------------------------------
-  kart_spark_blue: { recipe: sparkBlue, pack: "kart", bus: "sfx", level: -9, priority: 2, maxInstances: 4, vary: 0, minGap: 0.05, expect: [0.2, 0.7] },
-  kart_spark_orange: { recipe: sparkOrange, pack: "kart", bus: "sfx", level: -7, priority: 2, maxInstances: 4, vary: 0, minGap: 0.05, expect: [0.2, 0.8] },
+  kart_spark_blue: { recipe: sparkBlue, pack: "kart", bus: "sfx", level: -9, priority: 2, maxInstances: 4, vary: 0, minGap: 0.05, reverb: 0.2, expect: [0.2, 0.7] },
+  kart_spark_orange: { recipe: sparkOrange, pack: "kart", bus: "sfx", level: -7, priority: 2, maxInstances: 4, vary: 0, minGap: 0.05, reverb: 0.2, expect: [0.2, 0.8] },
   // Under the mini-turbo when the hottest (third) charge is let go.
-  kart_super_turbo: { recipe: superTurbo, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 3, vary: 0, minGap: 0.05, expect: [0.6, 1.1] },
+  kart_super_turbo: { recipe: superTurbo, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 3, vary: 0, minGap: 0.05, reverb: 0.2, expect: [0.6, 1.1] },
   // Flung out of a slipstream.
-  kart_slingshot: { recipe: slingshot, pack: "kart", bus: "sfx", level: -6, priority: 2, maxInstances: 3, vary: 0.02, minGap: 0.05, expect: [0.5, 0.95] },
+  kart_slingshot: { recipe: slingshot, pack: "kart", bus: "sfx", level: -6, priority: 2, maxInstances: 3, vary: 0.02, minGap: 0.05, reverb: 0.1, expect: [0.5, 0.95] },
   // Another kart going by close and fast: a swish of air.
   kart_pass: { recipe: passSwish, pack: "kart", bus: "sfx", level: -12, priority: 0, maxInstances: 2, vary: 0.04, minGap: 0.2, expect: [0.3, 0.55] },
   // Lifting off at high revs: the exhaust pops (the player's own karts only).
   kart_backfire: { recipe: backfire, pack: "kart", bus: "sfx", level: -11, priority: 1, maxInstances: 2, vary: 0.05, minGap: 0.3, expect: [0.12, 0.6] },
-  kart_mini_turbo: { recipe: miniTurbo, pack: "kart", bus: "sfx", level: -5, priority: 2, maxInstances: 4, vary: 0.02, minGap: 0.05, expect: [0.3, 0.8] },
-  kart_boost_whoosh: { recipe: boostWhoosh, pack: "kart", bus: "sfx", level: -6, priority: 2, maxInstances: 4, vary: 0.03, minGap: 0.05, expect: [0.8, 1.5] },
-  kart_boost_pad: { recipe: boostPad, pack: "kart", bus: "sfx", level: -5, priority: 2, maxInstances: 4, vary: 0.01, minGap: 0.05, expect: [0.4, 1.0] },
-  kart_start_boost: { recipe: startBoost, pack: "kart", bus: "sfx", level: -3, priority: 3, maxInstances: 4, vary: 0.01, minGap: 0.05, expect: [0.8, 1.6] },
-  kart_flood: { recipe: flood, pack: "kart", bus: "sfx", level: -6, priority: 3, maxInstances: 4, vary: 0.04, minGap: 0.1, expect: [0.5, 1.2] },
+  kart_mini_turbo: { recipe: miniTurbo, pack: "kart", bus: "sfx", level: -5, priority: 2, maxInstances: 4, vary: 0.02, minGap: 0.05, reverb: 0.1, expect: [0.3, 0.8] },
+  kart_boost_whoosh: { recipe: boostWhoosh, pack: "kart", bus: "sfx", level: -6, priority: 2, maxInstances: 4, vary: 0.03, minGap: 0.05, reverb: 0.12, expect: [0.8, 1.5] },
+  kart_boost_pad: { recipe: boostPad, pack: "kart", bus: "sfx", level: -5, priority: 2, maxInstances: 4, vary: 0.01, minGap: 0.05, reverb: 0.1, expect: [0.4, 1.0] },
+  kart_start_boost: { recipe: startBoost, pack: "kart", bus: "sfx", level: -3, priority: 3, maxInstances: 4, vary: 0.01, minGap: 0.05, reverb: 0.12, expect: [0.8, 1.6] },
+  kart_flood: { recipe: flood, pack: "kart", bus: "sfx", level: -6, priority: 3, maxInstances: 4, vary: 0.04, minGap: 0.1, reverb: 0.1, expect: [0.5, 1.2] },
 
   // --- item boxes and items ----------------------------------------------------------------------------------
-  kart_box_smash: { recipe: boxSmash, pack: "kart", bus: "sfx", level: -5, priority: 2, maxInstances: 5, vary: 0.01, minGap: 0.03, expect: [0.4, 1.1] },
+  kart_box_smash: { recipe: boxSmash, pack: "kart", bus: "sfx", level: -5, priority: 2, maxInstances: 5, vary: 0.01, minGap: 0.03, reverb: 0.12, expect: [0.4, 1.1] },
   kart_roulette_tick: { recipe: rouletteTick, pack: "kart", bus: "ui", level: -11, priority: 2, maxInstances: 4, vary: 0, minGap: 0.025, expect: [0.04, 0.2] },
-  kart_item_ready: { recipe: itemReady, pack: "kart", bus: "ui", level: -4, priority: 3, maxInstances: 4, vary: 0, minGap: 0.1, expect: [0.5, 1.3] },
-  kart_nitro: { recipe: nitroUse, pack: "kart", bus: "sfx", level: -4, priority: 3, maxInstances: 4, vary: 0.02, minGap: 0.05, expect: [0.6, 1.3] },
-  kart_puck_fire: { recipe: puckFire, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 4, vary: 0.03, minGap: 0.05, expect: [0.3, 0.8] },
-  kart_puck_bounce: { recipe: puckBounce, pack: "kart", bus: "sfx", level: -7, priority: 2, maxInstances: 4, vary: 0.04, minGap: 0.04, expect: [0.2, 0.6] },
-  kart_slick_splat: { recipe: slickSplat, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 4, vary: 0.03, minGap: 0.05, expect: [0.4, 1.1] },
+  kart_item_ready: { recipe: itemReady, pack: "kart", bus: "ui", level: -4, priority: 3, maxInstances: 4, vary: 0, minGap: 0.1, reverb: 0.15, expect: [0.5, 1.3] },
+  kart_nitro: { recipe: nitroUse, pack: "kart", bus: "sfx", level: -4, priority: 3, maxInstances: 4, vary: 0.02, minGap: 0.05, reverb: 0.1, expect: [0.6, 1.3] },
+  kart_puck_fire: { recipe: puckFire, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 4, vary: 0.03, minGap: 0.05, reverb: 0.08, expect: [0.3, 0.8] },
+  kart_puck_bounce: { recipe: puckBounce, pack: "kart", bus: "sfx", level: -7, priority: 2, maxInstances: 4, vary: 0.04, minGap: 0.04, reverb: 0.1, expect: [0.2, 0.6] },
+  kart_slick_splat: { recipe: slickSplat, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 4, vary: 0.03, minGap: 0.05, reverb: 0.08, expect: [0.4, 1.1] },
 
   // --- more items (./kart-items.ts): a comet's glitter (as long as the comet lasts), a storm, a skyrocket, a blast, a decoy ---
-  kart_comet: { recipe: cometGlitter, pack: "kart", bus: "sfx", level: -8, priority: 2, maxInstances: 3, vary: 0, expect: [5.8, 6.6] },
-  kart_storm: { recipe: stormCrack, pack: "kart", bus: "sfx", level: -3, priority: 3, maxInstances: 4, vary: 0.03, minGap: 0.05, expect: [1.8, 2.5] },
-  kart_skyrocket: { recipe: skyrocketLaunch, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 2, vary: 0.02, minGap: 0.1, expect: [1.4, 2.1] },
-  kart_skyrocket_burst: { recipe: skyrocketBurst, pack: "kart", bus: "sfx", level: -2, priority: 3, maxInstances: 2, vary: 0.02, minGap: 0.1, expect: [1.7, 2.4] },
-  kart_blast: { recipe: blastWump, pack: "kart", bus: "sfx", level: -3, priority: 3, maxInstances: 3, vary: 0.02, minGap: 0.1, expect: [0.9, 1.5] },
-  kart_decoy_pop: { recipe: decoyPop, pack: "kart", bus: "sfx", level: -4, priority: 3, maxInstances: 4, vary: 0.02, minGap: 0.05, expect: [1.1, 1.7] },
+  kart_comet: { recipe: cometGlitter, pack: "kart", bus: "sfx", level: -8, priority: 2, maxInstances: 3, vary: 0, reverb: 0.12, expect: [5.8, 6.6] },
+  kart_storm: { recipe: stormCrack, pack: "kart", bus: "sfx", level: -3, priority: 3, maxInstances: 4, vary: 0.03, minGap: 0.05, reverb: 0.35, expect: [1.8, 2.5] },
+  kart_skyrocket: { recipe: skyrocketLaunch, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 2, vary: 0.02, minGap: 0.1, reverb: 0.12, expect: [1.4, 2.1] },
+  kart_skyrocket_burst: { recipe: skyrocketBurst, pack: "kart", bus: "sfx", level: -2, priority: 3, maxInstances: 2, vary: 0.02, minGap: 0.1, reverb: 0.4, expect: [1.7, 2.4] },
+  kart_blast: { recipe: blastWump, pack: "kart", bus: "sfx", level: -3, priority: 3, maxInstances: 3, vary: 0.02, minGap: 0.1, reverb: 0.3, expect: [0.9, 1.5] },
+  kart_decoy_pop: { recipe: decoyPop, pack: "kart", bus: "sfx", level: -4, priority: 3, maxInstances: 4, vary: 0.02, minGap: 0.05, reverb: 0.15, expect: [1.1, 1.7] },
 
   // --- hits ---------------------------------------------------------------------------------------------------------
-  kart_hit: { recipe: hit, pack: "kart", bus: "sfx", level: -2, priority: 3, maxInstances: 4, vary: 0.02, minGap: 0.08, expect: [0.7, 1.5] },
-  kart_spinout: { recipe: spinout, pack: "kart", bus: "sfx", level: -3, priority: 3, maxInstances: 4, vary: 0.02, minGap: 0.08, expect: [0.7, 1.4] },
-  kart_bump: { recipe: bump, pack: "kart", bus: "sfx", level: -6, priority: 2, maxInstances: 4, vary: 0.06, minGap: 0.05, expect: [0.1, 0.6] },
-  kart_wall_thud: { recipe: wallThud, pack: "kart", bus: "sfx", level: -5, priority: 2, maxInstances: 3, vary: 0.05, minGap: 0.08, expect: [0.3, 0.9] },
+  kart_hit: { recipe: hit, pack: "kart", bus: "sfx", level: -2, priority: 3, maxInstances: 4, vary: 0.02, minGap: 0.08, reverb: 0.15, expect: [0.7, 1.5] },
+  kart_spinout: { recipe: spinout, pack: "kart", bus: "sfx", level: -3, priority: 3, maxInstances: 4, vary: 0.02, minGap: 0.08, reverb: 0.15, expect: [0.7, 1.4] },
+  kart_bump: { recipe: bump, pack: "kart", bus: "sfx", level: -6, priority: 2, maxInstances: 4, vary: 0.06, minGap: 0.05, reverb: 0.06, expect: [0.1, 0.6] },
+  kart_wall_thud: { recipe: wallThud, pack: "kart", bus: "sfx", level: -5, priority: 2, maxInstances: 3, vary: 0.05, minGap: 0.08, reverb: 0.15, expect: [0.3, 0.9] },
   kart_wall_scrape: { recipe: wallScrape, pack: "kart", bus: "sfx", level: -10, priority: 1, maxInstances: 3, vary: 0.05, minGap: 0.1, expect: [0.3, 0.9] },
-  kart_hazard: { recipe: hazard, pack: "kart", bus: "sfx", level: -3, priority: 3, maxInstances: 3, vary: 0.03, minGap: 0.1, expect: [0.7, 1.5] },
+  kart_hazard: { recipe: hazard, pack: "kart", bus: "sfx", level: -3, priority: 3, maxInstances: 3, vary: 0.03, minGap: 0.1, reverb: 0.15, expect: [0.7, 1.5] },
 
   // --- the air --------------------------------------------------------------------------------------------------------
-  kart_jump: { recipe: jump, pack: "kart", bus: "sfx", level: -6, priority: 2, maxInstances: 4, vary: 0.03, minGap: 0.1, expect: [0.3, 0.9] },
-  kart_trick: { recipe: trick, pack: "kart", bus: "sfx", level: -7, priority: 2, maxInstances: 4, vary: 0, minGap: 0.1, expect: [0.5, 1.2] },
-  kart_land: { recipe: land, pack: "kart", bus: "sfx", level: -6, priority: 2, maxInstances: 4, vary: 0.04, minGap: 0.1, expect: [0.3, 0.9] },
+  kart_jump: { recipe: jump, pack: "kart", bus: "sfx", level: -6, priority: 2, maxInstances: 4, vary: 0.03, minGap: 0.1, reverb: 0.08, expect: [0.3, 0.9] },
+  kart_trick: { recipe: trick, pack: "kart", bus: "sfx", level: -7, priority: 2, maxInstances: 4, vary: 0, minGap: 0.1, reverb: 0.15, expect: [0.5, 1.2] },
+  kart_land: { recipe: land, pack: "kart", bus: "sfx", level: -6, priority: 2, maxInstances: 4, vary: 0.04, minGap: 0.1, reverb: 0.1, expect: [0.3, 0.9] },
   // Under the landing of a long jump, louder the longer the flight (the player's own karts only).
-  kart_thud: { recipe: heavyLanding, pack: "kart", bus: "sfx", level: -5, priority: 2, maxInstances: 2, vary: 0.04, minGap: 0.15, expect: [0.5, 1.0] },
+  kart_thud: { recipe: heavyLanding, pack: "kart", bus: "sfx", level: -5, priority: 2, maxInstances: 2, vary: 0.04, minGap: 0.15, reverb: 0.15, expect: [0.5, 1.0] },
   // The wind round a fast kart, loudest in the air (steered: the player's own karts only).
   kart_wind: { recipe: windRush, pack: "kart", bus: "sfx", level: -17, loop: true, priority: 1, fadeIn: 0.3, fadeOut: 0.4, vary: 0, expect: [1.3, 1.7] },
-  kart_fall: { recipe: fall, pack: "kart", bus: "sfx", level: -6, priority: 3, maxInstances: 3, vary: 0.02, minGap: 0.2, expect: [1.2, 2.1] },
-  kart_drone_drop: { recipe: droneDrop, pack: "kart", bus: "sfx", level: -7, priority: 2, maxInstances: 3, vary: 0.02, minGap: 0.1, expect: [0.3, 0.9] },
+  kart_fall: { recipe: fall, pack: "kart", bus: "sfx", level: -6, priority: 3, maxInstances: 3, vary: 0.02, minGap: 0.2, reverb: 0.25, expect: [1.2, 2.1] },
+  kart_drone_drop: { recipe: droneDrop, pack: "kart", bus: "sfx", level: -7, priority: 2, maxInstances: 3, vary: 0.02, minGap: 0.1, reverb: 0.1, expect: [0.3, 0.9] },
 
   // --- countdown, laps, finishing ------------------------------------------------------------------------------------
-  kart_beep_low: { recipe: beepLow, pack: "kart", bus: "ui", level: -4, priority: 3, maxInstances: 1, vary: 0, expect: [0.2, 0.6] },
-  kart_beep_high: { recipe: beepHigh, pack: "kart", bus: "ui", level: -3, priority: 3, maxInstances: 1, vary: 0, expect: [0.5, 1.2] },
-  kart_lap: { recipe: lapChime, pack: "kart", bus: "ui", level: -5, priority: 3, maxInstances: 2, vary: 0, minGap: 0.2, expect: [0.7, 1.6] },
+  kart_beep_low: { recipe: beepLow, pack: "kart", bus: "ui", level: -4, priority: 3, maxInstances: 1, vary: 0, reverb: 0.06, expect: [0.2, 0.6] },
+  kart_beep_high: { recipe: beepHigh, pack: "kart", bus: "ui", level: -3, priority: 3, maxInstances: 1, vary: 0, reverb: 0.2, expect: [0.5, 1.2] },
+  kart_lap: { recipe: lapChime, pack: "kart", bus: "ui", level: -5, priority: 3, maxInstances: 2, vary: 0, minGap: 0.2, reverb: 0.25, expect: [0.7, 1.6] },
   // A place won or lost: two notes, up or down, soft (at most one in a third of a second: karts side by side swap places).
-  kart_place_up: { recipe: placeUp, pack: "kart", bus: "ui", level: -9, priority: 2, maxInstances: 1, vary: 0, minGap: 0.3, expect: [0.3, 0.8] },
+  kart_place_up: { recipe: placeUp, pack: "kart", bus: "ui", level: -9, priority: 2, maxInstances: 1, vary: 0, minGap: 0.3, reverb: 0.1, expect: [0.3, 0.8] },
   kart_place_down: { recipe: placeDown, pack: "kart", bus: "ui", level: -11, priority: 1, maxInstances: 1, vary: 0, minGap: 0.3, expect: [0.3, 0.8] },
-  kart_final_lap: { recipe: finalLap, pack: "kart", bus: "ui", level: -2, priority: 3, maxInstances: 1, vary: 0, minGap: 0.5, expect: [1.5, 2.8] },
-  kart_finish_win: { recipe: finishWin, pack: "kart", bus: "ui", level: -1, priority: 3, maxInstances: 1, vary: 0, expect: [2.8, 5] },
-  kart_finish_ok: { recipe: finishOk, pack: "kart", bus: "ui", level: -2, priority: 3, maxInstances: 1, vary: 0, expect: [1.8, 3.8] },
-  kart_cheer: { recipe: cheer, pack: "kart", bus: "ui", level: -7, priority: 2, maxInstances: 1, vary: 0.02, expect: [2.0, 3.6] },
+  kart_final_lap: { recipe: finalLap, pack: "kart", bus: "ui", level: -2, priority: 3, maxInstances: 1, vary: 0, minGap: 0.5, reverb: 0.3, expect: [1.5, 2.8] },
+  kart_finish_win: { recipe: finishWin, pack: "kart", bus: "ui", level: -1, priority: 3, maxInstances: 1, vary: 0, reverb: 0.35, expect: [2.8, 5] },
+  kart_finish_ok: { recipe: finishOk, pack: "kart", bus: "ui", level: -2, priority: 3, maxInstances: 1, vary: 0, reverb: 0.3, expect: [1.8, 3.8] },
+  kart_cheer: { recipe: cheer, pack: "kart", bus: "ui", level: -7, priority: 2, maxInstances: 1, vary: 0.02, reverb: 0.4, expect: [2.0, 3.6] },
 
   // --- loops of the air ---------------------------------------------------------------------------------------------------
   kart_seeker: { recipe: seekerWhistle, pack: "kart", bus: "sfx", level: -11, loop: true, priority: 3, fadeIn: 0.1, fadeOut: 0.15, vary: 0, expect: [0.6, 1.0] },
@@ -234,8 +234,8 @@ export const KART_CUES: Record<string, CueSpec> = {
   kart_amb_ding: { recipe: ambDing, pack: "kart", bus: "sfx", level: -20, priority: 0, maxInstances: 1, vary: 0.01, minGap: 1, expect: [0.8, 1.55] },
 
   // --- The rubber duck, and a horn ----------------------------------------------------------------------------------------------
-  kart_duck: { recipe: duckSqueak, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 2, vary: 0.03, minGap: 0.2, expect: [0.4, 1.0] },
-  kart_horn: { recipe: horn, pack: "kart", bus: "sfx", level: -4, priority: 3, maxInstances: 3, vary: 0.01, minGap: 0.1, expect: [0.5, 1.2] },
+  kart_duck: { recipe: duckSqueak, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 2, vary: 0.03, minGap: 0.2, reverb: 0.1, expect: [0.4, 1.0] },
+  kart_horn: { recipe: horn, pack: "kart", bus: "sfx", level: -4, priority: 3, maxInstances: 3, vary: 0.01, minGap: 0.1, reverb: 0.12, expect: [0.5, 1.2] },
   // The photo finish's flash: the screen's own camera, so it bypasses the world like the interface.
   kart_shutter: { recipe: shutter, pack: "kart", bus: "ui", level: -7, priority: 2, maxInstances: 1, vary: 0.02, minGap: 0.3, expect: [0.15, 0.4] },
 
@@ -245,5 +245,5 @@ export const KART_CUES: Record<string, CueSpec> = {
   kart_ui_ready: { recipe: uiReady, pack: "kart", bus: "ui", level: -9, priority: 2, maxInstances: 2, vary: 0, minGap: 0.05, expect: [0.3, 1.0] },
   kart_ui_join: { recipe: uiJoin, pack: "kart", bus: "ui", level: -9, priority: 2, maxInstances: 2, vary: 0, minGap: 0.05, expect: [0.3, 1.1] },
   kart_ui_leave: { recipe: uiLeave, pack: "kart", bus: "ui", level: -11, priority: 2, maxInstances: 2, vary: 0, minGap: 0.05, expect: [0.3, 1.0] },
-  kart_ui_start: { recipe: uiStart, pack: "kart", bus: "ui", level: -6, priority: 3, maxInstances: 1, vary: 0, expect: [0.8, 1.9] },
+  kart_ui_start: { recipe: uiStart, pack: "kart", bus: "ui", level: -6, priority: 3, maxInstances: 1, vary: 0, reverb: 0.2, expect: [0.8, 1.9] },
 };

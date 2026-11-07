@@ -80,6 +80,36 @@ export const smoothstep = (a: number, b: number, x: number): number => {
 };
 const lerp = (a: number, b: number, u: number): number => a + (b - a) * u;
 
+/**
+ * The grid revs its engines in the last second before Go: up to a roar as the lights go green and gone the moment the
+ * race starts (the karts' own pulling away takes over). 0..1, a pure function of the countdown.
+ */
+export function gridFlare(view: { phase: string; countdown: number }): number {
+  if (view.phase !== "countdown") return 0;
+  const c = view.countdown;
+  if (!(c > 0) || c > 1.1) return 0;
+  // Rises from 1.1 s to the peak at 0.15 s, then a touch of let-off into Go.
+  const up = smoothstep(1.1, 0.3, c);
+  return up * (c < 0.15 ? 0.6 + 4 * c : 1);
+}
+
+/**
+ * Four gears in the revs: through each the engine climbs, and at the top of it the next gear takes the load and the
+ * revs fall back. A pure function of the speed (as a fraction of top), so the same on every device and every
+ * snapshot. The factor is 1 on average, ±6 % through a gear (a dip of about two semitones at a change); it fades to
+ * nothing standing still, at top speed and in the air.
+ */
+const GEAR_EDGES = [0.12, 0.3, 0.52, 0.78] as const;
+export function gearFactor(f: number): number {
+  if (f <= GEAR_EDGES[0] || f >= GEAR_EDGES[3]) return 1;
+  let g = 0;
+  while (g < GEAR_EDGES.length - 2 && f >= GEAR_EDGES[g + 1]!) g++;
+  const u = (f - GEAR_EDGES[g]!) / (GEAR_EDGES[g + 1]! - GEAR_EDGES[g]!);
+  // The swing fades in over the first gear's start and out over the last one's end, so both ends join the plain curve.
+  const swing = smoothstep(0.12, 0.2, f) * (1 - smoothstep(0.68, 0.78, f));
+  return 1 + 0.06 * (2 * u - 1) * swing;
+}
+
 export interface EngineTarget {
   /** How fast the engine turns: about 0.64 just moving, 1.75 at top speed, up to ~2.3 boosting in the air. A layer plays at revs / its own. */
   revs: number;
@@ -103,35 +133,41 @@ export interface EngineTarget {
  * louder and rougher; lifting off or rolling downhill it drops back, quieter
  * and smoother.
  */
-export function engineTarget(k: KartView, work = 0): EngineTarget {
+export function engineTarget(k: KartView, work = 0, flare = 0): EngineTarget {
   const f = k.speed / TOP_SPEED;
   const forward = Math.max(0, f);
   const w = clamp(work, -1, 1);
   const air = smoothstep(0.25, 0.9, k.hop);
   let revs = f >= 0 ? 0.64 + 1.1 * Math.pow(Math.min(forward, 1.6), 0.9) : 0.64 + 0.5 * Math.min(1, -f * 3);
+  revs *= 1 + (gearFactor(Math.abs(f)) - 1) * (1 - air);
   if (k.boost > 0) revs *= 1.08;
   if (k.drift !== 0) revs *= 1.03;
   if (k.offroad) revs *= 0.95;
   revs *= 1 + 0.2 * air;
   if (k.spin > 0) revs *= 0.75;
   revs *= 1 + (w > 0 ? 0.05 : 0.035) * w;
+  // The start: a standing kart on the grid blips its throttle (flare is 0 everywhere else).
+  const idleRev = flare * (1 - smoothstep(0.5, 3, Math.abs(k.speed)));
+  revs *= 1 + 0.75 * idleRev;
   const carried = k.rescue > 0;
   const speed = Math.abs(k.speed);
   const alive = carried ? 0 : 1;
   const pulling = Math.max(0, w);
   const lifting = Math.max(0, -w);
-  const engine =
+  const engine = Math.max(
+    0.8 * alive * idleRev,
     alive *
     (k.spin > 0 ? 0.55 : 1) *
     smoothstep(0.2, 2.5, speed) *
     (0.6 + 0.4 * Math.min(1, forward)) *
     (1 + 0.15 * pulling - 0.28 * lifting) *
-    (1 + 0.08 * air);
-  const grit =
+    (1 + 0.08 * air));
+  const grit = Math.max(
+    0.55 * alive * idleRev,
     alive *
     smoothstep(0.5, 4, speed) *
-    clamp(0.22 + 0.7 * pulling - 0.2 * lifting + (k.boost > 0 ? 0.35 : 0) + (k.offroad ? 0.25 : 0) + (k.drift !== 0 ? 0.12 : 0) - 0.4 * air, 0, 1);
-  const idle = alive * (1 - smoothstep(0.4, 4.5, speed)) * (k.spin > 0 ? 0.6 : 1);
+    clamp(0.22 + 0.7 * pulling - 0.2 * lifting + (k.boost > 0 ? 0.35 : 0) + (k.offroad ? 0.25 : 0) + (k.drift !== 0 ? 0.12 : 0) - 0.4 * air, 0, 1));
+  const idle = alive * (1 - smoothstep(0.4, 4.5, speed)) * (k.spin > 0 ? 0.6 : 1) * (1 - 0.7 * idleRev);
   const growl = alive * (k.boost > 0 ? 1 : 0);
   return { revs, engine, grit, idle, growl };
 }

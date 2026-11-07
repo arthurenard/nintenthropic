@@ -29,6 +29,9 @@ export interface Order {
   duck?: { depth: number; hold: number };
 }
 
+/** The countdown's beeps are one note played at the A major triad's three steps: 3, 2, 1. */
+const COUNT_RATE: Record<number, number> = { 3: 1, 2: 1.2599, 1: 1.4983 };
+
 /** A landing at least this hard (the sim's `land` strength, 0..1) thuds under its sound. */
 export const THUD_FROM = 0.25;
 
@@ -65,7 +68,14 @@ const keep = (...orders: (Order | null)[]): Order[] => orders.filter((o): o is O
 export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
   switch (event.type) {
     case "countdown":
-      return [{ cue: event.n === 0 ? "kart_beep_high" : "kart_beep_low", volume: 1, pan: 0, distance: 0, rate: 1, delay: 0, priority: 3 }];
+      // Three notes up the A major triad (A4, C#5, E5) and Go on the A an octave above the first, with the crowd behind it.
+      if (event.n === 0) {
+        return [
+          { cue: "kart_beep_high", volume: 1, pan: 0, distance: 0, rate: 1, delay: 0, priority: 3 },
+          { cue: "kart_cheer", volume: 0.4, pan: 0, distance: 0, rate: 1.04, delay: 0.12, priority: 1 },
+        ];
+      }
+      return [{ cue: "kart_beep_low", volume: 1, pan: 0, distance: 0, rate: COUNT_RATE[event.n] ?? 1, delay: 0, priority: 3 }];
 
     case "pickup":
     case "box": {

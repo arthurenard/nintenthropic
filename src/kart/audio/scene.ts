@@ -37,6 +37,8 @@ export interface Scene {
   laps: number;
   /** Who drives each kart (the grid), for the sounds that are a driver's own: Dabble's horn is a quack. */
   racers?: readonly Pick<RacerSetup, "id" | "character">[];
+  /** The grid's engines revving for the start, 0..1 (see `gridFlare`): 0 outside the last second of the countdown. */
+  flare?: number;
 }
 
 /** The nearest local kart to a place, and how the place sounds from there. */

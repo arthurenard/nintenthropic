@@ -46,6 +46,7 @@ import {
   ease,
   engineFamily,
   engineTarget,
+  gridFlare,
   engineWork,
   gritShare,
   layerMix,
@@ -59,6 +60,7 @@ import { type MusicRenderer, createMusicRenderer } from "./music/loader";
 import { type MusicTrack, MusicPlayer, beatTimes } from "./music/player";
 import { type PieceId, THEME_PIECES } from "./music/pieces";
 import { MUSIC_SAMPLE_RATE, type RenderedMusic } from "./music/render";
+import { enterRoom } from "./space";
 import { type LocalKart, type Scene, falloff, hearThing, listenerAt, localOf } from "./scene";
 
 export type { KartSound, MusicKind, TrackTheme } from "./kinds";
@@ -407,6 +409,8 @@ class RaceAudioImpl implements RaceAudio {
       );
     }
     await Promise.all(jobs);
+    // The track's room, for every send the sounds ask for.
+    enterRoom(this.bus, theme);
     onProgress?.(1);
     // The final-lap version renders in the background: a lap or two of racing is time enough.
     if (this.renderer && this.makeTrack && (THEME_PIECES as readonly string[]).includes(theme)) void this.track(piece, true);
@@ -602,7 +606,7 @@ class RaceAudioImpl implements RaceAudio {
 
     const karts = new Map<number, KartView>();
     for (const k of view.karts) karts.set(k.id, k);
-    const scene: Scene = { locals: local.filter((l) => karts.has(l.kart)), karts, laps: view.laps, racers: view.racers };
+    const scene: Scene = { locals: local.filter((l) => karts.has(l.kart)), karts, laps: view.laps, racers: view.racers, flare: gridFlare(view) };
 
     this.phases(view);
     this.events(view.events, scene);
@@ -726,7 +730,7 @@ class RaceAudioImpl implements RaceAudio {
           last: { speed: k.speed, x: k.x, y: k.y, z: k.z },
           slope: 0,
           work: 0,
-          revs: engineTarget(k).revs,
+          revs: engineTarget(k, 0, scene.flare ?? 0).revs,
           engine: 0,
           rasp: 0,
           idling: 0,
@@ -751,7 +755,7 @@ class RaceAudioImpl implements RaceAudio {
         v.last.y = k.y;
         v.last.z = k.z;
       }
-      const target = engineTarget(k, v.work);
+      const target = engineTarget(k, v.work, scene.flare ?? 0);
       // Smooth the targets (a guest's karts jump between snapshots): revs climb faster than they fall.
       v.revs = ease(v.revs, target.revs, dt, target.revs > v.revs ? 0.07 : 0.12);
       v.engine = ease(v.engine, target.engine, dt, 0.06);
