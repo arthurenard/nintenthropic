@@ -55,17 +55,22 @@ export const palm: PieceSpec = {
   key: { tonic: "G", scale: "major" },
   bpm: 120,
   swing: 0.08,
+  race: true,
   rack: {
-    bass: { inst: "bass-marimba", level: -2, pan: -0.1 },
-    uke: { inst: "uke", level: -3.5, pan: -0.35, reverb: 0.12, chorus: 0.2 },
-    banjo: { inst: "banjo", level: -5, pan: 0.4, reverb: 0.12 },
-    lead: { inst: "steel", level: 0, pan: 0.05, reverb: 0.22, delay: 0.15 },
-    flute: { inst: "flute", level: -3, pan: 0.3, reverb: 0.3, delay: 0.2 },
-    arp: { inst: "marimba", level: -6, pan: -0.3, reverb: 0.18 },
+    bass: { inst: "bass-marimba", level: -2, pan: -0.1, highpass: 40, comp: { threshold: -16, ratio: 3, attack: 0.008, release: 0.1 } },
+    uke: { inst: "uke-bright", level: -3.5, pan: -0.35, reverb: 0.12, chorus: 0.2, highpass: 200 },
+    banjo: { inst: "banjo-bright", level: -5, pan: 0.4, reverb: 0.12, highpass: 250 },
+    lead: { inst: "steel-pan", level: 0, pan: 0.05, reverb: 0.22, delay: 0.15, highpass: 250, comp: { threshold: -15, ratio: 2.5, attack: 0.01, release: 0.12 } },
+    flute: { inst: "flute", level: -3, pan: 0.3, reverb: 0.3, delay: 0.2, highpass: 400 },
+    arp: { inst: "marimba", level: -6, pan: -0.3, reverb: 0.18, highpass: 200 },
     mar: { inst: "marimba", level: -5, pan: -0.15, reverb: 0.2, delay: 0.1 },
-    drums: { inst: "drums", level: -3 },
+    drums: { inst: "drums", level: -3, kit: "latin" },
   },
-  fx: { reverb: { t60: 1.2, size: 0.55, mix: 0.22 }, delay: { beats: 0.75, feedback: 0.3, tone: 3800, mix: 0.16 } },
+  fx: {
+    reverb: { t60: 1.4, size: 0.6, mix: 0.24, predelay: 0.016 },
+    delay: { beats: 0.75, feedback: 0.3, tone: 3800, mix: 0.16 },
+    master: { air: 2 },
+  },
   sections: [
     {
       name: "A",
@@ -122,6 +127,8 @@ export const palm: PieceSpec = {
     {
       name: "B2",
       bars: 8,
+      // The island's last lap round the tune: a whole tone up.
+      shift: 2,
       chords: "Am D G Em Am D G D",
       level: 1.1,
       parts: {

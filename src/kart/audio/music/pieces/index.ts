@@ -57,11 +57,48 @@ export const PIECES = {
       fill: { "snare-brush": "x.x.xxxx", "tom-mid": "......x." },
     },
   }),
-  canyon,
-  funfair,
-  snow,
+  // The heroic chorus again a tone higher with trumpets in the canyon, before the tag gallops home.
+  canyon: withFinale(canyon, {
+    from: 2,
+    at: 3,
+    shift: 2,
+    extra: { horns: chords("sync", { vel: 0.75, roll: 0.005 }) },
+  }),
+  // The march once more a tone up, the brass doubled by the calliope's own octave, before the trio.
+  funfair: withFinale(funfair, {
+    from: 3,
+    at: 4,
+    shift: 2,
+    extra: { glock: tune("r:128", { vel: 0.5 }) },
+  }),
+  // Frost again, a tone higher, with a choir joining the strings, then the dominant to fall back to D.
+  snow: withFinale(snow, {
+    from: 4,
+    shift: 2,
+    extra: { choir: chords("pad", { vel: 0.6, centre: 66 }) },
+    turn: {
+      chords: "Asus4 A7",
+      part: "lead",
+      tune: "r:16 | r:12 f#5:2 e5:2",
+      chordsPart: "pad",
+      groove: { "kick-soft": "x.......x.......", shaker: "xoxoxoxoxoxoxoxo" },
+      fill: { rim: "x.x.xxxx", clap: "......xX" },
+    },
+  }),
   volcano,
-  space,
+  // The finale once more, a tone higher, before the dominant that drops back into the launch.
+  space: withFinale(space, {
+    from: 6,
+    shift: 2,
+    turn: {
+      chords: "C#sus4 C#",
+      part: "lead",
+      tune: "r:16 | r:12 e5:2 c#5:2",
+      chordsPart: "pad",
+      groove: { "kick-808": "x...x...x...x...", shaker: "xoxoxoxoxoxoxoxo" },
+      fill: { "snare-electro": "xxxxxxxx", clap: "x.x.x.xX" },
+    },
+  }),
   palm,
   menu,
   "results-win": resultsWin,

@@ -73,15 +73,21 @@ export const volcano: PieceSpec = {
   name: "Volcano Rush",
   key: { tonic: "D", scale: "minor" },
   bpm: 154,
+  race: true,
   rack: {
-    bass: { inst: "bass-rock", level: -2, pan: 0 },
-    gtr: { inst: "guitar-dist", level: -5.5, pan: -0.6, reverb: 0.08 },
-    gtr2: { inst: "guitar-dist", level: -5.5, pan: 0.6, reverb: 0.08 },
-    lead: { inst: "lead-dist", level: 0, pan: 0.05, reverb: 0.2, delay: 0.2 },
-    brass: { inst: "brass", level: -4.5, pan: 0.2, reverb: 0.25 },
-    drums: { inst: "drums", level: -2.5 },
+    bass: { inst: "bass-pick", level: -2, pan: 0, highpass: 40, drive: 2.4, comp: { threshold: -15, ratio: 4, attack: 0.006, release: 0.09 } },
+    // Two rhythm guitars, one in each ear, through a driven amp and a cabinet that closes above 5 kHz.
+    gtr: { inst: "gtr-power", level: -5.5, pan: -0.65, reverb: 0.06, drive: 4.5, highpass: 90, lowpass: 5200, eq: [[850, 1, 2.5]] },
+    gtr2: { inst: "gtr-power", level: -5.5, pan: 0.65, reverb: 0.06, drive: 4.5, highpass: 90, lowpass: 5200, eq: [[850, 1, 2.5]] },
+    lead: { inst: "gtr-lead", level: 0, pan: 0.05, reverb: 0.2, delay: 0.2, highpass: 300, lowpass: 7000 },
+    brass: { inst: "brass-section", level: -4.5, pan: 0.2, reverb: 0.25, highpass: 200 },
+    drums: { inst: "drums", level: -2.5, kit: "rock", comp: { threshold: -13, ratio: 3, attack: 0.012, release: 0.1 } },
   },
-  fx: { reverb: { t60: 1.0, size: 0.45, mix: 0.16 }, delay: { beats: 0.75, feedback: 0.28, tone: 3500, mix: 0.14 } },
+  fx: {
+    reverb: { t60: 1.2, size: 0.5, mix: 0.18, predelay: 0.01 },
+    delay: { beats: 0.75, feedback: 0.28, tone: 3500, mix: 0.14 },
+    master: { air: 1, glue: -22 },
+  },
   sections: [
     {
       name: "Riff",
@@ -148,6 +154,8 @@ export const volcano: PieceSpec = {
     {
       name: "Final Chorus",
       bars: 8,
+      // The last chorus kicks up a whole tone, as a rock band's does.
+      shift: 2,
       chords: "D5 Bb5 F5 C5 D5 Bb5 C5 A5",
       level: 1.08,
       parts: {

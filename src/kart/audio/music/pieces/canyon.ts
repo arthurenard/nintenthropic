@@ -54,15 +54,22 @@ export const canyon: PieceSpec = {
   name: "Canyon Run",
   key: { tonic: "E", scale: "mixolydian" },
   bpm: 122,
+  race: true,
   rack: {
-    bass: { inst: "bass-pop", level: -2, pan: -0.1 },
-    chords: { inst: "banjo", level: -4, pan: 0.3, reverb: 0.15 },
-    lead: { inst: "twang", level: 0, reverb: 0.35, delay: 0.3 },
-    harmonica: { inst: "harmonica", level: -1, pan: -0.25, reverb: 0.3, delay: 0.2 },
-    whistle: { inst: "whistle", level: 0, pan: 0.2, reverb: 0.4, delay: 0.3 },
-    drums: { inst: "drums", level: -3 },
+    bass: { inst: "bass-pick", level: -2, pan: -0.1, highpass: 40, duck: 0.1, comp: { threshold: -16, ratio: 3, attack: 0.008, release: 0.1 } },
+    chords: { inst: "banjo-bright", level: -4.5, pan: 0.3, reverb: 0.15, highpass: 220 },
+    // The surf guitar: a clean, bright string drowned in a spring reverb's splash and shivering in tremolo.
+    lead: { inst: "gtr-clean", level: 0, reverb: 0.5, delay: 0.3, highpass: 200, tremolo: { rate: 7.5, depth: 0.22 }, eq: [[2600, 1.2, 3]] },
+    harmonica: { inst: "reed", level: -1.5, pan: -0.25, reverb: 0.3, delay: 0.2, highpass: 400 },
+    whistle: { inst: "whistle", level: 0, pan: 0.2, reverb: 0.4, delay: 0.3, highpass: 450 },
+    horns: { inst: "brass-section", level: -4, pan: -0.15, reverb: 0.35, highpass: 250 },
+    drums: { inst: "drums", level: -3, kit: "pop" },
   },
-  fx: { reverb: { t60: 1.5, size: 0.8, mix: 0.3 }, delay: { beats: 0.5, feedback: 0.3, tone: 3500, mix: 0.2 } },
+  fx: {
+    reverb: { t60: 1.9, size: 0.85, mix: 0.32, predelay: 0.025 },
+    delay: { beats: 0.5, feedback: 0.3, tone: 3500, mix: 0.2 },
+    master: { air: 1.5 },
+  },
   sections: [
     {
       name: "Hook",
