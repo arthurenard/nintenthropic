@@ -19,7 +19,7 @@ import type { Take } from "../dsp/take";
 import { type Voice, drumHit, fm, modal } from "../dsp/voices";
 import { thump } from "./kit";
 import { ar, drive, expo, tone } from "./kart-kit";
-import { BELL, BRASS, CHIME, GLASS, KALIMBA, MARIMBA, PIP, STAB, TWANG, air, crackle, knock, note, puff, shower, sweep, tweet, unison } from "./kart-synth";
+import { BELL, BRASS, breath, CHIME, GLASS, KALIMBA, MARIMBA, PIP, STAB, TWANG, air, crackle, knock, note, puff, shower, sweep, tweet, unison } from "./kart-synth";
 
 const VIBES: Voice = modal({
   partials: [[1, 1, 1], [4, 0.28, 0.4], [10, 0.08, 0.15]],
@@ -27,12 +27,6 @@ const VIBES: Voice = modal({
 });
 /** A clean blip: FM at 1:1, the index collapsing in a few milliseconds, so a ping with a bite. */
 const BLIP: Voice = fm({ ratio: 1, index: 2.2, indexTau: 0.035, tau: 0.16, release: 0.06, attack: 0.002 });
-
-/** A faint noisy breath under tonal sounds: the texture that makes two takes two takes. */
-function breath(out: Mono, t: Take, gain = 0.012): void {
-  const n = bandpass(white(out.length, t.rng), t.sr, 800, 6000, 2);
-  for (let i = 0; i < out.length; i++) out[i]! += gain * n[i]!;
-}
 
 // --- the countdown and the laps ---------------------------------------------------------------------------
 
@@ -55,10 +49,11 @@ export function beepLow(t: Take): Mono {
 export function beepHigh(t: Take): Mono {
   const out = t.canvas(1.25);
   [81, 85, 88].forEach((m, k) => note(out, t, STAB, 0.004 * k, m, 0.35, 0.95, 0.5));
-  note(out, t, BLIP, 0, 93, 0.3, 1, 0.5);
-  note(out, t, BELL, 0.01, 93, 0.3, 0.9, 0.38);
-  note(out, t, CHIME, 0.02, 100, 0.5, 0.8, 0.3);
-  const pad = unison(t, 1.1, midiHz(69) * t.p, [-12, -5, 0, 5, 12], 3600);
+  // The held note is the A an octave above the countdown's first beep: a clean blip carries it for the whole of the take.
+  note(out, t, BLIP, 0, 81, 0.8, 1, 0.8);
+  note(out, t, BELL, 0.01, 93, 0.3, 0.9, 0.3);
+  note(out, t, CHIME, 0.02, 100, 0.5, 0.8, 0.25);
+  const pad = unison(t, 1.1, midiHz(81) * t.p, [-12, -5, 0, 5, 12], 3600);
   shapeBy(pad, (u) => smooth(u / 0.1) * smooth((1 - u) / 0.6));
   t.put(out, pad, 0, 0.3);
   t.put(out, thump(t, 0.3, 130, 44, 0.002, 0.07), 0, 0.7);
@@ -312,7 +307,7 @@ export function horn(t: Take): Mono {
 export function hornParty(t: Take): Mono {
   const out = t.canvas(0.8);
   const n = t.n(0.5);
-  const f = sampled(n, (u) => 520 * Math.pow(1.9, smooth(u / 0.25)) * (u > 0.8 ? 1 - 0.3 * (u - 0.8) : 1), 16);
+  const f = sampled(n, (u) => 520 * t.p * Math.pow(1.9, smooth(u / 0.25)) * (u > 0.8 ? 1 - 0.3 * (u - 0.8) : 1), 16);
   const reed = saw(n, t.sr, f, 0.15, 0.3);
   const body = formants(reed, t.sr, [{ freq: 1100, q: 3, amp: 1 }, { freq: 2800, q: 4, amp: 0.6 }]);
   normalize(body);
@@ -328,7 +323,7 @@ export function hornParty(t: Take): Mono {
 export function hornSqueeze(t: Take): Mono {
   const out = t.canvas(0.8);
   const n = t.n(0.55);
-  const f = sampled(n, (u) => 330 * (u < 0.15 ? 0.7 + 2 * u : 1) * (u > 0.7 ? 1 - 0.28 * smooth((u - 0.7) / 0.3) : 1), 16);
+  const f = sampled(n, (u) => 330 * t.p * (u < 0.15 ? 0.7 + 2 * u : 1) * (u > 0.7 ? 1 - 0.28 * smooth((u - 0.7) / 0.3) : 1), 16);
   const v = tone(n, t.sr, f, 0.7, 0.55);
   const mod = tone(n, t.sr, Float32Array.from(f, (x) => x * 1.01), 0.3, 0.2);
   for (let i = 0; i < n; i++) v[i] = v[i]! * (0.75 + 0.25 * mod[i]!);
@@ -351,8 +346,8 @@ export function hornRibbit(t: Take): Mono {
     shapeBy(body, (u) => smooth(u / 0.1) * smooth((1 - u) / 0.3));
     t.put(out, body, at, 1);
   };
-  croak(0, 0.2, 150);
-  croak(0.26, 0.28, 195);
+  croak(0, 0.2, 150 * t.p);
+  croak(0.26, 0.28, 195 * t.p);
   return out;
 }
 
@@ -382,6 +377,7 @@ export function hornBell(t: Take): Mono {
     addMode(out, t.sr, at, midiHz(103) * 2.4, 0.18, 0.18, 1);
     t.put(out, click(t.sr, t.rng, 0.002, 3000, 12000), at, 0.4);
   }
+  breath(out, t, 0.02);
   return out;
 }
 
@@ -389,7 +385,7 @@ export function hornBell(t: Take): Mono {
 export function hornTuba(t: Take): Mono {
   const out = t.canvas(1.1);
   const n = t.n(0.75);
-  const f = sampled(n, (u) => 98 * (u < 0.1 ? 0.93 + 0.7 * u : 1) * (u > 0.8 ? 1 - 0.1 * (u - 0.8) : 1), 16);
+  const f = sampled(n, (u) => 98 * t.p * (u < 0.1 ? 0.93 + 0.7 * u : 1) * (u > 0.8 ? 1 - 0.1 * (u - 0.8) : 1), 16);
   const a = saw(n, t.sr, f, 0.3, 0.1);
   const b = saw(n, t.sr, Float32Array.from(f, (x) => x * 1.006), 0.3, 0.6);
   for (let i = 0; i < n; i++) a[i] = (a[i]! + b[i]!) * 0.5;
@@ -414,9 +410,9 @@ export function hornRobot(t: Take): Mono {
     ar(v, t.sr, 0.004, 0.02);
     t.put(out, v, at, 0.9);
   };
-  blip(0, 0.1, 330, 330);
-  blip(0.13, 0.08, 330, 440);
-  blip(0.25, 0.28, 440, 660);
+  blip(0, 0.1, 330 * t.p, 330 * t.p);
+  blip(0.13, 0.08, 330 * t.p, 440 * t.p);
+  blip(0.25, 0.28, 440 * t.p, 660 * t.p);
   return out;
 }
 

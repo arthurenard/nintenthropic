@@ -30,7 +30,7 @@ import { bubble, thump } from "./kit";
 import { ar, drive, expo, glide, swoosh, tone } from "./kart-kit";
 import {
   BELL, CHIME, GLASS, GLITTER, KALIMBA, MARIMBA, PIP, STAB, TWANG,
-  air, crackle, knock, note, puff, rain, shower, siren, sweep, taps, unison,
+  air, breath, crackle, knock, note, puff, rain, shower, siren, sweep, taps, unison, wander,
 } from "./kart-synth";
 
 // --- the box and the roulette ---------------------------------------------------------------------------
@@ -169,6 +169,7 @@ export function itemGet(item: keyof typeof CHIMES): Recipe {
   return (t) => {
     const out = t.canvas(0.8);
     CHIMES[item]!(out, t);
+    breath(out, t, 0.015);
     return out;
   };
 }
@@ -265,12 +266,12 @@ export function seekerLaunch(t: Take): Mono {
   t.put(out, thump(t, 0.13, 250, 80, 0.001, 0.03), 0, 0.9);
   knock(out, t, 0, 820, 0.7, 0.014);
   t.put(out, air(t, 0.4, 1200, 5200, 1.6, puff(0.15, 1.4), 70), 0.01, 0.5);
-  note(out, t, BELL, 0.1, 96, 0.2, 0.9, 0.55);
-  note(out, t, BELL, 0.24, 100, 0.2, 0.9, 0.5);
-  const chirp = sweep(t, 0.16, (u) => 1200 * Math.pow(3, u), 0.25);
+  note(out, t, BELL, 0.1, 91, 0.2, 0.9, 0.5);
+  note(out, t, BELL, 0.24, 96, 0.2, 0.9, 0.45);
+  const chirp = sweep(t, 0.16, (u) => 900 * Math.pow(2.6, u), 0.2);
   ar(chirp, t.sr, 0.004, 0.06);
-  t.put(out, chirp, 0.3, 0.25);
-  return out;
+  t.put(out, chirp, 0.3, 0.22);
+  return lowpass(out, t.sr, 8500, 1);
 }
 
 /**
@@ -288,13 +289,16 @@ export function seekerBeeps(t: Take): Mono {
     for (let i = 0; i < buf.length; i++) out[(start + i) % n]! += gain * buf[i]!;
   };
   for (let k = 0; k < 4; k++) {
-    const f = midiHz(k % 2 === 0 ? 93 : 98);
+    // Each beep a hair different in pitch and level, so the loop is a machine at work and not a test tone.
+    const f = midiHz(k % 2 === 0 ? 93 : 98) * t.rng.range(0.997, 1.003);
     const len = t.n(0.11);
     const beep = tone(len, t.sr, new Float32Array(len).fill(f), 0.12, 0);
     shapeBy(beep, (u) => smooth(u / 0.04) * Math.pow(Math.max(0, 1 - u), 1.4));
-    wrap(beep, (k * seconds) / 4, 0.8);
-    wrap(beep, (k * seconds) / 4 + 0.075, 0.2);
-    wrap(beep, (k * seconds) / 4 + 0.15, 0.07);
+    const at = (k * seconds) / 4 + t.rng.range(0, 0.002);
+    const level = t.rng.range(0.88, 1);
+    wrap(beep, at, 0.8 * level);
+    wrap(beep, at + 0.075, 0.2 * level);
+    wrap(beep, at + 0.15, 0.07 * level);
   }
   // A faint hum between the beeps: a turbine two octaves below, in whole cycles of the loop.
   const hum = 3 * 105;
@@ -306,11 +310,12 @@ export function seekerBeeps(t: Take): Mono {
 export function seekerLock(t: Take): Mono {
   const out = t.canvas(0.4);
   [91, 95, 100].forEach((m, k) => {
-    const beep = tone(t.n(0.06), t.sr, new Float32Array(t.n(0.06)).fill(midiHz(m)), 0.15, 0);
+    const beep = tone(t.n(0.06), t.sr, new Float32Array(t.n(0.06)).fill(midiHz(m) * t.rng.range(0.996, 1.004)), 0.15, 0);
     shapeBy(beep, (u) => smooth(u / 0.08) * Math.pow(Math.max(0, 1 - u), 1.2));
     t.put(out, beep, k * 0.05, 0.6);
   });
   note(out, t, BELL, 0.15, 103, 0.2, 0.9, 0.55);
+  breath(out, t, 0.015);
   return out;
 }
 
@@ -491,10 +496,9 @@ export function stormStrike(t: Take): Mono {
   // Thunder: a roll of low noise, its swells like a wind-up, and the same rumble thrown back off the hills.
   const rumble = lowpass(bandNoise(t.n(2.1), t.sr, t.rng, 36, 520, 2), t.sr, 400 * t.cutoff, 2);
   const m = rumble.length;
-  for (let i = 0; i < m; i++) {
-    const u = i / m;
-    rumble[i]! *= 0.5 + 0.5 * Math.sin(2 * Math.PI * (4 + 3 * u) * u * 2.1 + 1);
-  }
+  // The roll: swells at irregular intervals (a random walk, smoothed), never a steady throb.
+  const roll = wander(m, t.rng, 0.25, 1, 4.5, t.sr);
+  for (let i = 0; i < m; i++) rumble[i]! *= roll[i]!;
   shapeBy(rumble, (u) => smooth(u / 0.05) * Math.pow(Math.max(0, 1 - u), 1.6));
   t.put(out, rumble, 0.07, 1.1);
   t.put(out, thump(t, 0.8, 90, 33, 0.01, 0.2), 0.09, 0.8);
@@ -543,9 +547,10 @@ export function skyrocketLaunch(t: Take): Mono[] {
  */
 export function skyrocketWarn(t: Take): Mono {
   const out = t.canvas(1.3);
-  t.put(out, siren(t, 1.2, 760, 1240, 3, 0.4), 0, 0.8);
+  t.put(out, siren(t, 1.2, 760 * t.p, 1240 * t.p, 3, 0.4), 0, 0.8);
   // A pulse a beat under the siren: a heartbeat of dread, four of them.
   for (let k = 0; k < 5; k++) t.put(out, thump(t, 0.12, 190, 90, 0.002, 0.03), 0.02 + k * 0.24, 0.5);
+  breath(out, t, 0.02);
   return out;
 }
 

@@ -28,7 +28,7 @@ import { loadSoundPack } from "../../audio";
 import type { Pack } from "../../audio";
 import { volumeGain } from "../../audio/routing";
 import type { LoopControl, LoopParams, SteerableAudio } from "../../audio/types";
-import type { KartView, RaceEvent, RaceView } from "../contract";
+import type { Emote, KartView, RaceEvent, RaceView } from "../contract";
 import { AMBIENCE, BED_PANS, SpotClock, rng } from "./ambience";
 import {
   ENGINE_LAYERS,
@@ -54,7 +54,7 @@ import {
   surfaceTarget,
   windTarget,
 } from "./engines";
-import { type Order, ordersFor } from "./events";
+import { type Order, emoteOrder, ordersFor } from "./events";
 import { type KartSound, type MusicKind, type TrackTheme, SOUND_CUES, pieceFor } from "./kinds";
 import { type MusicRenderer, createMusicRenderer } from "./music/loader";
 import { type MusicTrack, MusicPlayer, beatTimes } from "./music/player";
@@ -324,6 +324,8 @@ class RaceAudioImpl implements RaceAudio {
   private readonly winds = new Map<number, Looper>();
   /** The place each of the player's own karts was last heard at. */
   private readonly places = new Map<number, { place: number; at: number }>();
+  /** The emote each own kart was last making, so its sound is heard once as it begins. */
+  private readonly emotes = new Map<number, Emote | null>();
   private readonly rolls = new Map<number, { next: number; count: number }>();
   private readonly puckHeading = new Map<number, { heading: number; t: number }[]>();
   private readonly lastBounce = new Map<number, number>();
@@ -633,6 +635,7 @@ class RaceAudioImpl implements RaceAudio {
       this.pendingFinal = false;
       this.rolls.clear();
       this.places.clear();
+      this.emotes.clear();
       this.puckHeading.clear();
       if (this.playingKey === `${this.loadedTheme}-final` && this.wantedKey) {
         // The last race ended in its final-lap music: the next one starts from the normal version.
@@ -942,6 +945,13 @@ class RaceAudioImpl implements RaceAudio {
       }
       if (heard) heard.place = k.place;
       else this.places.set(l.kart, { place: k.place, at: -9 });
+      // A cheer or a wave, as it begins.
+      const emote = k.emote ?? null;
+      if (emote !== (this.emotes.get(l.kart) ?? null)) {
+        const o = emoteOrder(emote, l.pan);
+        if (o) this.start(o);
+        this.emotes.set(l.kart, emote);
+      }
     }
   }
 

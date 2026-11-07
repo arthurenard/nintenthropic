@@ -9,11 +9,12 @@ import { describe, expect, it } from "vitest";
 import { CUES, cuesInPack } from "../../audio/cues/table";
 import { momentaryMaxDb } from "../../audio/dsp/master";
 import { renderTake, takeCount } from "../../audio/render";
-import type { RaceEvent } from "../contract";
+import type { HitCause, ItemKind, RaceEvent } from "../contract";
+import { ITEM_KINDS } from "../sim/state";
 import { estimatePitch, peakOfBuffer, spectralCentroid, toDb } from "./analysis";
 import { AMBIENCE, ambienceCues } from "./ambience";
 import { ENGINE_CUES, ENGINE_LAYERS, ENGINE_NOTE, REV_HI, REV_LO, SURFACE_CUES } from "./engines";
-import { ordersFor } from "./events";
+import { HORNS, emoteOrder, ordersFor } from "./events";
 import { SOUND_CUES } from "./kinds";
 import { SIM_EVENTS } from "./simulate";
 
@@ -46,15 +47,17 @@ describe("the kart pack", () => {
       // another kart going by close
       "kart_pass",
       // item boxes and items
-      "kart_box_smash", "kart_roulette_tick", "kart_item_ready", "kart_nitro", "kart_puck_fire", "kart_puck_bounce", "kart_seeker", "kart_slick_splat",
+      "kart_box_smash", "kart_roulette_tick", "kart_item_ready", "kart_nitro", "kart_nitro_triple", "kart_puck_fire", "kart_puck_bounce", "kart_seeker_launch", "kart_seeker", "kart_seeker_lock", "kart_slick_splat", "kart_slick_skid",
+      // what the roulette lands on: a chime for each item
+      ...ITEM_KINDS.map((item) => `kart_get_${item}`),
       // the comet, the items that strike from afar, the decoy
-      "kart_comet", "kart_storm", "kart_skyrocket", "kart_skyrocket_burst", "kart_blast", "kart_decoy_pop",
-      // hits, bumps, walls
-      "kart_hit", "kart_spinout", "kart_bump", "kart_wall_thud", "kart_wall_scrape",
+      "kart_comet", "kart_storm", "kart_skyrocket", "kart_skyrocket_warn", "kart_skyrocket_burst", "kart_blast", "kart_decoy_drop", "kart_decoy_pop",
+      // hits, bumps (by force), walls
+      "kart_hit", "kart_spinout", "kart_bump", "kart_bump_hard", "kart_wall_thud", "kart_wall_scrape",
       // countdown, laps, finishing
-      "kart_beep_low", "kart_beep_high", "kart_lap", "kart_final_lap", "kart_finish_win", "kart_finish_ok", "kart_cheer",
+      "kart_beep_low", "kart_beep_high", "kart_lap", "kart_final_lap", "kart_finish_win", "kart_finish_ok", "kart_cheer", "kart_applause", "kart_emote_cheer", "kart_emote_wave",
       // air
-      "kart_jump", "kart_trick", "kart_land", "kart_thud", "kart_fall", "kart_drone", "kart_drone_drop", "kart_hazard", "kart_wind",
+      "kart_jump", "kart_trick", "kart_land", "kart_land_cheer", "kart_thud", "kart_fall", "kart_drone", "kart_drone_drop", "kart_hazard", "kart_wind",
       // a place won or lost
       "kart_place_up", "kart_place_down",
       // the road and the surfaces
@@ -62,7 +65,7 @@ describe("the kart pack", () => {
       // the places
       ...AMBIENCE_CUES,
       // the duck, the horn, the interface
-      "kart_duck", "kart_horn", "kart_shutter", "kart_ui_select", "kart_ui_back", "kart_ui_ready", "kart_ui_join", "kart_ui_leave", "kart_ui_start",
+      "kart_duck", "kart_horn", ...Object.values(HORNS).filter((cue) => cue !== "kart_horn" && cue !== "kart_duck"), "kart_shutter", "kart_ui_select", "kart_ui_back", "kart_ui_ready", "kart_ui_join", "kart_ui_leave", "kart_ui_start",
     ];
     for (const cue of wanted) expect(KART, cue).toContain(cue);
     expect(KART.length).toBe(wanted.length);
@@ -182,6 +185,25 @@ describe("the kart pack", () => {
         for (const o of ordersFor(e, scene)) names.add(o.cue);
       }
     }
+    // And the events the scripted race does not stage: every item picked up and used, every strike, every cause of a hit, bumps of both weights, a trick landed, each driver's horn, each emote.
+    const racers = ["bun", "pepper", "moss", "kit", "juniper", "mango", "bramble", "rivet", "dabble"].map((character, id) => ({ id, character }));
+    const wide = {
+      ...scene,
+      racers,
+      karts: new Map(racers.map((r) => [r.id, { id: r.id, x: r.id, z: 0, heading: 0, place: r.id + 1, finished: null } as never])),
+    };
+    const items: ItemKind[] = ["nitro", "nitro3", "puck", "seeker", "slick", "puck3", "comet", "storm", "skyrocket", "blast", "decoy"];
+    const causes: HitCause[] = ["puck", "seeker", "slick", "decoy", "storm", "skyrocket", "blast", "comet"];
+    const more: object[] = [
+      ...items.flatMap((item) => [{ type: "pickup", kart: 0, item }, { type: "use", kart: 0, item }, { type: "use", kart: 1, item }]),
+      ...(["storm", "skyrocket", "blast"] as const).map((item) => ({ type: "strike", kart: 0, item, x: 1, z: 1 })),
+      ...causes.map((cause) => ({ type: "hit", kart: 0, by: 1, cause })),
+      { type: "bump", a: 0, b: 1, strength: 0.2 }, { type: "bump", a: 0, b: 1, strength: 0.9 },
+      { type: "land", kart: 0, boost: true, strength: 0.5 },
+      ...racers.map((r) => ({ type: "horn", kart: r.id })),
+    ];
+    for (const event of more) for (const o of ordersFor({ id: 1, tick: 0, ...event } as RaceEvent, wide)) names.add(o.cue);
+    for (const emote of ["cheer", "wave"] as const) names.add(emoteOrder(emote, 0)!.cue);
     for (const name of names) expect(Object.prototype.hasOwnProperty.call(CUES, name), name).toBe(true);
     for (const cue of KART) expect(names.has(cue), `${cue} is never played`).toBe(true);
   });

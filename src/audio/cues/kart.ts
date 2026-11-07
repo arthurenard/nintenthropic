@@ -207,6 +207,7 @@ export const KART_CUES: Record<string, CueSpec> = {
   kart_nitro_triple: { recipe: nitroTriple, pack: "kart", bus: "sfx", level: -4, priority: 3, maxInstances: 3, vary: 0.02, minGap: 0.05, reverb: 0.1, expect: [0.8, 1.3] },
   kart_puck_fire: { recipe: puckFire, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 3, vary: 0.03, minGap: 0.05, reverb: 0.08, expect: [0.3, 0.8] },
   kart_seeker_launch: { recipe: seekerLaunch, pack: "kart", bus: "sfx", level: -6, priority: 3, maxInstances: 2, vary: 0.02, minGap: 0.1, reverb: 0.1, expect: [0.4, 0.9] },
+  kart_seeker_lock: { recipe: seekerLock, pack: "kart", bus: "sfx", level: -8, priority: 3, maxInstances: 2, vary: 0.02, minGap: 0.1, reverb: 0.1, expect: [0.25, 0.6] },
   kart_puck_bounce: { recipe: puckBounce, pack: "kart", bus: "sfx", level: -7, priority: 2, maxInstances: 3, vary: 0.04, minGap: 0.04, reverb: 0.1, expect: [0.2, 0.6] },
   kart_slick_splat: { recipe: slickSplat, pack: "kart", bus: "sfx", level: -5, priority: 3, maxInstances: 3, vary: 0.03, minGap: 0.05, reverb: 0.08, expect: [0.4, 1.1] },
   kart_slick_skid: { recipe: slickSkid, pack: "kart", bus: "sfx", level: -8, priority: 3, maxInstances: 2, vary: 0.03, minGap: 0.1, reverb: 0.06, expect: [0.5, 1.0] },
@@ -226,7 +227,7 @@ export const KART_CUES: Record<string, CueSpec> = {
 
   // --- hits ---------------------------------------------------------------------------------------------------------
   kart_hit: { recipe: hit, pack: "kart", bus: "sfx", level: -2, priority: 3, maxInstances: 4, vary: 0.02, minGap: 0.08, reverb: 0.15, expect: [0.7, 1.5] },
-  kart_spinout: { recipe: spinout, pack: "kart", bus: "sfx", level: -3, priority: 3, maxInstances: 4, vary: 0.02, minGap: 0.08, reverb: 0.15, expect: [0.7, 1.4] },
+  kart_spinout: { recipe: spinout, pack: "kart", bus: "sfx", level: -3, priority: 3, maxInstances: 3, vary: 0.02, minGap: 0.08, reverb: 0.15, expect: [1.2, 1.7] },
   kart_bump: { recipe: bump, pack: "kart", bus: "sfx", level: -6, priority: 2, maxInstances: 3, vary: 0.06, minGap: 0.05, reverb: 0.06, expect: [0.15, 0.5] },
   kart_bump_hard: { recipe: bumpHard, pack: "kart", bus: "sfx", level: -4, priority: 2, maxInstances: 2, vary: 0.05, minGap: 0.08, reverb: 0.1, expect: [0.4, 0.9] },
   kart_wall_thud: { recipe: wallThud, pack: "kart", bus: "sfx", level: -5, priority: 2, maxInstances: 3, vary: 0.05, minGap: 0.08, reverb: 0.15, expect: [0.3, 0.9] },
@@ -248,7 +249,7 @@ export const KART_CUES: Record<string, CueSpec> = {
 
   // --- countdown, laps, finishing ------------------------------------------------------------------------------------
   kart_beep_low: { recipe: beepLow, pack: "kart", bus: "ui", level: -4, priority: 3, maxInstances: 1, vary: 0, reverb: 0.06, expect: [0.2, 0.6] },
-  kart_beep_high: { recipe: beepHigh, pack: "kart", bus: "ui", level: -3, priority: 3, maxInstances: 1, vary: 0, reverb: 0.2, expect: [0.5, 1.2] },
+  kart_beep_high: { recipe: beepHigh, pack: "kart", bus: "ui", level: -3, priority: 3, maxInstances: 1, vary: 0, reverb: 0.2, expect: [0.8, 1.4] },
   kart_lap: { recipe: lapChime, pack: "kart", bus: "ui", level: -5, priority: 3, maxInstances: 2, vary: 0, minGap: 0.2, reverb: 0.25, expect: [0.8, 1.6] },
   // A place won or lost: two notes, up or down, soft (at most one in a third of a second: karts side by side swap places).
   kart_place_up: { recipe: placeUp, pack: "kart", bus: "ui", level: -9, priority: 2, maxInstances: 1, vary: 0, minGap: 0.3, reverb: 0.1, expect: [0.3, 0.8] },

@@ -323,9 +323,9 @@ export function fall(t: Take): Mono {
   shapeBy(wind, (u) => smooth(u / 0.3) * smooth((1 - u) / 0.3));
   t.put(out, wind, 0, 0.18);
   // The claw: a latch, a clunk and a whirr that carries the kart off.
-  knock(out, t, 1.62, 330, 0.9, 0.04);
-  t.put(out, thump(t, 0.2, 150, 55, 0.002, 0.04), 1.62, 0.8);
-  addMetal(out, t.sr, t.rng, 1.62, 780, 0.1, 0.35, [1, 1.7, 2.7]);
+  knock(out, t, 1.62, 330, 0.45, 0.04);
+  t.put(out, thump(t, 0.2, 150, 55, 0.002, 0.04), 1.62, 0.4);
+  addMetal(out, t.sr, t.rng, 1.62, 780, 0.1, 0.18, [1, 1.7, 2.7]);
   const rotor = bandNoise(t.n(0.4), t.sr, t.rng, 160, 1400, 2);
   const m = rotor.length;
   for (let i = 0; i < m; i++) rotor[i]! *= 0.55 + 0.45 * Math.sin((2 * Math.PI * 38 * i) / t.sr);

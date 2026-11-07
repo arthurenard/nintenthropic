@@ -45,6 +45,8 @@ export type KartSound =
   | "finish-win"
   | "finish-ok"
   | "cheer"
+  /** The results' applause. */
+  | "applause"
   /** The photo finish's camera. */
   | "shutter"
   /** The Konami code: the gold sting, the same as the arcade's (a core cue, loaded with the engine). */
@@ -64,6 +66,7 @@ export const SOUND_CUES: Record<KartSound, string> = {
   "finish-win": "kart_finish_win",
   "finish-ok": "kart_finish_ok",
   cheer: "kart_cheer",
+  applause: "kart_applause",
   shutter: "kart_shutter",
   gold: "ui_gold",
 };

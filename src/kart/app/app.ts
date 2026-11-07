@@ -694,6 +694,7 @@ export class KartApp {
     const mine = new Set(localPlayers(lobby, session.device).map((player) => kartOf(lobby, player.slot)));
     const first = result.standings.find((row) => row.place === 1);
     this.services.sound.music(first && mine.has(first.kart) ? "results-win" : "results");
+    this.services.sound.play("applause");
   }
 
   /**

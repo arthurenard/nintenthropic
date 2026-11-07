@@ -68,9 +68,9 @@ export const WAH: Voice = subtractive({
   attack: 0.03, decay: 0.3, sustain: 0.75, release: 0.1, vibrato: { rate: 5.2, depth: 14, delay: 0.1 },
 });
 
-/** Place a voice's note on ``out`` (the exact pitch; the take's own pitch spread is for noises, not notes). */
+/** Place a voice's note on ``out``: the pitch exact to within three cents and the strike a few percent off its force, so two takes are two takes. */
 export function note(out: Mono, t: Take, voice: Voice, at: number, midi: number, hold: number, vel = 0.85, gain = 1): void {
-  t.put(out, voice({ sr: t.sr, freq: midiHz(midi), hold, vel, rng: t.rng.fork(`${midi}@${at}`) }), at, gain);
+  t.put(out, voice({ sr: t.sr, freq: midiHz(midi + t.rng.range(-0.03, 0.03)), hold, vel: Math.min(1, vel * t.rng.range(0.96, 1.04)), rng: t.rng.fork(`${midi}@${at}`) }), at, gain);
 }
 
 /** The C major pentatonic across the top of the keyboard, in MIDI notes: where glitter lives. */
@@ -243,4 +243,10 @@ export function wander(n: number, rng: Rng, lo: number, hi: number, rate: number
     out[i] = v;
   }
   return out;
+}
+
+/** A faint noisy breath under tonal sounds: the texture that makes two takes two takes (and keeps a bell from being a test tone). */
+export function breath(out: Mono, t: Take, gain = 0.012): void {
+  const n = bandNoise(out.length, t.sr, t.rng, 800, 6000, 2);
+  for (let i = 0; i < out.length; i++) out[i]! += gain * n[i]!;
 }
