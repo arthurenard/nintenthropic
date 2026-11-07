@@ -119,7 +119,7 @@ async function once(browser, players, track, camera) {
   await page.locator("#screen-howto").waitFor({ state: "visible", timeout: 120000 });
   await page.locator("#howto-continue").click();
   await page.locator("#lobby-players").waitFor();
-  await page.getByRole("radio", { name: new RegExp(NAMES[track] ?? track) }).first().click();
+  await page.getByRole("radio", { name: new RegExp(NAMES[track] ?? track.replace(/-/g, " "), "i") }).first().click();
   await page.getByRole("radio", { name: "1", exact: true }).click();
   await page.getByRole("button", { name: "Start Race" }).click();
   await page.waitForFunction(() => window.gripTest.state()?.race, null, { timeout: 120000 });

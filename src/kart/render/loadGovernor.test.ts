@@ -39,7 +39,8 @@ describe("LoadGovernor", () => {
     const g = new LoadGovernor();
     // A browser holding the page to 30 fps: nothing drawn less changes it.
     const seen = run(g, 33.3, 60);
-    expect(seen.length).toBeLessThanOrEqual(2);
+    // Two steps down, judged together, and both put back: it does not keep trying.
+    expect(seen.length).toBeLessThanOrEqual(3);
     expect(g.level).toBe(0);
   });
 

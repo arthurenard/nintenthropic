@@ -91,6 +91,8 @@ export class LoadGovernor {
   /** A trial step up in progress: from which level, and when it began. */
   private trial: { from: number; at: number } | null = null;
   private trials = 0;
+  /** Where the run of steps down now under way began: its level, and how the frames were then. */
+  private descent: { level: number; before: number; busy: number } | null = null;
   private closedFrom = Infinity;
   private closedUntil = 0;
   private closedFor = CLOSED;
@@ -146,14 +148,20 @@ export class LoadGovernor {
     if (this.judging && this.frames >= this.judging.at) {
       const { before, busy } = this.judging;
       this.judging = null;
+      // The first steps are small and cost the picture nothing: a descent is judged from where it began once it is two
+      // steps down (or at the bottom), not step by step, or a step of a few per cent would be undone before the next.
+      const origin = this.descent;
       // Quicker frames are one sign that a step bought something; frames come in whole refreshes, so a step that took a
       // tenth off the main thread's work may not show in them yet: the time the frame took to build is the other.
-      const helped = mean <= before * GAIN || (busy > 0 && busyMedian <= busy * GAIN);
-      if (slow && !helped && this.level > 0) {
-        // Nothing came of it: put it back, and leave this alone while the frames stay as they are.
+      const ref = origin ?? { level: this.level - 1, before, busy };
+      const helped = mean <= ref.before * GAIN || (ref.busy > 0 && busyMedian <= ref.busy * GAIN);
+      if (slow && !helped && this.level > 0 && (this.level - ref.level >= 2 || this.level >= this.max)) {
+        // Nothing came of it: put it all back, and leave this alone while the frames stay as they are.
         this.futile = mean;
-        return this.set(this.level - 1);
+        this.descent = null;
+        return this.set(ref.level);
       }
+      if (!slow) this.descent = null;
     }
     if (!slow) this.futile = null;
 
@@ -175,6 +183,7 @@ export class LoadGovernor {
       }
       if (this.slowWindows >= SLOW_WINDOWS && this.level < this.max) {
         this.slowWindows = 0;
+        this.descent ??= { level: this.level, before: mean, busy: busyMedian };
         this.judging = { before: mean, busy: busyMedian, at: this.frames + SETTLE };
         return this.set(this.level + 1);
       }
@@ -218,6 +227,7 @@ export class LoadGovernor {
     this.easyWindows = 0;
     this.settleUntil = this.frames + SETTLE;
     this.judging = null;
+    this.descent = null;
     this.trial = null;
     this.trials = 0;
     this.closedFrom = Infinity;
