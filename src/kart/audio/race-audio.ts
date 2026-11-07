@@ -56,7 +56,7 @@ import {
 import { type Order, ordersFor } from "./events";
 import { type KartSound, type MusicKind, type TrackTheme, SOUND_CUES, pieceFor } from "./kinds";
 import { type MusicRenderer, createMusicRenderer } from "./music/loader";
-import { type MusicTrack, MusicPlayer, beatTimes } from "./music/player";
+import { type MusicTrack, MusicPlayer, makeMusicTrack } from "./music/player";
 import { type PieceId, THEME_PIECES } from "./music/pieces";
 import { MUSIC_SAMPLE_RATE, type RenderedMusic } from "./music/render";
 import { type LocalKart, type Scene, falloff, hearThing, listenerAt, localOf } from "./scene";
@@ -76,7 +76,8 @@ export interface RaceAudioOptions {
 }
 
 /** What RaceAudio needs of a music player. */
-export type MusicPlayerLike = Pick<MusicPlayer, "play" | "switchTo" | "stop" | "duck" | "setVolume" | "setPaused" | "dispose" | "current">;
+export type MusicPlayerLike = Pick<MusicPlayer, "play" | "switchTo" | "stop" | "duck" | "setVolume" | "setPaused" | "dispose" | "current"> &
+  Partial<Pick<MusicPlayer, "setComet">>;
 
 export interface RaceAudio {
   /**
@@ -370,12 +371,7 @@ class RaceAudioImpl implements RaceAudio {
     this.makeTrack =
       options.makeTrack ??
       (steer
-        ? (r) => {
-            const buffer = steer.ctx.createBuffer(2, r.loopSamples, r.sampleRate);
-            buffer.copyToChannel(r.left as Float32Array<ArrayBuffer>, 0);
-            buffer.copyToChannel(r.right as Float32Array<ArrayBuffer>, 1);
-            return { id: r.id + (r.transpose ? "-final" : ""), buffer, beats: beatTimes(r.bars), duration: r.loopSamples / r.sampleRate };
-          }
+        ? (r) => makeMusicTrack(steer.ctx, r)
         : null);
     if (options.volumes) this.setVolumes(options.volumes);
   }
@@ -616,6 +612,8 @@ class RaceAudioImpl implements RaceAudio {
     this.ownMoments(view, scene);
     this.roulette(scene);
     this.finalLapFallback(view, scene);
+    // A local kart under a Comet: the music's glittering layer plays over the race.
+    this.player?.setComet?.(scene.locals.some((l) => (scene.karts.get(l.kart)?.comet ?? 0) > 0));
     this.lastPhase = view.phase;
   }
 

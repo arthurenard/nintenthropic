@@ -19,6 +19,49 @@ export interface MusicTrack {
   beats: Float32Array;
   /** The loop's length, seconds. */
   duration: number;
+  /** False for a one-shot (a jingle): it plays once and ends. */
+  loop?: boolean;
+  /** Seconds, from the start of the loop, at which each bar falls (the invincibility layer starts on one). */
+  barStarts?: Float32Array;
+  /** A race theme's invincibility layer: one bar that loops over the music while a comet burns. */
+  comet?: AudioBuffer;
+  /** The final-lap version's fanfare, played as the music lifts. */
+  stinger?: AudioBuffer;
+}
+
+/** The structural part of a rendered piece that a track is made from (see ./render.ts). */
+export interface RenderedLike {
+  id: string;
+  sampleRate: number;
+  left: Float32Array;
+  right: Float32Array;
+  loopSamples: number;
+  bars: readonly ScoreBar[];
+  transpose: number;
+  loop?: boolean;
+  comet?: { left: Float32Array; right: Float32Array; sampleRate: number };
+  stinger?: { left: Float32Array; right: Float32Array; sampleRate: number };
+}
+
+function bufferOf(ctx: BaseAudioContext, left: Float32Array, right: Float32Array, sampleRate: number): AudioBuffer {
+  const buffer = ctx.createBuffer(2, left.length, sampleRate);
+  buffer.copyToChannel(left as Float32Array<ArrayBuffer>, 0);
+  buffer.copyToChannel(right as Float32Array<ArrayBuffer>, 1);
+  return buffer;
+}
+
+/** A rendered piece as something the player can play: its buffer, its beats and bars, its comet layer and stinger. */
+export function makeMusicTrack(ctx: BaseAudioContext, r: RenderedLike): MusicTrack {
+  return {
+    id: r.id + (r.transpose ? "-final" : ""),
+    buffer: bufferOf(ctx, r.left, r.right, r.sampleRate),
+    beats: beatTimes(r.bars),
+    barStarts: Float32Array.from(r.bars.map((b) => b.start)),
+    duration: r.loopSamples / r.sampleRate,
+    loop: r.loop !== false,
+    ...(r.comet ? { comet: bufferOf(ctx, r.comet.left, r.comet.right, r.comet.sampleRate) } : {}),
+    ...(r.stinger ? { stinger: bufferOf(ctx, r.stinger.left, r.stinger.right, r.stinger.sampleRate) } : {}),
+  };
 }
 
 /** Every beat of a piece, seconds from the start of the loop. */
@@ -55,6 +98,8 @@ export class MusicPlayer {
   private readonly filter: BiquadFilterNode;
   private readonly master: GainNode;
   private voice: Voice | null = null;
+  private comet: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private cometWanted = false;
   private volume = 1;
   private paused = false;
   private disposed = false;
@@ -88,8 +133,62 @@ export class MusicPlayer {
   play(track: MusicTrack, fade = 0.8): void {
     if (this.disposed) return;
     const now = this.ctx.currentTime;
+    this.stopComet(now, 0.2);
     this.fadeOutCurrent(now, fade);
     this.voice = this.start(track, now, 0, fade);
+    if (this.cometWanted) this.startComet();
+  }
+
+  /**
+   * The invincibility layer: while a comet burns, a bar of glittering
+   * percussion and bell pings loops over the music, coming in on the next bar
+   * line and leaving in a breath. Nothing happens for a piece without one.
+   */
+  setComet(on: boolean): void {
+    if (this.disposed || this.cometWanted === on) return;
+    this.cometWanted = on;
+    if (on) this.startComet();
+    else this.stopComet(this.ctx.currentTime, 0.5);
+  }
+
+  private startComet(when?: number, offset?: number): void {
+    const v = this.voice;
+    if (!v || !v.track.comet || this.comet) return;
+    const track = v.track;
+    let at = when;
+    if (at === undefined) {
+      const bars = track.barStarts ?? track.beats;
+      const { wait } = nextBeat(bars, track.duration, this.position(), 0.03);
+      at = this.ctx.currentTime + wait;
+    }
+    void offset;
+    const source = this.ctx.createBufferSource();
+    source.buffer = track.comet!;
+    source.loop = true;
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0, Math.max(0, at - 0.001));
+    gain.gain.linearRampToValueAtTime(1, at + 0.35);
+    source.connect(gain).connect(this.duckGain);
+    source.start(at);
+    this.comet = { source, gain };
+  }
+
+  private stopComet(when: number, fade: number): void {
+    const c = this.comet;
+    if (!c) return;
+    this.comet = null;
+    try {
+      c.gain.gain.cancelScheduledValues(when);
+      c.gain.gain.setValueAtTime(c.gain.gain.value, when);
+      c.gain.gain.linearRampToValueAtTime(0, when + fade);
+      c.source.stop(when + fade + 0.05);
+    } catch {
+      // Already stopped.
+    }
+    c.source.onended = () => {
+      c.source.disconnect();
+      c.gain.disconnect();
+    };
   }
 
   /**
@@ -110,11 +209,34 @@ export class MusicPlayer {
     const offset = track.beats[Math.min(index, track.beats.length - 1)] ?? 0;
     this.fadeOutCurrent(when, fade);
     this.voice = this.start(track, when, offset, fade);
+    // The final-lap fanfare lands on the downbeat of the lifted music, which ducks a little under it.
+    if (track.stinger) {
+      const s = this.ctx.createBufferSource();
+      s.buffer = track.stinger;
+      const g = this.ctx.createGain();
+      g.gain.value = 0.9;
+      s.connect(g).connect(this.master);
+      s.start(when);
+      s.onended = () => {
+        s.disconnect();
+        g.disconnect();
+      };
+      const duck = this.duckGain.gain;
+      duck.setValueAtTime(1, Math.max(this.ctx.currentTime, when - 0.01));
+      duck.setTargetAtTime(0.55, when, 0.02);
+      duck.setTargetAtTime(1, when + 1.1, 0.35);
+    }
+    if (this.comet) {
+      // The layer carries on in the lifted tempo: the old bar leaves, the new one comes in with the music.
+      this.stopComet(when, 0.05);
+      this.startComet(when);
+    }
   }
 
   /** Fade out and stop. */
   stop(fade = 0.8): void {
     if (this.disposed) return;
+    this.stopComet(this.ctx.currentTime, Math.min(fade, 0.4));
     this.fadeOutCurrent(this.ctx.currentTime, fade);
     this.voice = null;
   }
@@ -167,7 +289,7 @@ export class MusicPlayer {
   private start(track: MusicTrack, when: number, offset: number, fade: number): Voice {
     const source = this.ctx.createBufferSource();
     source.buffer = track.buffer;
-    source.loop = true;
+    source.loop = track.loop !== false;
     const gain = this.ctx.createGain();
     gain.gain.setValueAtTime(0, Math.max(0, when - 0.001));
     // Equal-power rise: a quarter of a sine.

@@ -104,8 +104,8 @@ export function pingPong(input: Mono, sr: number, delaySamples: number, feedback
  * ../../../audio/dsp/space.ts, returned as a wet-only stereo pair that is
  * ``extra`` seconds longer than the input (its tail, to be folded).
  */
-export function reverb(send: Mono, sr: number, rng: Rng, t60: number, size: number, extra: number): [Mono, Mono] {
-  const [l, r] = room(send, sr, rng, { t60, size, damping: 0.35, predelay: 0.012, mix: 1, tail: extra });
+export function reverb(send: Mono, sr: number, rng: Rng, t60: number, size: number, extra: number, predelay = 0.012, damping = 0.35): [Mono, Mono] {
+  const [l, r] = room(send, sr, rng, { t60, size, damping, predelay, mix: 1, tail: extra });
   // ``room`` returns dry + wet; the dry is taken back out, leaving the wet alone.
   for (let i = 0; i < send.length; i++) {
     l[i]! -= send[i]!;
