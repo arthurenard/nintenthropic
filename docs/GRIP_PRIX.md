@@ -212,7 +212,7 @@ Everything is under `src/kart/`. Each part is built against
 | Input | `input/` + `src/tracking/` | `wheelControl(...)`, `keyboardControl()`, `gamepadControl()` → `DriverControl`; the wheel's picture (`WheelPreview`); every hand the tracker sees. |
 | Render | `render/` | `createRaceRenderer(canvas, hudRoot, options): RaceRenderer`: the world, the karts, split screen, chase cameras, effects, each viewport's HUD, the minimap. |
 | App | `app/`, `main.ts`, `/race.html` | The screens: start, you, choose your driver, the wheel check, how to drive, lobby, race, results, standings, podium. |
-| Sound | `src/audio/cues/` pack `kart`, `src/kart/audio/` | An engine for each weight (and Rivet's motor), in two layers pitched by its revs and roughened by how hard it works; other karts heard going by (stereo, Doppler); the tyres on the road and every surface; the drift's squeal and its sparks' fizz through the three levels; the wind at speed, in the air and in a slipstream; boosts, landings, items, hits, a place won or lost, the countdown and the finish; each track's place, very quietly — synthesised like every Nintenthropic sound ("Sound" below). |
+| Sound | `src/audio/cues/` pack `kart`, `src/kart/audio/` | An engine for each weight (and Rivet's motor), in three rev bands pitched by its revs, built from firings, an exhaust pipe, an intake and a harmonic series (wide and alive), roughened by how hard it works, with a bark at each gear change; other karts heard going by (stereo, Doppler, duller from behind); the tyres on the road and every surface, a scraped barrier and creaking suspension; the drift's squeal and its sparks' fizz through the three levels; the wind at speed, in the air and in a slipstream; boosts, landings, items, hits, a place won or lost, the countdown and the finish; each track's place, very quietly — synthesised like every Nintenthropic sound ("Sound" below). |
 
 ### Coordinates
 
@@ -923,30 +923,78 @@ nothing is sampled. `RaceAudio` (`race-audio.ts`) runs one race screen: it turns
 `KartView`), plays the track's place (`ambience.ts`) and the music (`music/`). Each loop is started when it is first
 heard and let go after half a second of silence, and is told only what has moved since it was last told.
 
-- **Engines.** Four, by the driver: a light kart's buzzing two-stroke, a middleweight's single-cylinder thumper, a
-  heavy kart's V-twin (two firings a cycle, unevenly spaced: its lope), and Rivet the robot's electric motor, with its
-  windings' and gears' whine. Each is made as an exhaust hears it: every firing a push of gas, a sharp edge and a puff
-  of noise ringing the pipe's resonances, no two firings quite alike in time or strength. Each is made twice, low and
-  high in its revs, and the two cross over, so neither is played far from where it was made (a loop sped up sounds
-  thin, slowed down dull). The revs run from 0.64 just moving to about 1.75 at top speed; a boost adds 8%, the air 20%
-  (the wheels spin free), a drift 3%; off the road they fall 5% and in a spin-out 25%. How hard the engine works is
-  the kart's acceleration and the climb under it: working, it sings higher, louder and rougher (its rasp, a loop
-  pulsing on its firings, comes up); lifting off or rolling downhill it softens, and lifting off hard after pulling at
-  high revs, the exhaust pops (at most once in 2.5 s; not the motor's). Near a standstill the idle takes over (the motor hums). A
-  boost's growl roars under it. Each note wavers a little, as an engine never holds one quite still.
+- **Engines.** Four, by the driver: a light kart's buzzing two-stroke, a middleweight's punchy twin (one stroke hard
+  and its partner half as hard), a heavy kart's V-twin (two firings a cycle, unevenly spaced: its lope), and Rivet the
+  robot's electric motor. None is an oscillator with a filter on it; each is built the way the machine makes its sound
+  (`src/audio/cues/kart-engines.ts`). Every firing is a push of gas (a pulse with a hard edge and a longer tail) that
+  thumps (its low-passed push, the sub a kart's chest hears), strikes the exhaust pipe (a waveguide closed at one end,
+  `pipeResonance` in `src/audio/dsp/resonators.ts`, ringing at its tube frequency and the odd multiples of it, then
+  coloured by three or four formants of the body and the muffler), throws a puff of turbulent gas out of the mouth, and
+  half a cycle later the intake draws and roars and the valves tick. Under it all runs the engine's periodic part as a
+  full harmonic series (every multiple of the note, shaped by the same resonances, swelling and dipping with the
+  firings' strength). No two firings are alike: their timing wanders, their strength spreads lognormally and breathes
+  over a few cycles, and now and then one is weak. The two ears share the firings (so the low end is one engine in the
+  middle and the sum to mono loses under 1.2 dB) but have their own pipe tuning, gas and intake noise and upper partials:
+  a twin-outlet exhaust, wide above a few hundred hertz. Each engine is made in three rev bands (low, middle and high,
+  made at revs 0.8, 1.2 and 1.8; `ENGINE_LAYERS`, `REV_LO`, `REV_MID`, `REV_HI`), so a loop is never played more than
+  about a quarter from where it was made, its pipe's resonances stay where an exhaust would have them instead of
+  sliding with the pitch, and the three cross over (`layerMix`, equal power: at most two sound at once). The motor is
+  additive (the rotor's poles, the windings' and gears' whine, the drive's switching shimmer, a second rotor a whisker
+  off beating at a different rate in each ear). The revs run from 0.64 just moving to about 1.75 at top speed; a boost
+  adds 8 %, the air 20 % (the wheels spin free), a drift 3 %; off the road they fall 5 % and in a spin-out 25 %. How
+  hard the engine works is the kart's acceleration and the climb under it: working, it sings higher, louder and
+  rougher (the load layer, `kart_engine_grit`: a burst of gas on every firing, an intake resonance in each ear, the
+  chain's and valves' rattle, a spit now and then, which is where "on throttle" brightens an engine); lifting off or
+  rolling downhill it softens, and lifting off hard after pulling at high revs, the exhaust crackles (`kart_backfire`:
+  seven to ten pops thinning out, each a thump, a crack and the pipe's ring, scattered across the field; at most once in
+  2.5 s; not the motor's). Near a standstill the idle takes over (a lumpy put-put through the same pipe, thirteen thumps
+  a second in a pattern that never repeats; the motor hums). A boost's growl (a deeper engine with flame in its throat)
+  roars under it. Each note wavers a little, as an engine never holds one quite still. The revs run through four gears
+  (`gearFactor`, a pure function of speed): ±6 % through a gear, a dip of about two semitones at each change, fading to
+  nothing standing still, at top speed and in the air; each change up under power barks (`kart_shift`: the clutch's
+  clunk, the revs cut, a rasp as the next gear takes the load; `gearIndex`, also a pure function of speed; not for the
+  motor, not coasting, at most one in 0.4 s). In the last second before Go the whole grid blips its throttle
+  (`gridFlare`: revs up by three quarters, the idle handing over to the engine, gone at Go).
 - **Other karts.** Every local kart's engine and the nearest others' (at most four others, six karts in all), heard
   from the nearest local kart: louder close (to nothing at 70 m, the engine's distance roll-off and air on top), the
   nearest standing out of the pack (each further one stepped down), to the side it lies on (a kart 3.5 m to one side
-  is half way over), and bent by Doppler from the two karts' velocities, at a third of the real speed of sound so that
-  a kart going by at 8 m/s more falls two or three semitones as it passes; one that goes by within 6 m at 3 m/s more
-  swishes past. Their drift squeals (the three nearest) and events are heard by distance. With more than one player
-  on the screen, each player's engine is quieter (two at 0.71 each, four at a half) and their everyday sounds a little
-  (four at 0.71); what must be heard is not.
-- **Ground and contact.** The tyres roll on the road (quiet, growing to top speed, gone in the air); grass, sand,
-  snow, ice and mud each have their own. A drift squeals, each spark level a tone and a half higher and louder, and
-  from the first spark its sparks fizz under it, a major third higher at each level; let go, the mini-turbo, a step
-  up for each level, and from the third a whoomph and a run of glass. Bumps, walls and landings by the sim's
-  strength (a hard landing thuds).
+  is half way over), duller when it is behind the listener (`earDistance`: the air's low-pass is given up to 40 % more
+  distance, as the kart's own body is in the way), and bent by Doppler from the two karts' velocities, at a third of the
+  real speed of sound so that a kart going by at 8 m/s more falls two or three semitones as it passes; one that goes by
+  within 6 m at 3 m/s more rushes past (`kart_pass`: a burst of air whose band falls as it goes, different in each ear,
+  with a soft pressure bump just after the front passes). The field is mixed, not rendered once for each view: a
+  source is heard from the nearest local kart, and each local kart's viewport has its own place in the stereo field (one
+  view centred, two left and right, four a 2 x 2), so with split screen the player in the left view hears their own kart
+  and everything near it on the left, and a kart that drives from one view's neighbourhood into another's moves across
+  the field. Their drift squeals (the three nearest) and events are heard by distance. With more than one player on the
+  screen, each player's engine is quieter (two at 0.71 each, four at a half) and their everyday sounds a little (four at
+  0.71); what must be heard is not.
+- **Ground and contact.** Every loop here is stereo: what is low and heavy is one thing in the middle, what is high and
+  grainy is made twice, once for each ear, and pulled towards the middle until the sum to mono loses under 2 dB (the
+  tests hold it). The tyres roll on the road (a rumble, the hum of the tread, which rises with speed as the loop plays
+  faster, the grain of the surface and the thump of a joint in the road, which comes faster with speed: quiet, growing to
+  top speed, gone in the air). Each surface has its own: grass swishes (a swish, a sizzle of blades, stalks snapping,
+  the turf's thrum), sand hisses and patters (a rush, 280 tiny grains a second, stones knocking), snow crunches (grains
+  with a squeak in some, the fump of the pack giving way), mud squelches (a slosh, wet slaps of the tread pulling out,
+  bubbles, a gurgle), ice hisses and creaks (fine crystals, glassy ticks, the lake groaning in a stick-slip glide).
+  A drift squeals as a real tyre does: noise through three narrow resonances (not harmonics of each other) whose
+  centres wander as the grip comes and goes, shuddering with stick and slip, over the scrub of the tread and a hiss,
+  each ear's tyre a hair apart in pitch. Its pitch follows the slip (the speed and how hard the wheel is turned), each
+  spark level is a tone and a half higher, and the step is a chirp: reaching a tier bends the squeal up a further 8 %
+  that settles over a fifth of a second. From the first spark its sparks fizz under it, a major third higher at each
+  level, with ringing glints; let go, the mini-turbo, a step up for each level, and from the third a whoomph and a run
+  of glass. A barrier scraped along is a loop that lasts as long as the contact (`kart_scrape`: plastic and metal
+  dragging with a flickering grip, the panel ringing at its own pitches, grit under it; the kart's `rub` flag (set by
+  the sim on every tick it is pressed on a barrier, a gentle rub included) keeps it going, held a tenth of a second
+  across skipped ticks, a hard hit adds its 0.35 s tail, its level follows the speed along the wall; another kart's scrape is still heard as a one-shot).
+  The chassis creaks at a hard bump or landing (`kart_creak`, the player's own kart: a short stick-slip groan, falling).
+  Bumps, walls and landings by the sim's strength (a hard landing thuds), and by the driver's weight (a light kart's
+  land and bump are pitched up to 14 % higher, a heavy kart's down to 16 % lower). The wind (`kart_wind`: a rush that
+  swells differently in each ear, a thin whistle, buffeting, a fine hiss) rises with speed and is loudest in the air;
+  in another kart's wake the torn air of the slipstream (`kart_draft`: a deep roar with fast buffeting, a ripping band
+  sweeping up and down, wide) rises as the draft charges. Not done: a kerb's rumble strip and water's splash (the sim
+  reports neither a kerb nor water under a kart; they need a kerb flag and a water ground from the tracks). Spectrograms
+  of old against new: `node tools/listen/cues.mjs --label after --shots DIR` (and `--label before --root <old checkout>`).
 - **Moments.** The countdown's beeps; a start boost; nitro; a boost pad; a slipstream's fling (a stretched band let
   go); off a ramp a spring's boing (lighter off a crest); a trick (a spiral of pings, a slide whistle's whee and a
   swirl that goes once round the head, the one stereo sound a kart makes); landing; item boxes and every item; hits
@@ -956,14 +1004,28 @@ heard and let go after half a second of silence, and is told only what has moved
   (kitchen), water lapping, a sea breeze and gulls (harbour), a dry wind and a hawk (canyon), a crowd, generators and
   the high striker's bell (funfair), a thin wind and creaking ice (snow), the mountain's rumble and lava (volcano), a
   spaceship's drone, the void's hiss and a radio's bleeps (space), surf, wind in the palms and tropical birds (palm).
+- **Rooms.** Every track has its own reverb (`space.ts`: an impulse response made once from the theme, with its own
+  length, decay by band, pre-delay and return level: a meadow's is 0.9 s and airy, a kitchen hard tile, the funfair a
+  big top, the glacier and the volcano caves of two seconds, space 2.6 s and dark). The arcade's engine takes it with
+  `setImpulse` (`RaceAudio.load` hands it over), and the one-shots that matter send into it (`reverb` in the cue
+  table: finish, cheer, laps, blasts, storms, the skyrocket's burst, hits, landings and boosts most, the countdown a
+  little). The loops (engines, tyres, wind) stay dry: they are the near, steady ground the rest rings against. The
+  countdown climbs the A major triad (one beep at A4, C#5, E5) and Go is the A above with the triad blooming over it
+  and the crowd a beat behind (the cheer has a 1.5 s gap, so a restart never stacks it); a drift boost at the second and
+  third charge has its own flame cue behind it (`kart_flame_short`, 1 s; `kart_flame_long`, 1.8 s), while the plain
+  whoosh stays as it was for pads, kicks and the start boost.
+- **The bus.** In a race the master gets a glue compressor (threshold −20 dB, 2.5:1, soft knee) and a −2.7 dB trim for
+  its make-up gain ahead of the limiter, whose ceiling is −2 dBFS (`enterRoom` sets them; `leaveRoom` hands back the
+  arcade's plain master and town room when the race audio is disposed). A new room is swapped in with the reverb return
+  faded out for 70 ms, so a ringing send never clicks.
 - **The mix.** Levels are dB at the bus, in `src/audio/cues/kart.ts` (its header has the ladder); the tests hold it
-  (`cues.test.ts`: every take under the bus's −1 dBFS ceiling, the kinds stepped, the engines' eight layers within
+  (`cues.test.ts`: every take under the bus's −1 dBFS ceiling, the kinds stepped, the engines' twelve layers within
   3 dB, the places under the engines). The music dips under the big moments: the finish (to 0.3 of its level), the
   final lap (0.45), being hit, a storm's bolt or a skyrocket bursting near (0.5), a blast or a fall (0.6), the start
   boost (0.65), the third drift boost (0.72), a nitro (0.78); a lighter dip never cuts a deeper one short. Measured
   over three laps of eight bots on Meadow Loop with one kart in view, the sliders where a new player finds them: the
-  whole mix −18.1 LUFS (true peak −2.4 dBTP), the effects −19.7 (−21.8 before the engines were remade) and the music
-  −22.9; each place alone −34 to −36.
+  whole mix −16.2 LUFS (true peak −3.7 dBTP; Glacier Pass −15.9 / −4.0, Volcano Rush −15.8 / −3.8, Kitchen Rally with
+  four views −15.5 / −3.3), the music −22.9; each place alone −34 to −36.
 - **What it costs.** Measured over a race of eight bots on Kitchen Rally with four views (Meadow Loop with one), against
   a bus that only counts, in Node on the M4 Max: the audio code takes 0.011 ms a frame with four views and 0.007 with one
   (CPU time, the least of three runs for each second of the race, medians of three alternating runs of the checkout
@@ -980,6 +1042,29 @@ heard and let go after half a second of silence, and is told only what has moved
   one-shot, with all their numbers) hash the same before and after. A render with `tools/listen` cannot show it
   bit for bit (the takes are made in workers, so two renders of one checkout differ); the loudness, range, peak,
   brightness and width of the Kitchen Rally render, before and after, are in `compare.mjs`.
+- **Re-inventing the motion sounds, measured.** `node tools/listen/cues.mjs --label <name> [--root <checkout>] [--takes 3]`
+  renders each cue of the pack in Node (no browser, nothing played), writes a stereo WAV of each and measures it:
+  centroid and rolloff, crest, amplitude-modulation depth (the spread of the level over 40 ms windows against its mean:
+  0 is a static drone), harmonic richness (how many multiples of the firing note stand within 30 dB of the strongest, to
+  8 kHz), stereo width (side over mid, dB) and the mono sum's loss. Means of three takes, the old recipes (the
+  checkout before this pass) against the new: the combustion engines' aliveness went from 0.03 to 0.07 (a drone) to 0.11
+  to 0.18; their harmonic richness from 14 to 25 lines to 25 to 40; their width from none (mono) to -9 to -5.6 dB, the mono sum
+  losing 0.5 to 1.1 dB; the drift's squeal and every ground loop from mono to -2.6 to -9 dB wide, losing at most 1.9 dB
+  summed; the combustion engines' crest 7 to 10 dB up to 11 to 14 (firings with edges, not a hum); the heavy engine's centroid from
+  300-360 to 350-500 Hz, the light one's from 860-980 to 1340-1750, the middleweight's from 490-610 to 740-1190. A
+  scripted lap of each weight (`solo-*` in `render.mjs`: idle, pulling away, cruising, lifting off, a climb, the air,
+  four drift tiers, release, grass, sand, a nitro, ice, mud, snow), a kart going by and a pack of eight come out at -18.7
+  to -19.9 LUFS with true peaks under -6.2 dBTP, and their stereo width from -17.7 dB to -6.4 to -8.3 dB (the pack from
+  -11.9 to -7.5). The whole mix stays at -16: three laps of eight bots on Meadow Loop -16.4 LUFS (-16.2 before; true peak
+  -3.4 dBTP), Glacier Pass -16.3 / -4.5, Volcano Rush -16.1 / -4.4, Kitchen Rally with four views -15.4 / -3.4. The
+  audio graph's cost (`renderMs` in the render: the audio thread's work for eight bots on four views, effects only, 50 s)
+  went from 1.97 s to 2.55 s (3.9 % to 5.1 % of one core, medians of three alternating runs; the stereo loops and the
+  third layer), the audio code's own time a frame is unchanged at about 0.03 ms. Spectrograms before and after are made
+  with `ffmpeg -i x.wav -lavfi showspectrumpic=s=1400x420:scale=log:fscale=log:stop=12000:start=40 x.png`. The pack's synthesis
+  cost (`node tools/listen/pack-time.mjs`, every cue's first take, best of five in Node) went from 250 to about 580 ms
+  (the engines are 12 of the 86 cues and about half of it; the harmonic series is one cycle's table laid through the
+  loop, and the filters are primed with the loop's own tail instead of run over two copies); in the page the takes are made in workers, so the wait before a race grows by
+  about a fifth of a second.
 - **Listening without hearing.** `node tools/listen/render.mjs --label <name>` renders scripted scenes (one kart of
   each weight through everything, karts going by, a pack of eight, the moments, each place alone) and real races of
   bots through the real engine and `RaceAudio` on an `OfflineAudioContext`, in a muted headless Chrome, writes them to
@@ -1573,7 +1658,7 @@ out when the lobby changes and not every frame: 1.0 style recalculation a frame 
 - Sound (Vitest, in Node, nothing played): every cue renders finite, unclipped and
   of its length, its takes different, a loop without a click at its seam
   (`src/audio/sounds.test.ts`); the kart pack's mix by kind, every take under the
-  bus's −1 dBFS ceiling, the engines' eight layers within 3 dB of each other,
+  bus's −1 dBFS ceiling, the engines' twelve layers within 3 dB of each other,
   brighter the lighter the kart and each on its note (`cues.test.ts`); RaceAudio
   against a recording bus (`race-audio.test.ts`): the sound of every event, an
   engine's revs, crossover, load and pops, a rival heard where it is at every step

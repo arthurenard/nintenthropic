@@ -219,6 +219,8 @@ export interface KartView {
   /** In the air (a hop, a jump), metres above the road. */
   hop: number;
   offroad: boolean;
+  /** Against a barrier this tick (a glancing rub or a hit), for the scrape's sound. */
+  rub?: boolean;
   /** What it is driving on. */
   surface: Surface | "road";
   /** Seconds since a trick began in the air (for its animation), 0 when none. */

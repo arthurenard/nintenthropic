@@ -119,6 +119,25 @@ export function passSwish(t: Take): Mono {
 
 // --- boosts ---------------------------------------------------------------------------------------------------
 
+/**
+ * The roar of a flame: a band of turbulent gas that flutters (a few dozen times a second, never evenly), a throatier
+ * band under it and a sprinkle of crackle, swelling in and dying away. A boost's fire; the longer the boost, the
+ * longer the take is stretched by its caller.
+ */
+function flameRoar(t: Take, seconds: number, attack: number): Mono {
+  const n = t.n(seconds);
+  const gas = bandNoise(n, t.sr, t.rng, 220, 2600, 2);
+  const flutter = lowpass(white(n, t.rng), t.sr, 38, 2);
+  normalize(flutter);
+  for (let i = 0; i < n; i++) gas[i]! *= 0.62 + 0.38 * flutter[i]!;
+  const throat = bandNoise(n, t.sr, t.rng, 70, 420, 2);
+  for (let i = 0; i < n; i++) gas[i]! += 0.8 * throat[i]! * (0.7 + 0.3 * flutter[i]!);
+  const crackle = highpass(white(n, t.rng), t.sr, 3500, 2);
+  for (let i = 0; i < n; i++) crackle[i]! *= t.rng.next() < 0.025 ? 1 : 0.02;
+  for (let i = 0; i < n; i++) gas[i]! += 0.35 * crackle[i]!;
+  return shapeBy(gas, (u) => smooth(u / attack) * Math.pow(Math.max(0, 1 - u), 1.2));
+}
+
 /** A boost's whoosh: a long rush of air, a low fwoom under it. */
 export function boostWhoosh(t: Take): Mono {
   const out = t.canvas(1.3);
@@ -126,6 +145,20 @@ export function boostWhoosh(t: Take): Mono {
   const fwoom = glide(t, 0.9, 85, 230, 0.7, 0.3, 0.1);
   shapeBy(fwoom, swell);
   t.put(out, fwoom, 0, 0.5);
+  return out;
+}
+
+/** The flame behind a hot drift boost (the second spark level): a second of fire. */
+export function flameShort(t: Take): Mono {
+  const out = t.canvas(1.0);
+  t.put(out, flameRoar(t, 1.0, 0.04), 0, 1);
+  return out;
+}
+
+/** The flame behind the hottest drift boost: nearly two seconds, throatier as it dies. */
+export function flameLong(t: Take): Mono {
+  const out = t.canvas(1.8);
+  t.put(out, flameRoar(t, 1.8, 0.06), 0, 1);
   return out;
 }
 

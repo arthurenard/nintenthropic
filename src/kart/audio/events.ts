@@ -9,6 +9,7 @@
  * (lap chimes, fanfares). A bot's final lap is its own business.
  */
 import type { RaceEvent } from "../contract";
+import { WEIGHT_RATE, engineFamily } from "./engines";
 import { type Scene, type Listener, falloff, hearKart, listenerAt, localOf } from "./scene";
 
 /** One sound to play. */
@@ -28,6 +29,9 @@ export interface Order {
   /** Pull the music down to ``depth`` of its level for ``hold`` seconds. */
   duck?: { depth: number; hold: number };
 }
+
+/** The countdown's beeps are one note played at the A major triad's three steps: 3, 2, 1. */
+const COUNT_RATE: Record<number, number> = { 3: 1, 2: 1.2599, 1: 1.4983 };
 
 /** A landing at least this hard (the sim's `land` strength, 0..1) thuds under its sound. */
 export const THUD_FROM = 0.25;
@@ -52,6 +56,12 @@ function order(cue: string, who: Listener, own: boolean, o: Partial<Order> & { r
   };
 }
 
+/** The pitch a kart's weight gives its landings and bumps: a light driver's come out higher and snappier, a heavy one's deeper. */
+function weightRate(scene: Scene, kart: number): number {
+  const character = scene.racers?.find((r) => r.id === kart)?.character;
+  return WEIGHT_RATE[engineFamily(character, kart)];
+}
+
 /** A hash of a hazard's name to a small pitch change, so each kind is a little different. */
 function hazardRate(kind: string): number {
   let h = 0;
@@ -65,7 +75,14 @@ const keep = (...orders: (Order | null)[]): Order[] => orders.filter((o): o is O
 export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
   switch (event.type) {
     case "countdown":
-      return [{ cue: event.n === 0 ? "kart_beep_high" : "kart_beep_low", volume: 1, pan: 0, distance: 0, rate: 1, delay: 0, priority: 3 }];
+      // Three notes up the A major triad (A4, C#5, E5) and Go on the A an octave above the first, with the crowd behind it.
+      if (event.n === 0) {
+        return [
+          { cue: "kart_beep_high", volume: 1, pan: 0, distance: 0, rate: 1, delay: 0, priority: 3 },
+          { cue: "kart_cheer", volume: 0.4, pan: 0, distance: 0, rate: 1.04, delay: 0.12, priority: 1 },
+        ];
+      }
+      return [{ cue: "kart_beep_low", volume: 1, pan: 0, distance: 0, rate: COUNT_RATE[event.n] ?? 1, delay: 0, priority: 3 }];
 
     case "pickup":
     case "box": {
@@ -139,6 +156,8 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
         case "drift":
           return keep(
             order("kart_mini_turbo", who, own, { radius: RADIUS.medium, rate: event.level >= 3 ? 1.22 : event.level >= 2 ? 1.12 : 1, volume: event.level >= 2 ? 1 : 0.8 }),
+            // The flame behind it, longer the hotter the charge.
+            event.level >= 2 ? order(event.level >= 3 ? "kart_flame_long" : "kart_flame_short", who, own, { radius: RADIUS.small, volume: event.level >= 3 ? 0.9 : 0.8, delay: 0.03 }) : null,
             event.level >= 3 ? order("kart_super_turbo", who, own, { radius: RADIUS.medium, ...(own ? { duck: { depth: 0.72, hold: 0.45 } } : {}) }) : null,
           );
         // Flung out of another kart's slipstream: a stretched band let go.
@@ -171,7 +190,13 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
       else who = null;
       if (!who) return [];
       const s = Math.min(1, Math.max(0, event.strength));
-      return keep(order("kart_bump", who, !!own, { radius: RADIUS.medium, volume: 0.35 + 0.65 * s, rate: 1.12 - 0.25 * s }));
+      const mine = own?.kart ?? event.a;
+      const w = weightRate(scene, mine);
+      return keep(
+        order("kart_bump", who, !!own, { radius: RADIUS.medium, volume: 0.35 + 0.65 * s, rate: (1.12 - 0.25 * s) * w }),
+        // The chassis groans at a hard knock (the player's own kart only).
+        own && s >= 0.35 ? order("kart_creak", who, true, { volume: 0.3 + 0.6 * s, rate: w, delay: 0.04, priority: 1 }) : null,
+      );
     }
 
     case "wall": {
@@ -181,7 +206,8 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
       const s = Math.min(1, Math.max(0, event.strength));
       return keep(
         s >= 0.3 ? order("kart_wall_thud", who, own, { radius: RADIUS.small, volume: 0.3 + 0.7 * s, rate: 1.15 - 0.3 * s }) : null,
-        s < 0.7 ? order("kart_wall_scrape", who, own, { radius: RADIUS.small, volume: 0.5 + 0.4 * (1 - s), priority: own ? 1 : 0 }) : null,
+        // The player's own scrape is a loop that lasts as long as the contact does (RaceAudio); another kart's is heard as a scrape.
+        s < 0.7 && !own ? order("kart_wall_scrape", who, own, { radius: RADIUS.small, volume: 0.5 + 0.4 * (1 - s), priority: 0 }) : null,
       );
     }
 
@@ -231,9 +257,11 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
       if (!who) return [];
       const own = !!localOf(scene, event.kart);
       const hard = event.strength ?? 0;
+      const w = weightRate(scene, event.kart);
       return keep(
-        order("kart_land", who, own, { radius: RADIUS.small }),
-        hard >= THUD_FROM ? order("kart_thud", who, own, { radius: RADIUS.small, volume: 0.4 + 0.6 * hard, rate: 1.06 - 0.12 * hard }) : null,
+        order("kart_land", who, own, { radius: RADIUS.small, rate: w }),
+        hard >= THUD_FROM ? order("kart_thud", who, own, { radius: RADIUS.small, volume: 0.4 + 0.6 * hard, rate: (1.06 - 0.12 * hard) * w }) : null,
+        own && hard >= 0.3 ? order("kart_creak", who, true, { volume: 0.35 + 0.55 * hard, rate: w, delay: 0.06, priority: 1 }) : null,
         event.boost ? order("kart_boost_whoosh", who, own, { radius: RADIUS.small, volume: 0.55, delay: 0.04 }) : null,
       );
     }

@@ -22,23 +22,24 @@ export type EngineFamily = "light" | "middle" | "heavy" | "electric";
 export const ENGINE_FAMILIES = ["light", "middle", "heavy", "electric"] as const satisfies readonly EngineFamily[];
 
 /**
- * Each engine is recorded twice: low in its revs and high. A loop pitched
- * far from where it was made sounds thin sped up and dull slowed down, so
- * each layer covers half the range and the two cross over in the middle.
+ * Each engine is made three times: low in its revs, in the middle and high. A loop pitched far from where it was made
+ * has its pipe's resonances dragged with it (thin sped up, dull slowed down), so each band covers a third of the range,
+ * is never played more than about a quarter from where it was made, and the three cross over.
  */
-export const ENGINE_LAYERS: Record<EngineFamily, { lo: string; hi: string }> = {
-  light: { lo: "kart_engine_light_lo", hi: "kart_engine_light_hi" },
-  middle: { lo: "kart_engine_middle_lo", hi: "kart_engine_middle_hi" },
-  heavy: { lo: "kart_engine_heavy_lo", hi: "kart_engine_heavy_hi" },
-  electric: { lo: "kart_engine_electric_lo", hi: "kart_engine_electric_hi" },
+export const ENGINE_LAYERS: Record<EngineFamily, { lo: string; mid: string; hi: string }> = {
+  light: { lo: "kart_engine_light_lo", mid: "kart_engine_light_mid", hi: "kart_engine_light_hi" },
+  middle: { lo: "kart_engine_middle_lo", mid: "kart_engine_middle_mid", hi: "kart_engine_middle_hi" },
+  heavy: { lo: "kart_engine_heavy_lo", mid: "kart_engine_heavy_mid", hi: "kart_engine_heavy_hi" },
+  electric: { lo: "kart_engine_electric_lo", mid: "kart_engine_electric_mid", hi: "kart_engine_electric_hi" },
 };
 
 /** Every engine layer's cue. */
-export const ENGINE_CUES = ENGINE_FAMILIES.flatMap((f) => [ENGINE_LAYERS[f].lo, ENGINE_LAYERS[f].hi]);
+export const ENGINE_CUES = ENGINE_FAMILIES.flatMap((f) => [ENGINE_LAYERS[f].lo, ENGINE_LAYERS[f].mid, ENGINE_LAYERS[f].hi]);
 
-/** The revs (the scale `engineTarget` gives) at which the low and the high layers were recorded: each plays at revs / this. */
-export const REV_LO = 0.9;
-export const REV_HI = 1.6;
+/** The revs (the scale `engineTarget` gives) at which the low, middle and high layers were made: each plays at revs / this. */
+export const REV_LO = 0.8;
+export const REV_MID = 1.2;
+export const REV_HI = 1.8;
 
 /**
  * Each engine's note at revs 1, Hz: the recipes in src/audio/cues/kart-motion.ts are made on these (the tests hold the
@@ -70,6 +71,9 @@ export function engineFamily(character: string | undefined, index: number): Engi
   return ENGINE_FAMILIES[((index % 4) + 4) % 4]!;
 }
 
+/** How a kart's weight pitches its landings and bumps: a light kart's land higher and snappier, a heavy one's deeper. */
+export const WEIGHT_RATE: Record<EngineFamily, number> = { light: 1.14, middle: 1, heavy: 0.84, electric: 0.88 };
+
 /** A little pitch offset per local player, so two karts with one engine are still two karts. */
 export const PLAYER_PITCH = [1, 0.94, 1.065, 0.89] as const;
 
@@ -79,6 +83,44 @@ export const smoothstep = (a: number, b: number, x: number): number => {
   return u * u * (3 - 2 * u);
 };
 const lerp = (a: number, b: number, u: number): number => a + (b - a) * u;
+
+/**
+ * The grid revs its engines in the last second before Go: up to a roar as the lights go green and gone the moment the
+ * race starts (the karts' own pulling away takes over). 0..1, a pure function of the countdown.
+ */
+export function gridFlare(view: { phase: string; countdown: number }): number {
+  if (view.phase !== "countdown") return 0;
+  const c = view.countdown;
+  if (!(c > 0) || c > 1.1) return 0;
+  // Rises from 1.1 s to the peak at 0.15 s, then a touch of let-off into Go.
+  const up = smoothstep(1.1, 0.3, c);
+  return up * (c < 0.15 ? 0.6 + 4 * c : 1);
+}
+
+const GEAR_EDGES = [0.12, 0.26, 0.42, 0.6, 0.78] as const;
+
+/** Which of the four gears a speed (a fraction of top) is in, 0 (first, and a standstill) to 3; a change is a step in this. */
+export function gearIndex(f: number): number {
+  let g = 0;
+  while (g < 3 && f >= GEAR_EDGES[g + 1]!) g++;
+  return f < GEAR_EDGES[0] ? 0 : g;
+}
+
+/**
+ * Four gears in the revs: through each the engine climbs, and at the top of it the next gear takes the load and the
+ * revs fall back. A pure function of the speed (as a fraction of top), so the same on every device and every
+ * snapshot. The factor is 1 on average, ±6 % through a gear (a dip of about two semitones at a change); it fades to
+ * nothing standing still, at top speed and in the air.
+ */
+export function gearFactor(f: number): number {
+  if (f <= GEAR_EDGES[0] || f >= GEAR_EDGES[GEAR_EDGES.length - 1]!) return 1;
+  let g = 0;
+  while (g < GEAR_EDGES.length - 2 && f >= GEAR_EDGES[g + 1]!) g++;
+  const u = (f - GEAR_EDGES[g]!) / (GEAR_EDGES[g + 1]! - GEAR_EDGES[g]!);
+  // The swing fades in over the first gear's start and out over the last one's end, so both ends join the plain curve.
+  const swing = smoothstep(0.12, 0.2, f) * (1 - smoothstep(0.68, 0.78, f));
+  return 1 + 0.06 * (2 * u - 1) * swing;
+}
 
 export interface EngineTarget {
   /** How fast the engine turns: about 0.64 just moving, 1.75 at top speed, up to ~2.3 boosting in the air. A layer plays at revs / its own. */
@@ -103,35 +145,41 @@ export interface EngineTarget {
  * louder and rougher; lifting off or rolling downhill it drops back, quieter
  * and smoother.
  */
-export function engineTarget(k: KartView, work = 0): EngineTarget {
+export function engineTarget(k: KartView, work = 0, flare = 0): EngineTarget {
   const f = k.speed / TOP_SPEED;
   const forward = Math.max(0, f);
   const w = clamp(work, -1, 1);
   const air = smoothstep(0.25, 0.9, k.hop);
   let revs = f >= 0 ? 0.64 + 1.1 * Math.pow(Math.min(forward, 1.6), 0.9) : 0.64 + 0.5 * Math.min(1, -f * 3);
+  revs *= 1 + (gearFactor(Math.abs(f)) - 1) * (1 - air);
   if (k.boost > 0) revs *= 1.08;
   if (k.drift !== 0) revs *= 1.03;
   if (k.offroad) revs *= 0.95;
   revs *= 1 + 0.2 * air;
   if (k.spin > 0) revs *= 0.75;
   revs *= 1 + (w > 0 ? 0.05 : 0.035) * w;
+  // The start: a standing kart on the grid blips its throttle (flare is 0 everywhere else).
+  const idleRev = flare * (1 - smoothstep(0.5, 3, Math.abs(k.speed)));
+  revs *= 1 + 0.75 * idleRev;
   const carried = k.rescue > 0;
   const speed = Math.abs(k.speed);
   const alive = carried ? 0 : 1;
   const pulling = Math.max(0, w);
   const lifting = Math.max(0, -w);
-  const engine =
+  const engine = Math.max(
+    0.8 * alive * idleRev,
     alive *
     (k.spin > 0 ? 0.55 : 1) *
     smoothstep(0.2, 2.5, speed) *
     (0.6 + 0.4 * Math.min(1, forward)) *
     (1 + 0.15 * pulling - 0.28 * lifting) *
-    (1 + 0.08 * air);
-  const grit =
+    (1 + 0.08 * air));
+  const grit = Math.max(
+    0.55 * alive * idleRev,
     alive *
     smoothstep(0.5, 4, speed) *
-    clamp(0.22 + 0.7 * pulling - 0.2 * lifting + (k.boost > 0 ? 0.35 : 0) + (k.offroad ? 0.25 : 0) + (k.drift !== 0 ? 0.12 : 0) - 0.4 * air, 0, 1);
-  const idle = alive * (1 - smoothstep(0.4, 4.5, speed)) * (k.spin > 0 ? 0.6 : 1);
+    clamp(0.22 + 0.7 * pulling - 0.2 * lifting + (k.boost > 0 ? 0.35 : 0) + (k.offroad ? 0.25 : 0) + (k.drift !== 0 ? 0.12 : 0) - 0.4 * air, 0, 1));
+  const idle = alive * (1 - smoothstep(0.4, 4.5, speed)) * (k.spin > 0 ? 0.6 : 1) * (1 - 0.7 * idleRev);
   const growl = alive * (k.boost > 0 ? 1 : 0);
   return { revs, engine, grit, idle, growl };
 }
@@ -145,10 +193,11 @@ export function engineWork(acceleration: number, slope = 0): number {
   return clamp((acceleration + 9.8 * 2.5 * slope) / 8, -1, 1);
 }
 
-/** The share of each layer at these revs: an equal-power crossover from the low layer to the high one. */
-export function layerMix(revs: number): { lo: number; hi: number } {
-  const u = smoothstep(1.08, 1.42, revs);
-  return { lo: Math.cos(0.5 * Math.PI * u), hi: Math.sin(0.5 * Math.PI * u) };
+/** The share of each layer at these revs: equal-power crossovers from the low layer to the middle one (about 1.0) and on to the high one (about 1.5). */
+export function layerMix(revs: number): { lo: number; mid: number; hi: number } {
+  const a = 0.5 * Math.PI * smoothstep(0.92, 1.12, revs);
+  const b = 0.5 * Math.PI * smoothstep(1.4, 1.62, revs);
+  return { lo: Math.cos(a), mid: Math.sin(a) * Math.cos(b), hi: Math.sin(b) };
 }
 
 /** The rasp's level for an engine, as a share of the engine's own (an electric motor whirs, it does not rasp). */
@@ -194,8 +243,18 @@ export function windTarget(k: KartView): WindTarget {
   const speed = Math.abs(k.speed);
   const air = smoothstep(0.5, 2.2, k.hop);
   const draft = clamp(k.draft ?? 0, 0, 1);
-  const volume = Math.min(1, smoothstep(15, 30, speed) * 0.6 + air * 0.55 + draft * 0.35 + (k.boost > 0 ? 0.15 : 0));
+  const volume = Math.min(1, smoothstep(15, 30, speed) * 0.6 + air * 0.55 + draft * 0.15 + (k.boost > 0 ? 0.15 : 0));
   return { rate: 0.75 + 0.4 * clamp(speed / TOP_SPEED, 0, 1.3) + 0.12 * air + 0.15 * draft, volume };
+}
+
+/**
+ * Sitting in another kart's wake: the torn air of the slipstream, rising as the draft charges toward its fling. None
+ * outside a wake, in the air, or carried by the drone.
+ */
+export function draftTarget(k: KartView): WindTarget {
+  const draft = clamp(k.draft ?? 0, 0, 1);
+  const volume = k.rescue > 0 || k.hop > 0.5 ? 0 : smoothstep(0.04, 0.5, draft) * (0.55 + 0.45 * smoothstep(10, 28, Math.abs(k.speed)));
+  return { rate: 0.8 + 0.4 * draft, volume };
 }
 
 export interface DriftTarget {
@@ -218,7 +277,8 @@ export function driftTarget(k: KartView): DriftTarget {
   const level = clamp(Math.round(k.driftLevel), 0, 3);
   return {
     on,
-    rate: (0.86 + 0.26 * clamp(Math.abs(k.speed) / TOP_SPEED, 0, 1)) * Math.pow(SQUEAL_STEP, level),
+    // The slip: how hard the wheel is turned at speed. Pitch climbs with the speed and the lock, and a step with each spark.
+    rate: (0.84 + 0.22 * clamp(Math.abs(k.speed) / TOP_SPEED, 0, 1) + 0.1 * clamp(Math.abs(k.steer), 0, 1)) * Math.pow(SQUEAL_STEP, level),
     volume: Math.min(1, 0.45 + 0.15 * level + 0.12 * Math.abs(k.steer)),
     sparks: on ? SPARK_LEVEL[level]! : 0,
     sparkRate: SPARK_RATE[level]!,
@@ -259,6 +319,15 @@ export function surfaceTarget(k: KartView): SurfaceTarget {
     rate: road ? 0.7 + 0.55 * clamp(speed / TOP_SPEED, 0, 1.25) : 0.8 + 0.45 * clamp(speed / TOP_SPEED, 0, 1),
     volume: surface && grounded ? (road ? 0.75 * smoothstep(2, 24, speed) : smoothstep(1.5, 14, speed)) : 0,
   };
+}
+
+/**
+ * How a rival's air should darken: sounds from behind the listener are heard a little further than they are (the head
+ * and the kart's own body are in the way). ``ahead`` is the rival's position along the listener's heading over the
+ * distance (1 dead ahead, -1 dead behind); the result is the distance to give the air's low-pass.
+ */
+export function earDistance(distance: number, ahead: number): number {
+  return distance * (1 + 0.4 * Math.max(0, -ahead));
 }
 
 /** The step of an exponential ease toward a target over ``dt``, with time constant ``tau``: smooths the jumps between a network's snapshots. */

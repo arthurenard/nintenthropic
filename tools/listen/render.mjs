@@ -33,6 +33,7 @@ export const JOBS = [
   { name: "race-glacier", spec: { race: "glacier-pass", seconds: 60, views: [3] } },
   { name: "race-volcano", spec: { race: "volcano-rush", seconds: 60, views: [6] } },
   { name: "race-kitchen-4", spec: { race: "kitchen-rally", seconds: 50, views: [0, 1, 2, 3] } },
+  { name: "race-kitchen-4-fx", spec: { race: "kitchen-rally", seconds: 50, views: [0, 1, 2, 3], music: false } },
   ...["meadow", "kitchen", "harbour", "canyon", "funfair", "snow", "volcano", "space", "palm"].map((theme) => ({ name: `place-${theme}`, spec: { scene: `place-${theme}`, music: false } })),
 ];
 
@@ -114,6 +115,8 @@ async function main() {
       const entry = {
         ...a,
         frameMs: { mean: +r.frameMs.mean.toFixed(3), p95: +r.frameMs.p95.toFixed(3), worst: +r.frameMs.worst.toFixed(2) },
+        renderMs: Math.round(r.renderMs),
+        realtime: +(r.seconds * 1000 / r.renderMs).toFixed(1),
         fired: r.fired,
         most: r.most,
         events: r.events,
@@ -128,7 +131,7 @@ async function main() {
       writeFileSync(summaryFile, JSON.stringify(summary, null, 1));
       console.log(
         `${job.name.padEnd(18)} ${a.seconds}s  ${a.lufs} LUFS  short max ${a.shortMax}  LRA ${a.lra}  TP ${a.truePeak} dBTP  centroid ${a.centroid} Hz  ` +
-          `width ${a.width} dB  frame ${entry.frameMs.mean} ms (p95 ${entry.frameMs.p95})  fired ${r.fired}  ${((Date.now() - t0) / 1000).toFixed(0)} s`,
+          `width ${a.width} dB  frame ${entry.frameMs.mean} ms (p95 ${entry.frameMs.p95})  fired ${r.fired}  graph ${Math.round(r.renderMs)} ms (${(r.seconds * 1000 / r.renderMs).toFixed(0)}x real time)  ${((Date.now() - t0) / 1000).toFixed(0)} s`,
       );
     }
   } finally {

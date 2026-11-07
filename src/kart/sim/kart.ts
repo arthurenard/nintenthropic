@@ -96,6 +96,7 @@ export function newKart(racer: RacerSetup, place: number, geo: TrackGeometry): K
     s,
     offset,
     offroad: false,
+    rub: false,
     progress: -behind,
     pad: 0,
     ground: "road",
@@ -348,6 +349,7 @@ export function placeOnTrack(w: World, k: KartState, emit: Emit, report: boolean
       half = p.sample.width / 2;
     }
   }
+  k.rub = false;
   let offset = p.offset;
   const side = offset > 0 ? 1 : -1;
   const open = isOpen(terrain, p.s, side);
@@ -362,6 +364,7 @@ export function placeOnTrack(w: World, k: KartState, emit: Emit, report: boolean
     offset = side * limit;
     const into = k.vx * rx + k.vz * rz;
     if (into > 0) {
+      k.rub = true;
       k.vx -= into * rx;
       k.vz -= into * rz;
       if (into >= W.minHit) {

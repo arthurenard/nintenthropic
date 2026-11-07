@@ -62,11 +62,18 @@ export function beepLow(t: Take): Mono {
   return out;
 }
 
-/** Go: the same beep an octave up, held. */
+/** Go: the same beep an octave up, held, and the A major triad blooming over it with a rising rush of air. */
 export function beepHigh(t: Take): Mono {
-  const out = t.canvas(0.85);
+  const out = t.canvas(1.1);
   note(out, t, beepVoice(t), 0, 81, 0.6, 0.95);
-  note(out, t, GLOCK, 0, 93, 0.3, 0.7, 0.35);
+  // The triad (C#6, E6) and the octave above, in glass.
+  note(out, t, GLOCK, 0, 93, 0.4, 0.7, 0.35);
+  note(out, t, GLOCK, 0.02, 85, 0.5, 0.65, 0.28);
+  note(out, t, GLOCK, 0.04, 88, 0.5, 0.65, 0.26);
+  note(out, t, VIBES, 0.03, 73, 0.7, 0.6, 0.3);
+  const air = bandNoise(t.n(0.5), t.sr, t.rng, 900, 7000, 2);
+  shapeBy(air, (u) => smooth(u / 0.25) * smooth((1 - u) / 0.6));
+  t.put(out, air, 0, 0.12);
   breath(out, t);
   return out;
 }
