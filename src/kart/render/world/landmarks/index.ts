@@ -31,10 +31,10 @@ export const HAZARDS: Readonly<Record<string, HazardSpec>> = Object.assign({}, .
 
 /** The names each theme's tracks may use, for the gallery and the dev tracks. */
 export const THEME_LANDMARKS: Readonly<Record<string, readonly string[]>> = {
-  meadow: ["windmill", "barn", "pond", "hay-bales", "hot-air-balloon", "sheep", "flower-field"],
+  meadow: ["windmill", "barn", "barn-run", "pond", "hay-bales", "hot-air-balloon", "sheep", "flower-field"],
   canyon: ["mesa", "rock-arch", "cactus-grove", "water-tower", "mine-cart"],
-  harbour: ["crane", "lighthouse", "ship", "containers", "warehouse", "buoy"],
-  kitchen: ["teapot", "fruit-bowl", "toaster", "grater", "salt-shaker", "pepper-mill", "cookbook", "cereal-box", "mug", "fork-arch", "spoon-arch", "sink", "window", "wall-clock"],
+  harbour: ["crane", "lighthouse", "ship", "ship-deck", "containers", "warehouse", "buoy"],
+  kitchen: ["teapot", "fruit-bowl", "toaster", "grater", "drawer", "salt-shaker", "pepper-mill", "cookbook", "cereal-box", "mug", "fork-arch", "spoon-arch", "sink", "window", "wall-clock"],
   snow: ["igloo", "cabin", "snowman", "ice-arch", "ice-cave", "pine-snow", "gondola", "ski-jump"],
   volcano: ["volcano", "lava-fall", "basalt-columns", "stone-bridge", "obsidian-arch", "hot-spring"],
   funfair: ["ferris-wheel", "carousel", "big-top", "rollercoaster", "entrance-arch", "food-stall", "balloon-stand", "hook-a-duck", "helter-skelter", "fireworks"],

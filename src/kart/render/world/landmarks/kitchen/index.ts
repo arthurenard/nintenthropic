@@ -17,6 +17,7 @@ import { mug, teapot } from "./crockery";
 import { fruitBowl } from "./fruit";
 import { orange, pea, teacup } from "./hazards";
 import { cerealBox, cookbook, pepperMill, saltShaker } from "./shelf";
+import { drawer } from "./drawer";
 import { forkArch, grater, spoonArch } from "./spans";
 import { wallClock, windowWall } from "./wall";
 
@@ -25,6 +26,7 @@ export const LANDMARKS: Record<string, LandmarkSpec> = {
   "fruit-bowl": fruitBowl,
   toaster,
   grater,
+  drawer,
   "salt-shaker": saltShaker,
   "pepper-mill": pepperMill,
   cookbook,

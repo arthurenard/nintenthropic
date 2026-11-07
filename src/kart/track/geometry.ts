@@ -558,6 +558,8 @@ const ROUTE_STICKY = 1.5;
 const ROUTE_LEAD = 18;
 /** Metres the branch follows the main road's own line for before it turns off (and before it rejoins). */
 const ROUTE_HUG = 14;
+/** ...and the same, shorter, where it rejoins: it comes in at an angle (the merge is a flare), and a longer hug would make it double back. */
+const ROUTE_HUG_END = 6;
 
 const smooth01 = (t: number): number => {
   const c = Math.min(1, Math.max(0, t));
@@ -647,7 +649,7 @@ export class RouteRoad extends TrackGeometry {
       point(a),
       point(main.at(from + ROUTE_HUG)),
       ...waypoints,
-      point(main.at(to - ROUTE_HUG)),
+      point(main.at(to - ROUTE_HUG_END)),
       point(b),
       point(main.at(to + ROUTE_LEAD)),
     ];
