@@ -32,13 +32,19 @@ export const TUNING = {
     /** A boost raises the top speed by this factor and makes the kart pull much harder. */
     boostSpeed: 1.35,
     boostTau: 0.45,
-    brakeDecel: 30,
-    /** Slower than this is a standstill for the reverse. */
-    standstill: 0.5,
-    /** Brake held at a standstill this long and the kart reverses. */
-    reverseDelay: 0.3,
+    /**
+     * The brake is a pull toward a target speed, as the throttle is: the kart eases toward `throttle x top - reverseTop x
+     * brake` with the rate constant `brakeRate` (1/s), so a held brake slows smoothly, never stops dead, and flows on
+     * into backing up. Brake and throttle together settle between (top - reverseTop); the brake alone, at -reverseTop.
+     */
+    brakeRate: 1.1,
+    /** The pedal comes on: the pull starts at `brakeFloor` of its rate and builds with this time constant (s) as the brake is held, so a flicker of open hands barely costs speed. */
+    brakeRamp: 0.5,
+    brakeFloor: 0.2,
+    /** Letting go of the brake, the pedal's build-up fades this many times faster than it came. */
+    brakeFade: 3,
+    /** The most a backing-up kart goes, m/s. */
     reverseTop: 7,
-    reverseTau: 0.6,
     /** Nothing goes faster than this, whatever bumps, slides and hills do: a boosted top speed and a little over. */
     maxSpeed: 36,
     /** A spinning kart sheds speed with this rate constant (1/s). */

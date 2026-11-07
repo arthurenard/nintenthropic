@@ -156,24 +156,82 @@ describe("barriers", () => {
 });
 
 describe("braking", () => {
-  it("stops the kart, and held at a standstill for 0.3 s reverses it, up to 7 m/s", () => {
+  /** The speed each tick (after it) of `ticks` ticks of this input, from top speed on the straight. */
+  function curve(drive: () => ReturnType<typeof input>, ticks: number): number[] {
     const r = solo();
-    run(r, 180, () => input({ throttle: 1 }));
+    run(r, 360, () => input({ throttle: 1 }));
     const speeds: number[] = [];
-    for (let i = 0; i < 240; i++) {
-      run(r, 1, () => input({ brake: 1 }));
+    for (let i = 0; i < ticks; i++) {
+      run(r, 1, drive);
       speeds.push(view(r).speed);
     }
-    const stopped = speeds.findIndex((v) => v <= 0);
-    // 30 m/s^2: about 21 m/s gone in 0.7 s.
-    expect(stopped).toBeGreaterThan(30);
-    expect(stopped).toBeLessThan(60);
-    const reversing = speeds.findIndex((v, i) => i > stopped && v < -0.5);
-    // Held for 0.3 s (18 ticks) before it backs up.
-    expect(reversing - stopped).toBeGreaterThanOrEqual(15);
-    expect(reversing - stopped).toBeLessThanOrEqual(24);
-    expect(Math.min(...speeds)).toBeLessThan(-6.5);
-    expect(Math.min(...speeds)).toBeGreaterThanOrEqual(-7.001);
+    return speeds;
+  }
+
+  it("eases on as the brake is held, as a pedal does: a little at first, never most of the speed at once", () => {
+    const v = curve(() => input({ brake: 1 }), 150);
+    const top = 24;
+    // After 0.2 s only a little is gone, 0.5 s a quarter, 1 s about 60%.
+    expect(v[11]!).toBeGreaterThan(21.2);
+    expect(v[29]!).toBeGreaterThan(15.5);
+    expect(v[29]!).toBeLessThan(19);
+    expect(v[59]!).toBeGreaterThan(5);
+    expect(v[59]!).toBeLessThan(11);
+    // No tick sheds more than 0.7 m/s: the old brake took 0.5 every tick from the first.
+    for (let i = 1; i < v.length; i++) expect(v[i - 1]! - v[i]!).toBeLessThan(0.7);
+    expect(v[0]!).toBeGreaterThan(top - 0.4);
+  });
+
+  it("takes about 1.5 to 2 s from top speed to a crawl, then backs up with no stop at zero, up to 7 m/s", () => {
+    const v = curve(() => input({ brake: 1 }), 360);
+    const crawl = v.findIndex((s) => s < 2);
+    expect(crawl).toBeGreaterThan(80);
+    expect(crawl).toBeLessThan(125);
+    const zero = v.findIndex((s) => s <= 0);
+    const reversing = v.findIndex((s) => s < -0.5);
+    // It flows through zero: the speed at the crawl keeps falling at much the same rate, not held for a moment.
+    expect(reversing - zero).toBeLessThan(12);
+    expect(v[crawl]! - v[crawl + 6]!).toBeGreaterThan(0.5);
+    expect(Math.min(...v)).toBeLessThan(-6.5);
+    expect(Math.min(...v)).toBeGreaterThanOrEqual(-7.001);
+  });
+
+  it("is hardly felt in a flicker of open hands", () => {
+    let n = 0;
+    // Brake for 0.15 s, then let go and drive on.
+    const v = curve(() => (n++ < 9 ? input({ brake: 1 }) : input({ throttle: 1 })), 30);
+    expect(v[v.length - 1]!).toBeGreaterThan(22.3);
+    n = 0;
+    // The same, braking three times in a second.
+    const w = curve(() => (n++ % 20 < 9 ? input({ brake: 1 }) : input({ throttle: 1 })), 60);
+    expect(w[w.length - 1]!).toBeGreaterThan(19.5);
+  });
+
+  it("builds from where it was left: a brake tapped again a moment later bites a little harder", () => {
+    let n = 0;
+    const tapped = curve(() => (n++ % 30 < 15 ? input({ brake: 1 }) : input()), 60);
+    n = 0;
+    const once = curve(() => (n++ < 15 ? input({ brake: 1 }) : input()), 60);
+    expect(tapped[59]!).toBeLessThan(once[59]! - 1);
+  });
+
+  it("blends with the throttle: both down settle about two thirds up, between the two", () => {
+    const r = race(ARENA, racers(1, 0));
+    toGo(r);
+    run(r, 240, () => input({ throttle: 1, steer: 0.07 }));
+    // The arena's road is a ring, so a gentle wheel keeps the kart on it.
+    const both = () => input({ throttle: 1, brake: 1, steer: 0.07 });
+    run(r, 240, both);
+    const s = view(r).speed;
+    expect(s).toBeGreaterThan(14);
+    expect(s).toBeLessThan(19);
+  });
+
+  it("coasts with nothing pressed: it eases, a little at first, to a stop", () => {
+    const v = curve(() => input(), 60);
+    expect(v[11]!).toBeGreaterThan(22);
+    expect(v[59]!).toBeGreaterThan(18);
+    expect(v[59]!).toBeLessThan(v[11]!);
   });
 
   it("still steers while reversing, the way a car does", () => {
@@ -415,7 +473,9 @@ describe("hop and drift", () => {
     const before = view(r).speed;
     run(r, 40, () => open(0));
     expect(view(r).drift).toBe(0);
-    expect(view(r).speed).toBeLessThan(before - 15);
+    expect(view(r).speed).toBeLessThan(before - 8);
+    // Still at speed, the same hands in a bend are a slide, so hold them straight until the kart is slow.
+    run(r, 90, () => open(0));
     run(r, 120, () => open(1));
     expect(view(r).drift).toBe(0);
     expect(view(r).speed).toBeLessThan(-1);
@@ -426,7 +486,7 @@ describe("hop and drift", () => {
     const before = view(r).speed;
     run(r, 30, () => input({ brake: 1, steer: 1 }));
     expect(view(r).drift).toBe(0);
-    expect(view(r).speed).toBeLessThan(before - 10);
+    expect(view(r).speed).toBeLessThan(before - 4);
   });
 
   it("is ended by running out of speed, with nothing", () => {
