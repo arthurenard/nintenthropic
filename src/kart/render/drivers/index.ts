@@ -98,6 +98,7 @@ export class Driver {
   /** How far the driver is looking back over a shoulder (-1..1, the side), eased; and how much at rest on the grid, eased. */
   private back = 0;
   private rest = 0;
+  private breathing = false;
   private readonly phase: number;
   private last = Number.NaN;
   private cheer = 0;
@@ -122,7 +123,8 @@ export class Driver {
       try {
         this.lids = new Lids(species, built.head, material, seed);
         this.head.add(this.lids.mesh);
-      } catch {
+      } catch (e) {
+        if (import.meta.env?.DEV) console.warn(`no eyelids for ${species}`, e);
         this.lids = null;
       }
     }
@@ -202,7 +204,10 @@ export class Driver {
     const breath = Math.sin(t * 2.3 + this.phase) * 0.012 * this.rest;
     this.root.position.set(this.base.x, this.base.y + bounce, this.base.z);
     this.root.rotation.set(0, m.twirl + this.back * 0.28, m.lean);
-    this.root.scale.set(DRIVER_SCALE * (1 - breath * 0.4), DRIVER_SCALE * (1 + breath), DRIVER_SCALE);
+    if (this.rest > 0.001 || this.breathing) {
+      this.root.scale.set(DRIVER_SCALE * (1 - breath * 0.4), DRIVER_SCALE * (1 + breath), DRIVER_SCALE);
+      this.breathing = this.rest > 0.001;
+    }
 
     // The head looks into the bend; dizzy, it rolls about.
     const sway = Math.sin(t * 7) * 0.1 * this.fin + Math.sin(t * 5) * 0.14 * this.wave;
@@ -262,10 +267,10 @@ export function speciesOf(character: string | undefined, fallback: Species = "fo
 }
 
 /** The driver of this species in the kart's colour: from the modelled art (drivers.glb) when it is loaded, else built in code. */
-export function createDriver(species: Species, colour: string, base: V3 = [0, 0, 0], material?: Material): Driver {
+export function createDriver(species: Species, colour: string, base: V3 = [0, 0, 0], material?: Material, salt = 0): Driver {
   const l = look(colour);
   const code = BUILDERS[species](l);
-  let seed = 0;
+  let seed = (salt * 131) % 997;
   for (let i = 0; i < colour.length; i++) seed = (seed * 31 + colour.charCodeAt(i)) % 997;
   return new Driver(driverFromArt(species, l, code) ?? code, base, material, species, seed);
 }

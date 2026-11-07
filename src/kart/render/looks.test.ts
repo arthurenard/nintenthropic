@@ -4,7 +4,7 @@ import { CHARACTERS } from "../characters";
 import type { KartView } from "../contract";
 import { TrackGeometry } from "../track/geometry";
 import { MEADOW_LOOP } from "../track/tracks";
-import { Lids } from "./drivers/face";
+import { blinkAt, Lids } from "./drivers/face";
 import { BUILDERS } from "./drivers";
 import { look } from "./drivers/parts";
 import { KartActor, type ActorContext, type KartPose } from "./kart";
@@ -48,12 +48,31 @@ describe("the brake lights", () => {
     expect(b[b.length - 1]!).toBeLessThan(0.1);
   });
 
+  it("ignore a cut in the speed (a respawn or a correction) and a noisy series", () => {
+    expect(Math.max(...run((t) => (t < 0.5 ? 30 : 8)))).toBeLessThan(0.05);
+    expect(Math.max(...run((t) => 20 + Math.sin(t * 40) * 0.4))).toBeLessThan(0.05);
+  });
+
   it("do not light for a kart already crawling", () => {
     expect(Math.max(...run((t) => Math.max(0, 1.2 - t * 3)))).toBeLessThan(0.05);
   });
 });
 
 describe("the glance back", () => {
+  it("only sees the karts of its own scene", () => {
+    const other: ActorContext = { ...ctx };
+    const poses: KartPose[] = [];
+    const a = actor(0, poses);
+    const b = new KartActor(1, () => ({ root: new Group(), pose() {}, dispose() {} }), { id: 1, colour: "#00f" }, other);
+    for (let i = 0; i < 240; i++) {
+      a.update(view(0, 0, 20), 1 / 60, ctx, i / 60);
+      b.update(view(1, -6, 20), 1 / 60, other, i / 60);
+    }
+    expect(Math.max(...poses.map((p) => Math.abs(p.lookBack ?? 0)))).toBe(0);
+    a.dispose();
+    b.dispose();
+  });
+
   it("a driver with a kart close behind looks round over that side's shoulder, now and then, and the one behind never does", () => {
     const lead: KartPose[] = [];
     const tail: KartPose[] = [];
@@ -96,6 +115,23 @@ describe("the glance back", () => {
 });
 
 describe("the eyelids", () => {
+  it("blink as a pure function of the clock and the seed, apart per seed", () => {
+    expect(blinkAt(12.34, 5)).toBe(blinkAt(12.34, 5));
+    let a = 0;
+    let b = 0;
+    let both = 0;
+    for (let i = 0; i < 3000; i++) {
+      const x = blinkAt(i * 0.01, 1) > 0.5;
+      const y = blinkAt(i * 0.01, 2) > 0.5;
+      a += x ? 1 : 0;
+      b += y ? 1 : 0;
+      both += x && y ? 1 : 0;
+    }
+    expect(a).toBeGreaterThan(20);
+    expect(b).toBeGreaterThan(20);
+    expect(both).toBeLessThan(Math.min(a, b) * 0.5);
+  });
+
   const species = CHARACTERS.map((c) => c.species);
 
   it("every driver has eyes to close, with a lid built for them", () => {

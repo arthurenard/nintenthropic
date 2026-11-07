@@ -93,6 +93,8 @@ export function brakeLights(base: Base | null): BrakeLights | null {
   mesh.visible = false;
   mesh.renderOrder = 11;
   mesh.frustumCulled = false;
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
   return {
     mesh,
     show(amount) {

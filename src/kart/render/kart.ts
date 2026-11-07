@@ -144,9 +144,11 @@ interface FallState {
 const _inv = new Quaternion();
 const _off = new Vector3();
 
-/** Every kart on screen, so a driver can see who is behind. */
-const LIVE = new Set<KartActor>();
+/** The karts of each scene (one set per ActorContext), so a driver can see who is behind in its own race and no other. */
+const CROWDS = new WeakMap<object, Set<KartActor>>();
 /** A glance back lasts this long, seconds, and comes at most this often. */
+/** A change of speed faster than this, m/s2, is a cut in the data rather than the kart braking. */
+const TELEPORT_ACCEL = 45;
 const GLANCE_FOR = 0.75;
 const GLANCE_EVERY = 3.2;
 
@@ -231,7 +233,10 @@ export class KartActor {
     ctx: ActorContext,
   ) {
     this.buzz = id * 2.4;
-    LIVE.add(this);
+    let crowd = CROWDS.get(ctx);
+    if (!crowd) CROWDS.set(ctx, (crowd = new Set()));
+    crowd.add(this);
+    this.crowd = crowd;
     this.buzzRate = IDLE_RATE + ((id * 5) % 15);
     this.model = factory(racer);
     this.root.add(this.model.root);
@@ -258,6 +263,7 @@ export class KartActor {
   }
 
   private glanceSide = 1;
+  private readonly crowd: Set<KartActor>;
 
   /**
    * +1 or -1 (the side to look over: + the driver's left) when another kart is close behind this one and a little to a side, 0 when none is.
@@ -268,7 +274,7 @@ export class KartActor {
     const fz = Math.cos(this.spot.heading);
     let best = 0;
     let bestBack = 12;
-    for (const o of LIVE) {
+    for (const o of this.crowd) {
       if (o === this || !o.spot.live) continue;
       const dx = o.spot.x - this.spot.x;
       const dz = o.spot.z - this.spot.z;
@@ -460,7 +466,9 @@ export class KartActor {
     this.root.rotation.set(rotX, rotY, rotZ, "YXZ");
 
     // Motion-driven attitude.
-    this.accel = damp(this.accel, dt > 0 ? (speed - this.lastSpeed) / dt : 0, 8, dt);
+    // A jump in speed no kart can make in a frame (a respawn, a snapshot's correction) is a cut, not a brake.
+    const rawAccel = dt > 0 ? (speed - this.lastSpeed) / dt : 0;
+    this.accel = damp(this.accel, Math.abs(rawAccel) > TELEPORT_ACCEL ? 0 : rawAccel, 8, dt);
     this.lastSpeed = speed;
     const spinning = view.spin > 0;
     // How hard it corners: the heading's turn rate times the speed, the sideways pull the body rolls away from.
@@ -530,7 +538,7 @@ export class KartActor {
     const buzzRoll = Math.sin(this.buzz * 1.13 + 1.3) * IDLE_ROLL * lope;
 
     // Brake lights: lit while the speed is falling hard on the ground, not by a spin-out or a fall.
-    const slowing = grounded && !spinning && !rescuing && speed > 1.5 ? smoothstep(2.2, 6.5, -this.accel) : 0;
+    const slowing = grounded && !spinning && !rescuing && speed > 1.5 ? smoothstep(3.5, 7, -this.accel) : 0;
     this.brakeGlow = damp(this.brakeGlow, slowing, slowing > this.brakeGlow ? 34 : 9, dt);
     // The glance back: a driver with a kart close behind looks round now and then, over the shoulder on its side.
     this.spot.x = view.x;
@@ -546,7 +554,7 @@ export class KartActor {
     }
     const glancing = time - this.glanceFrom < GLANCE_FOR && time >= this.glanceFrom;
     this.back = damp(this.back, glancing ? this.glanceSide : 0, glancing ? 9 : 6, dt);
-    const stopped = !rescuing && !spinning && grounded ? 1 - smoothstep(0.4, 2.5, Math.abs(speed)) : 0;
+    const stopped = !this.calm && !rescuing && !spinning && grounded ? 1 - smoothstep(0.4, 2.5, Math.abs(speed)) : 0;
     this.restEase = damp(this.restEase, stopped, 3, dt);
 
     const rough = view.offroad || view.surface === "mud" ? 0.035 : 0.006;
@@ -659,7 +667,8 @@ export class KartActor {
   }
 
   dispose(): void {
-    LIVE.delete(this);
+    this.crowd.delete(this);
+    this.spot.live = false;
     this.model.dispose();
     this.drone?.dispose();
     for (const r of this.resources) r.dispose();

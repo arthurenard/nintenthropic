@@ -512,7 +512,7 @@ function artKit(racer: Pick<RacerSetup, "id" | "colour" | "character" | "golden"
       return b.build();
     },
     extras: (accent, golden) => kartExtras(species, accent, golden),
-    driver: () => createDriver(species, racer.colour, [...DRIVER_AT], kartMaterial()),
+    driver: () => createDriver(species, racer.colour, [...DRIVER_AT], kartMaterial(), racer.id),
   };
 }
 
@@ -556,7 +556,7 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
   bodyGroup.add(chassis);
 
   // The driver pivots at the hip.
-  const driver = createDriver(species, racer.colour, [0, 0.9, -0.28], material);
+  const driver = createDriver(species, racer.colour, [0, 0.9, -0.28], material, racer.id);
   bodyGroup.add(driver.root);
   if (brake) bodyGroup.add(brake.mesh);
 
@@ -618,7 +618,7 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
       parts.push(r);
     }
     driverFar = withDetail(0.45, () => {
-      const d = createDriver(species, racer.colour, [0, 0.9, -0.28], material);
+      const d = createDriver(species, racer.colour, [0, 0.9, -0.28], material, racer.id);
       d.update({ time: 0, steer: 0, lean: 0, twirl: 0 });
       const g = d.bake();
       d.dispose();

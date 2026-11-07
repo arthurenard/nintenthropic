@@ -81,14 +81,36 @@ function lidGeometry(species: Species, head: BufferGeometry): { geometry: Buffer
   return { geometry, y: e.y, z, reach };
 }
 
+const BLINK_CYCLE = 3.8;
+const BLINK_LEN = 0.2;
+
+function hash(n: number): number {
+  const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+/**
+ * How shut a blink has the eyes at `time` (0..1): a pure function of the clock and the seed, so a driver posed from any clock, or
+ * replayed, blinks the same. Each cycle of a few seconds holds one blink (now and then two in a row) at a time of its own.
+ */
+export function blinkAt(time: number, seed: number): number {
+  const cycle = Math.floor(time / BLINK_CYCLE);
+  const into = time - cycle * BLINK_CYCLE;
+  const start = 0.3 + hash(cycle * 7.31 + seed * 1.93) * (BLINK_CYCLE - 1.3);
+  const double = hash(cycle * 3.17 + seed * 5.11) > 0.78;
+  for (let k = 0; k <= (double ? 1 : 0); k++) {
+    const u = (into - start - k * (BLINK_LEN + 0.04)) / BLINK_LEN;
+    if (u >= 0 && u < 1) return Math.sin(u * Math.PI) ** 0.7;
+  }
+  return 0;
+}
+
 /** The lids on one driver's head. */
 export class Lids {
   readonly mesh: Mesh;
   private readonly y: number;
   private readonly reach: number;
-  private next: number;
-  private blinkAt = -1;
-  private double = false;
+  private readonly seed: number;
 
   constructor(
     species: Species,
@@ -104,7 +126,7 @@ export class Lids {
     this.mesh.visible = false;
     this.y = made.y;
     this.reach = made.reach;
-    this.next = 0.6 + (seed % 7) * 0.37;
+    this.seed = seed;
   }
 
   /**
@@ -112,27 +134,7 @@ export class Lids {
    * then two), half shut and heavy when dizzy, shut while happy.
    */
   update(time: number, happy: number, dizzy: number, shut = 0): void {
-    // The blink: a lid that comes down quickly and goes up a little slower.
-    if (this.blinkAt < 0 && time >= this.next) {
-      this.blinkAt = time;
-      this.double = Math.sin(time * 12.9898) > 0.55;
-    }
-    let blink = 0;
-    if (this.blinkAt >= 0) {
-      const u = (time - this.blinkAt) / 0.2;
-      if (u >= 1) {
-        if (this.double) {
-          this.double = false;
-          this.blinkAt = time;
-        } else {
-          this.blinkAt = -1;
-          this.next = time + 2.2 + (Math.sin(time * 78.233) * 0.5 + 0.5) * 3.2;
-        }
-      } else {
-        blink = Math.sin(u * Math.PI) ** 0.7;
-      }
-    }
-    if (time < this.next - 6) this.next = time + 1;
+    const blink = blinkAt(time, this.seed);
     const closed = Math.min(1, Math.max(blink, happy, dizzy * 0.5, shut));
     const show = closed > 0.04;
     this.mesh.visible = show;
