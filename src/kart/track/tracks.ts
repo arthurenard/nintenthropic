@@ -1020,16 +1020,24 @@ export const FIVE_FINGER_CIRCUIT: TrackDef = {
     { x: 3.8, z: -54 },
     { x: 0, z: -40 },
   ],
-  itemRows: [0.0417, 0.2466, 0.4545, 0.5977],
+  itemRows: [0.0324, 0.2466, 0.4545, 0.5977],
   boostPads: [
-    { at: 0.127, offset: 0 },
+    { at: 0.096, offset: 0 },
     { at: 0.3914, offset: 1.5 },
     { at: 0.6181, offset: -1.5 },
     { at: 0.8845, offset: 0 },
   ],
+  // The wrist launcher fires a kart up the first diagonal; the fingertip lip hops the first finger; the thumb glide
+  // takes a kart off the thumb's tip and down to the wrist over the sea, to a landing mark in the lagoon.
+  air: [
+    { kind: "cannon", at: 0.0461, length: 36, height: 5 },
+    { kind: "lip", at: 0.1092, length: 34, height: 3.5 },
+    { kind: "glide", at: 0.7186, length: 95, height: 8 },
+  ],
+  drops: [{ from: 0.7211, to: 0.798, side: "both" }],
   hazards: [
-    { kind: "crab", motion: "cross", period: 5.6, radius: 1.3, at: 0.052, span: 6 },
-    { kind: "coconut", motion: "roll", period: 4.6, radius: 1.5, offset: -2.6, at: 0.1613, span: 0.0393 },
+    { kind: "crab", motion: "cross", period: 5.6, radius: 1.3, at: 0.0815, span: 6 },
+    { kind: "coconut", motion: "roll", period: 4.6, radius: 1.5, offset: -2.6, at: 0.18, span: 0.03 },
     { kind: "beach-ball", motion: "roll", period: 5, radius: 1.9, offset: 2.6, at: 0.653, span: 0.0478 },
     { kind: "crab", motion: "cross", period: 6.2, phase: 0.4, radius: 1.3, at: 0.888, span: 6 },
   ],

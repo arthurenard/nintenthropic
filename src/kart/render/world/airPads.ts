@@ -67,18 +67,19 @@ function posts(b: TrackBuild, site: ArcSite, post: Rgb, light: Rgb, length: numb
   const a = b.S(i);
   const bld = b.deco[b.chunkOf(i)]!;
   for (const side of [-1, 1] as const) {
-    const p = b.P(i - 1, side * (a.width / 2 - 0.5), 0);
+    // Beyond the barrier and the camera's margin, like the start gantry's legs: nothing solid where a kart or camera can be.
+    const p = b.P(i - 1, side * (a.width / 2 + b.wall(i, side) + 1.8), 0);
     if (site.kind === "cannon") {
       // A barrel: a thick tube leaning forward, lit at its mouth.
       const dir: V3 = [a.tx, 0, a.tz];
-      const base: V3 = [p[0], p[1] + 0.9, p[2]];
-      const mouth: V3 = [p[0] + dir[0] * 1.9, p[1] + 2.5, p[2] + dir[2] * 1.9];
-      bld.post(p[0], p[1], p[2], 0.45, 1.0, post, 8);
-      bld.rod(base, mouth, 0.55, post);
-      bld.blob(mouth[0] + dir[0] * 0.15, mouth[1] + 0.1, mouth[2] + dir[2] * 0.15, 0.5, 0.5, 0.5, scaleRgb(light, 0.7), 0);
+      const base: V3 = [p[0], p[1] + 1.3, p[2]];
+      const mouth: V3 = [p[0] + dir[0] * 3.2, p[1] + 4.6, p[2] + dir[2] * 3.2];
+      bld.post(p[0], p[1], p[2], 0.8, 1.4, post, 8);
+      bld.rod(base, mouth, 1.0, post);
+      bld.blob(mouth[0] + dir[0] * 0.2, mouth[1] + 0.15, mouth[2] + dir[2] * 0.2, 0.8, 0.8, 0.8, scaleRgb(light, 0.7), 0);
     } else {
-      bld.post(p[0], p[1], p[2], 0.1, 3.6, post, 6);
-      bld.blob(p[0], p[1] + 3.8, p[2], 0.34, 0.34, 0.34, scaleRgb(light, 0.7), 0);
+      bld.post(p[0], p[1], p[2], 0.16, 6.5, post, 6);
+      bld.blob(p[0], p[1] + 6.8, p[2], 0.55, 0.55, 0.55, scaleRgb(light, 0.7), 0);
     }
   }
   void length;
