@@ -15,7 +15,7 @@ test("first run, the landing and the arcade", async ({ page }, info) => {
   await expect(page.locator("#landing")).toBeVisible();
   await page.mouse.move(1, 1);
   await shot(page, info, "02-landing", 1200);
-  await page.getByRole("link", { name: "Play" }).click();
+  await page.locator("#tile-arcade").getByRole("link", { name: "Play" }).click();
   await expect(page.locator("#arcade")).toBeVisible();
   await page.mouse.move(1, 1);
   await shot(page, info, "02-arcade");

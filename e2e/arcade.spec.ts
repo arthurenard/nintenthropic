@@ -98,7 +98,7 @@ test("the browser's Back in a game pauses it, and never leaves the page with the
   page.on("pageerror", (error) => errors.push(error.message));
   await returningVisitor(page, { "handy.control.v1": "mouse" });
   await page.goto("/");
-  await page.getByRole("link", { name: "Play" }).click();
+  await page.locator("#tile-arcade").getByRole("link", { name: "Play" }).click();
   await card(page, "Dead of Night").click();
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).phase, { timeout: 60_000 }).toBe("play");
@@ -129,7 +129,7 @@ test("the browser's Back while a game gets ready cancels it, to where the addres
     await route.continue().catch(() => {});
   });
   await page.goto("/");
-  await page.getByRole("link", { name: "Play" }).click();
+  await page.locator("#tile-arcade").getByRole("link", { name: "Play" }).click();
   await card(page, "High Noon").click();
   await page.getByRole("button", { name: "Play", exact: true }).click();
   await expect.poll(async () => (await snapshot(page)).view).toBe("game");
@@ -169,7 +169,7 @@ test("the landing: Grip Prix large and first, Finger Guns slim, and the way into
   // Grip Prix first for the keyboard too: its Race is the first button in the page's order.
   expect(await page.locator("#landing .tile-go").first().getAttribute("href")).toBe("race.html");
   // Grip Prix goes to its own page; Finger Guns' Play opens the arcade, not a game.
-  await expect(grip.getByRole("link", { name: "Race" })).toHaveAttribute("href", "race.html");
+  await expect(grip.getByRole("link", { name: "Play" })).toHaveAttribute("href", "race.html");
   await expect(arcade.getByRole("link", { name: "Play" })).toHaveAttribute("href", "#finger-guns");
 
   // Its picture arrives over its sunny backdrop, which is also what stands in until it does (or if it never does).
@@ -232,7 +232,7 @@ test("Grip Prix, and the way home from it", async ({ page }) => {
   page.on("pageerror", (error) => errors.push(error.message));
   await returningVisitor(page);
   await page.goto("/");
-  await page.locator("#tile-grip").getByRole("link", { name: "Race" }).click();
+  await page.locator("#tile-grip").getByRole("link", { name: "Play" }).click();
   await expect(page).toHaveURL(/\/race\.html$/);
   await expect(page.getByRole("heading", { name: "Grip Prix" })).toBeVisible();
 
@@ -241,14 +241,14 @@ test("Grip Prix, and the way home from it", async ({ page }) => {
   await expect(page).toHaveURL(/\/(index\.html)?(#grip-prix)?$/);
   await expect(page.locator("#landing")).toBeVisible();
   await expect(page.locator("#arcade")).toBeHidden();
-  await expect(page.locator("#tile-grip").getByRole("link", { name: "Race" })).toBeFocused();
+  await expect(page.locator("#tile-grip").getByRole("link", { name: "Play" })).toBeFocused();
 
   // The same by address: the landing, not a game card, and the arcade's own cards untouched.
   for (const address of ["/#grip-prix", "/?game=grip-prix"]) {
     await page.evaluate(() => localStorage.removeItem("handy.space.v1"));
     await page.goto(address);
     await expect(page.locator("#landing")).toBeVisible();
-    await expect(page.locator("#tile-grip").getByRole("link", { name: "Race" })).toBeFocused();
+    await expect(page.locator("#tile-grip").getByRole("link", { name: "Play" })).toBeFocused();
   }
   // And the arcade, once visited, is where the landing stands next time.
   await page.goto("/#arcade");

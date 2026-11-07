@@ -554,7 +554,7 @@ body[data-view="landing"] .spaces {
     min-width: 96px;
   }
   .tile-arcade::before {
-    background: linear-gradient(to right, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.5) 60%, rgba(0, 0, 0, 0.3) 100%);
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.74) 0%, rgba(0, 0, 0, 0.4) 60%, rgba(0, 0, 0, 0.16) 100%);
   }
   .landing-main {
     justify-content: flex-start;
@@ -666,8 +666,15 @@ body[data-view="landing"] .spaces {
   .tile-arcade .tile-body {
     padding: 0 16px 16px;
   }
-  .tile-arcade .eyebrow {
+  .tile-arcade .eyebrow,
+  .tile-grip .eyebrow {
     display: none;
+  }
+  .tile-grip .tile-actions {
+    margin-top: 10px;
+  }
+  .tile-grip::before {
+    background: linear-gradient(to top, rgba(4, 22, 52, 0.92) 0%, rgba(4, 22, 52, 0.78) 34%, rgba(4, 22, 52, 0.3) 62%, rgba(4, 22, 52, 0) 80%);
   }
   .tile-arcade .tile-title {
     grid-area: auto;
