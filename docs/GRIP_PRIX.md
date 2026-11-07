@@ -1883,6 +1883,77 @@ out when the lobby changes and not every frame: 1.0 style recalculation a frame 
 0.016 ms in the pills' code. The flush that remains is the one the page must make once a frame; the style time in all
 (0.17 to 0.19 ms a frame) did not move.
 
+## Rivalries (`src/kart/rivals.ts`)
+
+People remember rivalries, not placings. Across a session (a cup, or several
+races in one room, until the room is left) the game keeps score of who spun
+out whom and who finished ahead of whom, and turns it into a small story. It
+is kind: nothing here is a leaderboard of shame, and nothing appears in
+Practice alone (no ledger is made for a `solo` session). It works the same for
+keyboard, pad and wheel players: it reads the race's events, not the controls.
+
+**One sheet per device.** Each device keeps its own ledger from the events it
+saw, so a guest who joins mid-session counts from when they arrived (and a tab
+that was hidden may miss a few events): two screens in one room can show
+slightly different grudges or awards. The host does not send a shared tally.
+
+**Bookkeeping.** `Rivalries` (one per room, made in `KartApp.attach`, cleared in
+`teardown`) is fed by the race screen from the race events, which every screen
+already receives (the host's and the guests' alike), so **nothing new travels
+over the wire** and the sim is untouched:
+
+- a `hit` event (`kart` spun, `by` the sender, `cause`: puck, seeker, slick,
+  decoy, skyrocket, blast, comet, storm) is attributed to its sender; a hazard
+  (`by: null`) and a kart's own item (`by === kart`) count for no one;
+- a `bump` counts as a hit only when it is hard (strength 0.85 and up) and one
+  kart was clearly quicker (3 m/s): the quicker one rammed (two Comets bumping
+  count for no one). A bump spins no one, so the numbers say "hits", not spin-outs;
+- `finish(standings)`, once per race, counts head-to-head (who finished ahead
+  of whom, for every pair with at least one person in it), places gained from the
+  grid, and photo finishes (neighbours within 0.15 s of each other).
+
+People are keyed as the Grand Prix's rows are: a player by lobby slot (`p0`),
+a bot by name (`b:Mango`), so the score survives a changed grid. Three
+`Tally`s are kept from the same events: the **race**, the **cup** (reset at a
+cup's first race) and the **session**. A race started over (a restart) is taken
+back out of the score first; the same race number twice does nothing.
+
+**A grudge** is a pair with at least three hits between them (four if a bot is
+one of them), or at least three races together with head-to-head wins within
+one of each other (four with a bot). Two bots never make one. The pair is named
+with the one ahead first, and the bigger the hit total the bigger the grudge.
+
+**On screen.**
+
+- The race intro: as the countdown begins (or, after a slow load, in the race's
+  first seconds), a glass pill calls out the biggest
+  grudge among the karts in this race ("Kit vs Mango: 3-1", and under it what
+  the numbers count, "Hits between them" or "Who finishes ahead").
+- A **nemesis** is whoever has hit you the most (two hits for a person, three
+  for a bot, a bot's hits weighing a little less), or else your closest
+  head-to-head. A small chevron in their colour hovers over their kart in your
+  viewport only (`render/rivalMarks.ts`, set with the optional
+  `RaceRenderer.setRivals`; it fades in past 3 m and out towards 90 m, and never
+  gets above 85% opacity).
+- **Revenge**: when you hit your nemesis, "Revenge!" shows in your viewport (in
+  place of "Got Kit.") and a short sting plays (`kart_revenge`, the `revenge`
+  sound; the screen's own, so it bypasses the world's muffle).
+- **Awards** (`pickAwards`, shown by `app/awards.ts`) on the results after a
+  single race, and on the podium for the whole cup (a cup's races show none):
+  Sharpshooter (most hits), Magnet (hit the most), Pacifist (no hits, when
+  others were busy), Comeback Kid (most places gained), Photo Finisher (most
+  photo finishes), Nemesis of the Day (most hits on one person). Only people win
+  them, never a bot; a tie goes to all who tied, and everyone level gives none;
+  a cup asks for more than a race; at most four are shown and nobody has more
+  than two. When there is nothing to say, the panel is not there.
+
+**Tests.** `rivals.test.ts` (attribution of every source, bumps, restarts,
+cups, head-to-head, grudges, nemesis, revenge, award picks and ties),
+`render/rivalMarks.test.ts` (the marker's look), `cues.test.ts` (the sting is in
+the pack), and `e2e/race-rivals.spec.ts` (a scripted run of hits, put on the
+score sheet through `gripTest.rivals()`, earns an award on the results, a grudge
+in the next race's intro and a nemesis; Practice alone has none).
+
 ## Tests
 
 - Unit (Vitest): the geometry; the sim (a bot laps every track in a sane time

@@ -49,6 +49,8 @@ export type KartSound =
   | "applause"
   /** The photo finish's camera. */
   | "shutter"
+  /** You hit your nemesis (rivals.ts). */
+  | "revenge"
   /** The Konami code: the gold sting, the same as the arcade's (a core cue, loaded with the engine). */
   | "gold";
 
@@ -68,5 +70,6 @@ export const SOUND_CUES: Record<KartSound, string> = {
   cheer: "kart_cheer",
   applause: "kart_applause",
   shutter: "kart_shutter",
+  revenge: "kart_revenge",
   gold: "ui_gold",
 };

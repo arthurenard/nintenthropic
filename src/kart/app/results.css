@@ -705,3 +705,68 @@ body[data-screen="race"] .pause-card.glass {
     padding-block: 13px;
   }
 }
+
+/* The awards (rivals.ts): a few silly, kind titles under the table, each with who has it and why. */
+.awards {
+  padding: 14px 18px 16px;
+  border-radius: 28px;
+}
+.awards .eyebrow {
+  margin: 0 0 6px;
+  color: rgba(255, 255, 255, 0.78);
+}
+.award-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.award {
+  display: grid;
+  grid-template-columns: minmax(0, 11em) minmax(0, 1fr);
+  grid-template-areas:
+    "title who"
+    "title detail";
+  column-gap: 16px;
+  align-items: baseline;
+  padding: 10px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.09);
+  animation: row-up 560ms var(--pop) backwards;
+  animation-delay: calc(var(--i, 0) * 80ms + 900ms);
+}
+.award-title {
+  grid-area: title;
+  align-self: center;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #ffe27a;
+}
+.award-who {
+  grid-area: who;
+  font-size: 17px;
+  font-weight: 600;
+}
+.award-detail {
+  grid-area: detail;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.72);
+}
+@media (max-width: 520px) {
+  .award {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "title who"
+      "detail detail";
+    column-gap: 12px;
+    row-gap: 1px;
+    padding: 8px 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .award {
+    animation: none;
+  }
+}

@@ -48,6 +48,7 @@ import { RescueDrone } from "./drone";
 import { outliving } from "./outliving";
 import { Effects } from "./effects";
 import { RenderEggs } from "./eggs";
+import { RivalMarks } from "./rivalMarks";
 import { Hud } from "./hud";
 import { ItemFx } from "./itemfx";
 import { KartActor, type ActorContext, type KartFactory } from "./kart";
@@ -203,6 +204,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   dynamic.add(kartGroup);
   /** Honk bubbles, the duck's flight and the Fun Fair's fireworks (eggs.ts). */
   const eggs = new RenderEggs(hudRoot, dynamic, calm);
+  /** The small marker over each player's nemesis (rivals.ts). */
+  const rivalMarks = new RivalMarks(hudRoot);
 
   const factory = options.kartFactory ?? createProceduralKart;
   const shadowTexture: Texture = glowTexture(0.0, 1.0);
@@ -410,6 +413,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     for (const c of cameras) c.calm = calm;
     hud.setViews(layout, viewKarts);
     eggs.setViews(viewKarts.length);
+    rivalMarks.setViews(viewKarts.length);
   };
 
   /** The distance (m) from which a kart is drawn welded: the tier's, or nearer once the governor has stepped. */
@@ -524,6 +528,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     async load(track: TrackDef, racerSetups: readonly RacerSetup[], onProgress?: (fraction: number) => void): Promise<void> {
       disposeWorld();
       racers = racerSetups;
+      rivalMarks.setColours(new Map(racerSetups.map((racer) => [racer.id, racer.colour])));
       const style = options.theme ? styleFor(options.theme) : undefined;
       // The modelled art first (what of it exists: the code-built stand-ins cover the rest).
       await loadKartArt(options.theme ?? track.theme, (f) => onProgress?.(f * 0.3));
@@ -594,6 +599,10 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       if (value === ceiling) return;
       ceiling = value;
       applySize();
+    },
+
+    setRivals(rivals: Readonly<Record<number, number>>): void {
+      rivalMarks.set(rivals);
     },
 
     setControls(kinds: Readonly<Record<number, ControlKind>>): void {
@@ -773,6 +782,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       const tHud = profiling ? performance.now() : 0;
       frameViews.forEach((v, i) => eggs.view(i, v.rect, v.eye, kartAt, time));
       eggs.end(time);
+      frameViews.forEach((v, i) => rivalMarks.place(i, v.rect, v.eye, kartAt, v.kart));
 
       hud.update(view, dt);
       lastBusy = performance.now() - tFrame;
@@ -801,6 +811,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       const shared = outliving(renderer, scene);
       disposeWorld();
       eggs.dispose();
+      rivalMarks.dispose();
       hud.dispose();
       post.dispose();
       timer?.dispose();

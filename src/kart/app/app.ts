@@ -36,6 +36,7 @@ import { crew, loadRules, loadYou, playerCount, saveRules, saveYou, wheelChecked
 import { RaceScreen, type RaceFailure } from "./race";
 import { trackById } from "../track/tracks";
 import { PodiumScreen } from "./podium";
+import { Rivalries } from "../rivals";
 import { ResultsScreen } from "./results";
 import { kartOf, localPlayers, previewColours, screenOfRoom } from "./roster";
 import { CameraFailure, SessionFailure, type Services, type SessionOptions, type SoundReport, type WheelControl } from "./services";
@@ -118,6 +119,8 @@ export class KartApp {
   /** The finish-line photos of the race the race screen shows (`raceId`), by kart: this device's and the room's. */
   private photos = new Map<number, string>();
   private unlisten: (() => void)[] = [];
+  /** Who hit whom, and who beat whom, in this room's races (rivals.ts): none in Practice alone. */
+  private rivals: Rivalries | null = null;
 
   constructor(
     private readonly services: Services,
@@ -223,6 +226,11 @@ export class KartApp {
     if (screen === "results") this.showResults(lobby);
     else if (screen === "standings") this.showStandings(lobby);
     else this.showPodium(lobby);
+  }
+
+  /** The room's score sheet, for the end-to-end tests to feed (testHooks.ts); null in Practice alone. */
+  rivalries(): Rivalries | null {
+    return this.rivals;
   }
 
   boot(): void {
@@ -365,6 +373,7 @@ export class KartApp {
     this.choice = null;
     this.bigScreenSet = false;
     this.rulesSet = false;
+    this.rivals = session.role === "solo" ? null : new Rivalries();
     this.unlisten = [session.onLobby((lobby) => this.lobbyChanged(lobby)), session.onClosed((reason) => this.closed(reason))];
     if (session.onPhoto) this.unlisten.push(session.onPhoto((shot) => this.gotPhoto(shot)));
   }
@@ -672,7 +681,7 @@ export class KartApp {
     this.raceId = lobby.race;
     const mine = localPlayers(lobby, session.device);
     this.show("race");
-    this.raceScreen.begin({ session, controls: this.controls.slice(0, mine.length), players: mine });
+    this.raceScreen.begin({ session, controls: this.controls.slice(0, mine.length), players: mine, rivals: this.rivals });
   }
 
   /** The race is over: its last moment stays in view a beat, then the results. */
@@ -687,6 +696,7 @@ export class KartApp {
     if (!session || !result) return;
     this.racers = this.raceScreen.lastView?.racers ?? this.racers;
     this.raceScreen.end();
+    this.rivals?.finish(result.standings);
     this.resultsScreen.render({
       result,
       lobby,
@@ -700,6 +710,8 @@ export class KartApp {
       rescues: this.raceScreen.rescued,
       photos: this.photos,
       cameras: this.cameraKarts(lobby, session.device),
+      // A single race has its awards here; a cup keeps them for the podium.
+      awards: lobby.grandPrix ? [] : (this.rivals?.raceAwards() ?? []),
     });
     this.show("results");
     this.backdrop.set(trackOfRace(lobby.settings, lobby.grandPrix));
@@ -761,7 +773,9 @@ export class KartApp {
     window.clearTimeout(this.finishTimer);
     this.raceScreen.end();
     this.standingsScreen.stop();
-    this.podiumScreen.render({ lobby, session });
+    const result = lobby.result ?? session.lobby().result;
+    if (result) this.rivals?.finish(result.standings);
+    this.podiumScreen.render({ lobby, session, awards: this.rivals?.cupAwards() ?? [] });
     this.show("podium");
   }
 
@@ -843,6 +857,8 @@ export class KartApp {
     this.endCupScreens();
     // The room's photos are the room's: gone with it.
     this.photos = new Map();
+    this.rivals?.clear();
+    this.rivals = null;
     this.resultsScreen.forgetPhotos();
     this.detach();
     const session = this.session;

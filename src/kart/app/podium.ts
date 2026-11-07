@@ -12,6 +12,8 @@ import type { GrandPrixState, LobbyState, Session } from "../contract";
 import type { PodiumRenderer } from "../render/podium";
 import { $, announce, element, setText } from "../../ui/dom";
 import { cupById } from "../grandprix";
+import type { Award } from "../rivals";
+import { showAwards } from "./awards";
 import { wonCup } from "../unlocks";
 import { podiumLine } from "./eggs";
 import { earnedTracks } from "./lobby";
@@ -30,6 +32,8 @@ export interface PodiumHooks {
 export interface PodiumInput {
   lobby: LobbyState;
   session: Session;
+  /** The cup's awards (rivals.ts), when there is enough to say. */
+  awards?: readonly Award[];
 }
 
 export class PodiumScreen {
@@ -61,7 +65,7 @@ export class PodiumScreen {
     this.canvas = null;
   }
 
-  render({ lobby, session }: PodiumInput): void {
+  render({ lobby, session, awards }: PodiumInput): void {
     this.stop();
     const gp = lobby.grandPrix;
     if (!gp) return;
@@ -102,6 +106,7 @@ export class PodiumScreen {
       }),
     );
 
+    showAwards($("podium-awards"), $("podium-awards-list"), awards ?? []);
     $("podium-again").hidden = !host;
     const back = $("podium-lobby");
     back.classList.toggle("primary", !host);

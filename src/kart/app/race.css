@@ -741,6 +741,34 @@ body[data-screen="race"] #sound-button {
     fade-out 300ms var(--ease) 1.7s forwards;
 }
 
+/* The rivalry the race intro calls out as the lights count down: "Kit vs Mango: 3-1", and what the numbers count. */
+.view-toast.rival-intro {
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 28px 13px;
+  border-radius: 24px;
+  text-align: center;
+  animation:
+    lost-in 300ms var(--ease),
+    fade-out 400ms var(--ease) 3s forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .view-toast.rival-intro {
+    animation: fade-out 400ms var(--ease) 3s forwards;
+  }
+}
+.rival-intro .rival-line {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.rival-intro .rival-basis {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--label-2);
+}
+
 /* The Konami code: gold washes over the whole page, once. */
 .gold-flash {
   position: fixed;
