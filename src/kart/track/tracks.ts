@@ -961,13 +961,14 @@ export const VOLCANO_RUSH: TrackDef = {
 };
 
 /**
- * The finale: a glowing ribbon of road high over a ringed planet, which turns under the middle of the lap. Off the
- * line it climbs into the twist, where the ribbon rolls one way and then the other (a boost strip up it, a comet
- * rolling down it at you); along the top, two crests to fly in a row with an asteroid circling the dip between them;
- * round the far end in a banked carousel that falls five metres; back along the lower ribbon, then straight down past
- * the planet (a boost strip on the way) to the long jump between two ribbons, and home. Almost no barriers (go over the
- * edge and the rescue drone brings you back), ring gates to drive through. The duck floats in an astronaut's helmet by
- * a satellite. About 1.2 km.
+ * The finale: a glowing ribbon of road high over a ringed planet, which turns under the middle of the lap. Off the line the ribbon
+ * splits: the aurora (the wide ribbon, a strip of boost, a comet rolling down it) or the comet trail, a narrower, lower ribbon swinging
+ * out and back where meteors strike in rows (each shows a growing shadow first). Then up into the twist, where the ribbon rolls one way
+ * and then the other; along the top, two crests with low-gravity lips and an asteroid circling the dip between them; round the far end
+ * in a banked carousel that falls nine metres under a meteor shower; back along the lower ribbon, past a plasma arm that turns across
+ * it, then straight down past the planet to the solar-sail glide and the cannon that fires a kart across the gap between two ribbons,
+ * and home. Almost no barriers (go over the edge and the rescue drone brings you back), ring gates to drive through. The duck floats in
+ * an astronaut's helmet by a satellite. About 1.2 km.
  */
 export const STARLIGHT_RIBBON: TrackDef = {
   id: "starlight-ribbon",
@@ -975,7 +976,7 @@ export const STARLIGHT_RIBBON: TrackDef = {
   theme: "space",
   laps: 3,
   width: 20,
-  blurb: "The finale, a ribbon of light over a ringed planet: roll through the twist, float over two crests, swing round the carousel under a meteor shower, glide down and get fired across the gap between two ribbons.",
+  blurb: "The finale, a ribbon of light over a ringed planet: split between the aurora and the comet trail, roll through the twist, float over two crests, swing round the carousel under a meteor shower, glide down and get fired across the gap between two ribbons.",
   points: [
     // Off the line and up into the twist: the ribbon rolls one way, then the other, as it climbs.
     { x: 0, z: 0 },
@@ -1079,6 +1080,8 @@ export const STARLIGHT_RIBBON: TrackDef = {
         { x: -4, z: 129, y: 6.4 },
         { x: 0, z: 140, y: 7.8 },
       ],
+      // Open to the void on both sides, like the ribbon it leaves.
+      drops: [{ from: 0.12, to: 0.9, side: "both" }],
       hazards: [
         ...rockRain({ kind: "meteor", at: 0.3, step: 0.16, rows: [[-4.5, 0], [0, 4.5], [-4.5, 4.5]], period: 6, stagger: 0.3, radius: 2.1 }),
       ],
@@ -1090,7 +1093,6 @@ export const STARLIGHT_RIBBON: TrackDef = {
   ],
   hazards: [
     { kind: "asteroid", motion: "orbit", period: 5.6, radius: 3, offset: 0, at: 0.425, span: 6.4 },
-    { kind: "asteroid", motion: "orbit", period: 6.4, phase: 0.4, radius: 3, offset: 0, at: 0.5791, span: 6.4 },
     { kind: "asteroid", motion: "orbit", period: 5.9, phase: 0.7, radius: 3, offset: 0, at: 0.6991, span: 6.4 },
     { kind: "comet", motion: "roll", period: 5.2, radius: 3, offset: -2, at: 0.1655, span: 0.0496 },
     // A plasma arm turning on the lower ribbon, a hundred metres before the glide: wait for it to come round, or slip by on its far side.
@@ -1121,11 +1123,13 @@ export const STARLIGHT_RIBBON: TrackDef = {
 };
 
 /**
- * Secret. An island shaped like an open hand, seen from above: the hand you play with. The road runs up and down every
- * finger (the fingertips are hairpins), round the thumb, and back along the wrist, where a giant wristwatch is the
- * start gantry. A ring to drive through on the long straight by the wrist (the fingers lie too close for anything to
- * stand between them), palm trees, beach huts, crabs and rolling coconuts. The minimap is a hand. The duck sunbathes in
- * sunglasses in the middle of the palm. The hand is tilted: every finger climbs to its tip and back. About 1.2 km.
+ * Secret. An island shaped like an open hand, seen from above: the hand you play with. The road runs up and down every finger
+ * (the fingertips are banked hairpins, and the hand is tilted: every finger climbs to its tip and back, the middle one highest), round
+ * the thumb, and back along the wrist, where a giant wristwatch is the start gantry. The palm trail leaves the road at the first valley
+ * and runs straight on across the palm, under the ring finger, through a tiki arch to the middle finger (nothing to climb, a coconut
+ * rolling down it); on the wrist the tide washes the beach road in sets of breakers. A ring to drive through on the long straight by the
+ * wrist (the fingers lie too close for anything to stand between them), palm trees, beach huts, crabs and rolling coconuts. The
+ * minimap is a hand. The duck sunbathes in sunglasses in the middle of the palm. About 1.2 km.
  */
 export const FIVE_FINGER_CIRCUIT: TrackDef = {
   id: "five-finger-circuit",
@@ -1133,7 +1137,7 @@ export const FIVE_FINGER_CIRCUIT: TrackDef = {
   theme: "palm",
   laps: 3,
   width: 13,
-  blurb: "An island shaped like an open hand: up and down every finger, a cannon off the wrist, and a glide from the thumb's tip down to the water.",
+  blurb: "An island shaped like an open hand: up and down every finger or across the palm by the tiki trail, a cannon off the wrist, the tide washing the beach road, and a glide from the thumb's tip down to the water.",
   secret: true,
   points: [
     { x: 0, z: 0 },
@@ -1230,7 +1234,7 @@ export const FIVE_FINGER_CIRCUIT: TrackDef = {
     { x: 3.8, z: -54 },
     { x: 0, z: -40 },
   ],
-  itemRows: [0.0324, 0.2466, 0.4545, 0.5977],
+  itemRows: [0.0324, 0.2466, 0.4545, 0.6077],
   boostPads: [
     { at: 0.096, offset: 0 },
     { at: 0.3914, offset: 1.5 },
@@ -1258,14 +1262,14 @@ export const FIVE_FINGER_CIRCUIT: TrackDef = {
       appeal: 0.75,
       points: [
         { x: -37, z: 136, y: 1.8 },
-        { x: -37, z: 118, y: 1.2 },
-        { x: -33, z: 104, y: 0.9 },
-        { x: -22, z: 95, y: 0.9 },
-        { x: -2, z: 92, y: 0.9 },
-        { x: 18, z: 92, y: 0.9 },
-        { x: 32, z: 97, y: 1 },
-        { x: 39, z: 110, y: 1.2 },
-        { x: 41, z: 126, y: 1.6 },
+        { x: -37, z: 112, y: 1.2 },
+        { x: -32, z: 96, y: 0.9 },
+        { x: -20, z: 86, y: 0.9 },
+        { x: -2, z: 82, y: 0.9 },
+        { x: 18, z: 82, y: 0.9 },
+        { x: 32, z: 88, y: 1 },
+        { x: 39, z: 102, y: 1.2 },
+        { x: 41, z: 124, y: 1.6 },
         { x: 41, z: 142, y: 2 },
       ],
       surfaces: [{ from: 0.2, to: 0.3, kind: "boost", offset: 0, width: 3 }],
@@ -1285,8 +1289,8 @@ export const FIVE_FINGER_CIRCUIT: TrackDef = {
     { kind: "crab", motion: "cross", period: 6.2, phase: 0.4, radius: 1.3, at: 0.915, span: 6 },
     // The tide: breakers wash up the beach road from the sea on the wrist, one set after another. Each rises out of the water at the
     // road's edge (foam first) and runs across; the next comes half a beat later, a little way on, round the bend.
-    ...front({ kind: "tide-wave", at: 0.8341, count: 3, step: 0.0031, period: 6.4, reach: -9.2, radius: 1.7 }),
-    ...front({ kind: "tide-wave", at: 0.8807, count: 3, step: 0.0031, period: 6.4, phase: 0.5, reach: -9.2, radius: 1.7 }),
+    ...front({ kind: "tide-wave", at: 0.8341, count: 3, step: 0.0031, period: 6.4, reach: -9.2, radius: 2 }),
+    ...front({ kind: "tide-wave", at: 0.8807, count: 3, step: 0.0031, period: 6.4, phase: 0.5, reach: -9.2, radius: 2 }),
   ],
   landmarks: [
     { kind: "wristwatch", at: 0, offset: 0, span: 12 },
@@ -1315,7 +1319,7 @@ export const FIVE_FINGER_CIRCUIT: TrackDef = {
     { kind: "beach-towel", at: 0.9173, offset: -30 },
     { kind: "surfboard", at: 0.9966, offset: 24, turn: 1.2 },
   ],
-  duck: { at: 0.04, offset: -39, y: 0.2 },
+  duck: { at: 0.04, offset: -28, y: 0.2 },
 };
 
 /** Every track, in the order they are raced: the Acorn Cup, the Comet Cup, then the secret one. */

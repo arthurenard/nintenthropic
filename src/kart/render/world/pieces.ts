@@ -461,8 +461,8 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
                 // The telegraph of a swell: it rises out of the lake or the sea, beside the road, before it runs across.
                 hidden = pose.warn <= 0;
                 const e = pose.warn * pose.warn * (3 - 2 * pose.warn);
-                y = roadY + pose.y * (1 - e);
-                grow = 0.5 + 0.5 * e;
+                y = roadY + pose.y * (1 - e) * (style.riseK ?? 1);
+                grow = (style.riseK === 0 ? 0.35 : 0.5) + (style.riseK === 0 ? 0.65 : 0.5) * e;
               }
               // Rails across the road under its path (sleepers, two rails), and a lamp post at the way in.
               const centre = def.at * track.length;
@@ -522,7 +522,7 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
           } else {
             mesh.setMatrixAt(i, _m.compose(_p.set(x, y, z), _q, _s.set(sx * grow, sx * grow, sx * grow)));
           }
-          mesh.setColorAt(i, flush(pose.warn, time, tint));
+          mesh.setColorAt(i, STYLES_2C[def.kind]?.noFlush ? WHITE : flush(pose.warn, time, tint));
         }
         mesh.instanceMatrix.needsUpdate = true;
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;

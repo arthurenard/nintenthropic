@@ -28,6 +28,10 @@ export interface PieceStyle2C {
   bare?: boolean;
   /** A slide that rises out of the lake or the sea beside the road while it warns (instead of a lamp), then runs across. */
   rise?: boolean;
+  /** How deep below the road a rising slide starts, as a share of the usual (default 1; 0: it appears at the road's edge and grows). */
+  riseK?: number;
+  /** Not flushed red-hot as it warns (the colour is its own: sea water, ice). */
+  noFlush?: boolean;
   /** A lamp post at its way in (default true; false where there is nowhere to stand: a bridge, a beach). */
   post?: boolean;
   /** The lamp's colour while it waits (steady) and when it is about to come, as linear RGB. */
@@ -176,10 +180,10 @@ export const MODELS_2C: Record<string, PieceModel2C> = {
 
 export const STYLES_2C: Record<string, PieceStyle2C> = {
   "ember-rock": { sky: true },
-  meteor: { sky: true },
+  meteor: { sky: true, noFlush: true },
   "lava-surge": { bare: true, rise: true, post: false },
-  "tide-wave": { bare: true, rise: true, post: false },
-  "plasma-orb": {},
+  "tide-wave": { bare: true, rise: true, riseK: 0, post: false, noFlush: true },
+  "plasma-orb": { noFlush: true },
 };
 
 export const KINDS_2C: readonly string[] = Object.keys(MODELS_2C);
