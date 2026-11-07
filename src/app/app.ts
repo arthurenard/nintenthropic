@@ -371,7 +371,7 @@ export class App {
 
   private fail(error: unknown): void {
     const told = whatWentWrong(error);
-    console.error("Super Claude Bros. could not start the game.", told.cause);
+    console.error("Nintenthropic could not start the game.", told.cause);
     this.round.end();
     this.showView("arcade");
     this.trouble(told.trouble, told.choices);

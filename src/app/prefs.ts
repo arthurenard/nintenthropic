@@ -23,7 +23,7 @@ const KEYS = {
   eye: "handy.eye.v1",
 };
 
-/** Everything Super Claude Bros. keeps starts with this, in both storages. */
+/** Everything Nintenthropic keeps starts with this, in both storages. */
 const PREFIX = "handy.";
 /** A saved aim, one per camera and video size (see calibration/storage.ts). */
 const AIM_PREFIX = "handy.aim.";
@@ -384,7 +384,7 @@ export function forgetSavedAims(storage: Storage | undefined = local()): number 
   return keys.length;
 }
 
-/** Forgets everything Super Claude Bros. keeps in this browser: aims, records, settings, tips, the lot. */
+/** Forgets everything Nintenthropic keeps in this browser: aims, records, settings, tips, the lot. */
 export function forgetEverything(storages: (Storage | undefined)[] = [local(), session()]): void {
   for (const storage of storages) remove(storage, keysOf(storage, PREFIX));
 }

@@ -1,4 +1,4 @@
-# Super Claude Bros. design language
+# Nintenthropic design language
 
 The bar is simple to state and hard to meet: every screen should feel as if
 Apple had made it. That means three things, in this order.
@@ -207,7 +207,7 @@ click and remembered.
 
 ## The landing
 
-`./` is the front door of Super Claude Bros.: "Games you play with your hands."
+`./` is the front door of Nintenthropic: "Games you play with your hands."
 over two equal, cinematic tiles (Apple's two-up product tiles are the model: art
 first, a few big words, one white pill). Stacked, one above the other, on a
 phone.
@@ -237,9 +237,9 @@ phone.
   to it; Resume puts the game's address back. While a game is getting ready,
   Back is Cancel.
 
-The bar over the landing and the arcade is frosted glass (64 tall): Super Claude
-Bros., Privacy, sound, Settings. In the arcade Super Claude Bros. has a chevron
-(the way back to the landing, as Grip Prix's own "‹ Super Claude Bros." is) and
+The bar over the landing and the arcade is frosted glass (64 tall): Nintenthropic, Privacy, sound, Settings.
+In the arcade Nintenthropic has a chevron
+(the way back to the landing, as Grip Prix's own "‹ Nintenthropic" is) and
 a segmented control sits in the middle: **Finger Guns | Grip Prix**, the arcade
 chosen, Grip Prix a link to its page.
 
@@ -276,10 +276,10 @@ the four shooters in a row beneath it. Grip Prix is not in the row.
 ## First run
 
 1. No welcome screen: a first visit lands straight on the landing (or on the
-   game a link named), whose title and tiles already say what Super Claude Bros.
+   game a link named), whose title and tiles already say what Nintenthropic
    is.
 2. Before the browser asks for the camera, say why and what happens to the
-   picture: "Super Claude Bros. needs your camera to see your hand. The picture
+   picture: "Nintenthropic needs your camera to see your hand. The picture
    stays on this computer." On a phone or a tablet the words fit what is in
    hand: "this device", and Use Touch where a computer offers Use Mouse or
    Trackpad. Play is focused on arrival for the keys, but not on a touch
@@ -309,7 +309,7 @@ beat. The outcome is green for a round won and red for one lost, except beside a
 New Best, where it is said plainly: a record is not told off. The secrets found
 sit under the stats; with none yet, the line says where they hide ("The scenery
 can take a shot."). Then two choices (Play Again, Choose a Game) plus Share — a
-PNG of the card, branded Super Claude Bros., saved or passed to the system share
+PNG of the card, branded Nintenthropic, saved or passed to the system share
 sheet.
 
 The card that arrives with the fall, before the results, says the same words

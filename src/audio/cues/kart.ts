@@ -1,6 +1,6 @@
 /**
  * Grip Prix's sound pack: a toy-box kart racer, every sound synthesised in
- * code like the rest of Super Claude Bros. The recipes are in
+ * code like the rest of Nintenthropic. The recipes are in
  * ./kart-motion.ts (what a kart sounds like as it moves), ./kart-events.ts
  * (what happens to it), ./kart-items.ts (five of the items),
  * ./kart-jingles.ts (the tunes and the interface) and ./kart-ambience.ts

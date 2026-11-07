@@ -1,14 +1,14 @@
 {
-  "name": "Super Claude Bros.",
-  "short_name": "Claude Bros.",
+  "name": "Nintenthropic",
+  "short_name": "Nintenthropic",
   "description": "Games you play with your hands in front of your camera: a finger-pistol arcade and a four-player kart race.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",
   "display_override": ["fullscreen", "standalone"],
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#ffffff",
+  "theme_color": "#e1501b",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

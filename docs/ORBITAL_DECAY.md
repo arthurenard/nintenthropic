@@ -1,6 +1,6 @@
 # Orbital Decay — game design
 
-The third game of Super Claude Bros. Four hundred kilometres up,
+The third game of Nintenthropic. Four hundred kilometres up,
 in the glass cupola of a space station, as a cloud of wreckage from a satellite
 collision crosses your orbit. You have the station's point-defence laser and
 seven windows between you and the vacuum. It must look and feel like something

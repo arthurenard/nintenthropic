@@ -1,6 +1,6 @@
-# Super Claude Bros. — architecture and contracts
+# Nintenthropic — architecture and contracts
 
-Super Claude Bros. is a static website. Everything — hand tracking, the games,
+Nintenthropic is a static website. Everything — hand tracking, the games,
 the 3D rendering, the sound — runs in the player's browser. There is no server
 beyond whatever hosts the files, and the camera picture never leaves the device.
 
@@ -19,8 +19,8 @@ parts under `src/kart/`, is described in [GRIP_PRIX.md](GRIP_PRIX.md).
 - **Fast to start.** The first screen is interactive in under 2 s on broadband;
   a game's assets load behind a progress bar with real numbers, and are cached.
 - **Private.** Frames are read in memory and never stored or sent anywhere.
-- **Original.** Every model, texture, sky and sound is made for Super Claude
-  Bros. — in Blender scripts under `art/` or synthesised in code. Only code
+- **Original.** Every model, texture, sky and sound is made for Nintenthropic
+  — in Blender scripts under `art/` or synthesised in code. Only code
   dependencies come from npm.
 
 ## Stack

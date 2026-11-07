@@ -336,7 +336,7 @@ test("Copy System Info copies what a bug report needs", async ({ page, context }
   await page.getByRole("button", { name: "Copy System Info" }).click();
   await expect(page.locator("#toast")).toHaveText("Copied.");
   const copied = await page.evaluate(() => navigator.clipboard.readText());
-  expect(copied).toMatch(/^Super Claude Bros\. \d+\.\d+\.\d+\n/);
+  expect(copied).toMatch(/^Nintenthropic \d+\.\d+\.\d+\n/);
   expect(copied).toContain("Browser: Mozilla/5.0");
   expect(copied).toContain("Graphics: ");
   expect(copied).toContain("Screen: ");

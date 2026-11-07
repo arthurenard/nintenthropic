@@ -1,6 +1,6 @@
 # Dead of Night — game design
 
-The second game of Super Claude Bros. A night at the last gas
+The second game of Nintenthropic. A night at the last gas
 station on a country road: the power is out, the fog is in, and the dead are
 walking up the road. You have a lever-action rifle, a flashlight under its
 barrel, and a barricade. It must look and feel like something Apple would put on
