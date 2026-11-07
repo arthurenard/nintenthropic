@@ -56,7 +56,7 @@ import { DIVIDER, PostChain, type DrawViews } from "./post";
 import { GpuTimer } from "./gpuTimer";
 import { pointScale } from "./points";
 import { Skids } from "./skids";
-import { QUALITY, capTier, hudBlurFor, type QualitySettings, type Tier } from "./quality";
+import { QUALITY, capTier, hudBlurFor, pixelRatioFor, type QualitySettings, type Tier } from "./quality";
 import { Things } from "./things";
 import { slotsFromThings, rowSlots, type BoxSlot } from "./world/boxes";
 import { createWorld, type World } from "./world";
@@ -263,6 +263,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     renderer.setRenderTarget(target);
     renderer.clear(true, true, false);
     target.scissorTest = true;
+    try {
     for (let index = 0; index < frameViews.length; index++) {
       const v = frameViews[index]!;
       const x = Math.floor(v.rect.x * pr);
@@ -273,9 +274,14 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       target.scissor.set(x, y, w, h);
       renderer.setRenderTarget(target);
       world.sky.group.position.copy(v.eye.position);
+      // The scene's matrices are worked out once a frame, by the first view's render (three does it on every render()); what the
+      // other views move on the way, the sky dome and the sun, is brought up to date by hand.
+      scene.matrixWorldAutoUpdate = index === 0;
+      if (index > 0) world.sky.group.updateMatrixWorld(true);
       const fovRad = (v.eye.fov * Math.PI) / 180;
       pointScale.value = (h) / (2 * Math.tan(fovRad / 2));
       world.focusSun(v.at.x, v.at.y, v.at.z);
+      if (index > 0) world.sun.updateMatrixWorld();
       // This view's frustum decides which trees, rocks and tufts are drawn for it.
       v.eye.updateMatrixWorld();
       v.eye.matrixWorldInverse.copy(v.eye.matrixWorld).invert();
@@ -300,7 +306,13 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       for (const a of tooNear) a.root.visible = true;
       tooNear.length = 0;
     }
-    target.scissorTest = false;
+    } finally {
+      // Whatever a view throws, the scene goes back to updating its own matrices, and no kart stays hidden for being near a lens.
+      scene.matrixWorldAutoUpdate = true;
+      for (const a of tooNear) a.root.visible = true;
+      tooNear.length = 0;
+      target.scissorTest = false;
+    }
     if (profiling) smooth("draw", performance.now() - t0);
   };
   const post = new PostChain(renderer, tier, drawViews);
@@ -332,7 +344,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
 
   /** The most of its resolution the picture may use (limitResolution): below 1 while the hand tracker is short of the GPU. */
   let ceiling = 1;
-  const pixelRatio = () => Math.max(0.5, Math.min(dpr, settings.pixelRatioCap) * Math.min(resolution.scale, ceiling));
+  const pixelRatio = () => pixelRatioFor(dpr, settings, Math.min(resolution.scale, ceiling), width, height);
 
   const applySize = () => {
     renderer.setPixelRatio(pixelRatio());
