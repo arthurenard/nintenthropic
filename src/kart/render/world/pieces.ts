@@ -92,17 +92,6 @@ const MODELS: Record<string, PieceModel> = {
       b.blob(0, 1.3, 0, 1.36, 0.22, 1.36, rgb("#fff7d6"), 1);
     },
   },
-  // A rollercoaster car, nose first.
-  "coaster-car": {
-    radius: 2,
-    build(b) {
-      b.box(0, 0.9, 0, 2.3, 1.0, 3.8, { bottom: rgb("#b31e3d"), top: rgb("#ff4d6d") });
-      b.box(0, 1.55, -0.6, 2.0, 0.5, 1.6, rgb("#fff3d6"));
-      b.box(0, 0.9, 1.9, 1.7, 0.7, 0.5, rgb("#ffd60a"));
-      b.box(0, 0.3, 0, 2.5, 0.25, 4.0, rgb("#2b2b33"));
-      b.blob(0, 2.0, -0.6, 0.45, 0.45, 0.45, rgb("#ffd1a1"), 0);
-    },
-  },
   // A funhouse wall panel, red and white striped, that slides across the way.
   "funhouse-panel": {
     radius: 2,

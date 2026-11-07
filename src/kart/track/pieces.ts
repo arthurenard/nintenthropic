@@ -20,7 +20,6 @@ export const PIECE_KINDS: readonly string[] = [
   "ore-cart",
   "icicle",
   "arm-ball",
-  "coaster-car",
   "funhouse-panel",
   "mallet",
   "swing-boat",
