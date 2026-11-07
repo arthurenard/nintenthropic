@@ -14,7 +14,7 @@ import { trackStats } from "./trackStats";
 /** What each theme can build (docs/GRIP_PRIX.md, "What each theme can build"). */
 const LANDMARKS: Record<TrackTheme, string[]> = {
   meadow: ["windmill", "barn", "barn-run", "pond", "hay-bales", "hot-air-balloon", "sheep", "flower-field"],
-  canyon: ["mesa", "rock-arch", "cactus-grove", "water-tower", "mine-cart"],
+  canyon: ["mesa", "rock-arch", "cactus-grove", "water-tower", "mine-cart", "mine-tunnel", "rope-bridge", "headframe", "dynamite-shack"],
   harbour: ["crane", "lighthouse", "ship", "ship-deck", "containers", "warehouse", "buoy"],
   kitchen: ["teapot", "fruit-bowl", "toaster", "grater", "drawer", "salt-shaker", "pepper-mill", "cookbook", "cereal-box", "mug", "fork-arch", "spoon-arch", "sink", "window", "wall-clock"],
   snow: ["igloo", "cabin", "snowman", "ice-arch", "ice-cave", "pine-snow", "gondola", "ski-jump"],

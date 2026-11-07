@@ -468,19 +468,24 @@ export const CANYON_RUN: TrackDef = {
     { x: -90, z: 226, y: 16.4, bank: 0.12 },
     { x: -103, z: 221, y: 16.4, bank: 0.1 },
     { x: -108, z: 208, y: 16.4 },
-    // The ridge road, and the gap in it.
-    { x: -108, z: 180, y: 16.3 },
-    { x: -109, z: 130, y: 16.2 },
-    { x: -113, z: 80, y: 16 },
-    { x: -122, z: 40, y: 15.6, bank: -0.16 },
-    // The tumble: a lip to fly off, then down through the S-bends, each leaning its own way.
-    // The rope bridge: ten metres of planks over the gorge, nothing on either side.
-    { x: -154.6, z: 20, y: 15.3, width: 10 },
-    { x: -170.2, z: 13.3, y: 14.9, width: 10 },
-    { x: -181.1, z: 8.3, y: 12.6 },
-    { x: -200, z: -5, y: 10.4, bank: 0.18 },
-    { x: -209, z: -40, y: 8.6, bank: -0.18 },
-    { x: -232, z: -80, y: 6.2, bank: 0.15 },
+    // The ridge road: a knife-edge of fast sweepers (the mine's split leaves it and rejoins it), then a straight over the gorge.
+    { x: -102, z: 192, y: 16.3, bank: 0.05 },
+    { x: -93, z: 160, y: 16.5, bank: 0.05 },
+    { x: -93, z: 128, y: 16.5, bank: -0.05 },
+    { x: -101, z: 100, y: 16.4, bank: -0.04 },
+    { x: -108, z: 80, y: 16.4 },
+    { x: -108, z: 60, y: 16.3 },
+    { x: -108, z: 14, y: 15.8 },
+    { x: -108, z: -24, y: 15.6 },
+    // The turn onto the rope bridge: forty-five metres of planks over the gorge, nothing on either side.
+    { x: -114, z: -48, y: 15.4, bank: 0.14 },
+    { x: -129, z: -62, y: 15.2, bank: 0.12 },
+    { x: -150, z: -68, y: 14.9, width: 10 },
+    { x: -178, z: -67, y: 14.6, width: 10 },
+    { x: -204, z: -63, y: 14.2, width: 12 },
+    // The tumble: down through S-bends, each leaning its own way.
+    { x: -228, z: -74, y: 11.6, bank: 0.16 },
+    { x: -240, z: -95, y: 8.8, bank: -0.18 },
     // The neck: twelve metres between the walls.
     { x: -225, z: -119, y: 4.4, width: 12, bank: 0.12 },
     { x: -184, z: -139, y: 2.8, width: 12 },
@@ -490,59 +495,85 @@ export const CANYON_RUN: TrackDef = {
     { x: -52, z: -177, y: 2.8, width: 18, bank: 0.15 },
     // The wash: the gorge opens into a wide sandy bed, twenty-two metres across, under the rock crushers.
     { x: -48, z: -131, y: 0.6, width: 22 },
-    { x: -43, z: -95, y: 1.4, width: 18, bank: -0.12 },
+    { x: -43, z: -95, y: 1.4, width: 22, bank: -0.12 },
     { x: -14, z: -70, y: 0.5, bank: 0.12 },
     { x: -4, z: -35, y: 0.1 },
   ],
-  itemRows: [0.16, 0.31, 0.66, 0.9],
+  itemRows: [0.155, 0.26, 0.64, 0.915],
   boostPads: [
-    { at: 0.27, offset: -2 },
-    { at: 0.8, offset: 2 },
+    { at: 0.257, offset: -2 },
+    { at: 0.809, offset: 2 },
     // The brave line through the crushers' middle lane.
-    { at: 0.8755, offset: 0 },
+    { at: 0.9, offset: 0 },
   ],
-  ramps: [
-    { at: 0.3715 },
-  ],
+  // The dynamite barrels at the end of the ridge: a cannon that throws a kart across the gorge, over sixty metres of nothing.
+  air: [{ kind: "cannon", at: 0.387, length: 84, height: 9 }],
   drops: [
-    { from: 0.3729, to: 0.3854, side: "both", gap: true },
+    { from: 0.3958, to: 0.4541, side: "both", gap: true },
     // The rope bridge has no rails.
-    { from: 0.452, to: 0.492, side: "both" },
+    { from: 0.512, to: 0.567, side: "both" },
   ],
   verges: [
-    { from: 0.1885, to: 0.3046, side: "right", distance: 24, surface: "sand" },
+    { from: 0.18, to: 0.285, side: "right", distance: 24, surface: "sand" },
+  ],
+  routes: [
+    {
+      // The mine: a shortcut through the mesa that the road round the neck's U goes the long way about. Straight on where the road
+      // bends away, into a timbered tunnel (rails and lanterns, narrow, a dog-leg through the rock) with two side galleries
+      // where ore carts run across it a beat apart, and out into the wash. Seventy metres shorter than the road round, and the
+      // carts do not wait.
+      id: "mine",
+      kind: "shortcut",
+      from: 0.693,
+      to: 0.872,
+      width: 10,
+      flare: 22,
+      appeal: 0.7,
+      points: [
+        { x: -150, z: -138, y: 2.1 },
+        { x: -124, z: -130, y: 1.7 },
+        { x: -92, z: -142, y: 1.3 },
+        { x: -66, z: -128, y: 0.9 },
+      ],
+      hazards: [
+        crosser({ at: 0.5, reach: 13, period: 6.6, radius: 1.8 }),
+      ],
+      landmarks: [{ kind: "mine-tunnel", at: 0.53, offset: 0, span: 56 }],
+    },
   ],
   hazards: [
-    { kind: "tumbleweed", at: 0.0464, motion: "cross", period: 6, radius: 1.5 },
-    { kind: "boulder", at: 0.6427, motion: "roll", period: 5, radius: 2.4, offset: -2.5, span: 0.0557 },
-    { kind: "boulder", at: 0.6427, motion: "roll", period: 5, phase: 0.55, radius: 2.4, offset: -2.5, span: 0.0557 },
-    // The mine rails cross the ridge road: two ore carts, one each way, a lamp lit on the post before each runs.
-    crosser({ at: 0.29, reach: 10, period: 6.4 }),
-    crosser({ at: 0.299, reach: -10, period: 6.4, phase: 0.5 }),
-    // The quarry on the way down: two wrecking balls swing across the road a beat apart.
-    pendulum({ at: 0.527, reach: 4.5, period: 3.2 }),
-    pendulum({ at: 0.549, reach: 4.5, period: 3.2, phase: 0.5 }),
-    // The rails cross again out of the neck.
-    crosser({ at: 0.738, reach: 10, period: 5.8, phase: 0.2 }),
-    crosser({ at: 0.748, reach: -10, period: 5.8, phase: 0.7 }),
+    { kind: "tumbleweed", at: 0.0443, motion: "cross", period: 6, radius: 1.5 },
+    // The quarry's rails cross the open ridge: two ore carts, one each way, a lamp lit on the post before each runs.
+    crosser({ at: 0.2935, reach: 10, period: 6.4 }),
+    crosser({ at: 0.3045, reach: -10, period: 6.4, phase: 0.5 }),
+    // Down the tumble, two wrecking balls swing across the road a beat apart.
+    pendulum({ at: 0.594, reach: 4.5, period: 3.2 }),
+    pendulum({ at: 0.61, reach: 4.5, period: 3.2, phase: 0.5 }),
+    { kind: "boulder", at: 0.675, motion: "roll", period: 5, radius: 2.4, offset: -2.5, span: 0.04 },
+    { kind: "boulder", at: 0.675, motion: "roll", period: 5, phase: 0.55, radius: 2.4, offset: -2.5, span: 0.04 },
+    // The rails cross the long way round the U as well, past the mesa.
+    crosser({ at: 0.7625, reach: 10, period: 5.8, phase: 0.2 }),
+    crosser({ at: 0.771, reach: -10, period: 5.8, phase: 0.7 }),
     // The wash: three rock crushers in a wave (the middle lane has the boost).
-    ...stomperRow({ at: 0.862, lanes: [-6, 0, 6], period: 4.4, stagger: 0.22, radius: 2.2 }),
+    ...stomperRow({ at: 0.889, lanes: [-6, 0, 6], period: 4.4, stagger: 0.22, radius: 2.2 }),
   ],
   landmarks: [
-    { kind: "mesa", at: 0.065, offset: -88, scale: 1.6 },
-    { kind: "cactus-grove", at: 0.0418, offset: 34 },
+    { kind: "mesa", at: 0.058, offset: -88, scale: 1.6 },
+    { kind: "cactus-grove", at: 0.037, offset: 34 },
     { kind: "rock-arch", at: 0.1393, offset: 0, span: 16 },
     { kind: "cactus-grove", at: 0.1672, offset: -34 },
     { kind: "mesa", at: 0.2053, offset: 112, scale: 1.8 },
-    { kind: "mine-cart", at: 0.2229, offset: -38, scale: 1.1, turn: 0.8 },
+    { kind: "headframe", at: 0.2229, offset: -38, scale: 1.1, turn: 0.8 },
     { kind: "water-tower", at: 0.2433, offset: -34, scale: 1.3 },
-    { kind: "mesa", at: 0.3083, offset: -65, scale: 1.5 },
-    { kind: "cactus-grove", at: 0.3343, offset: -30 },
-    { kind: "mesa", at: 0.3808, offset: -78, scale: 1.7 },
-    { kind: "cactus-grove", at: 0.4829, offset: 34 },
-    { kind: "mine-cart", at: 0.548, offset: -26, scale: 1.0, turn: -0.5 },
-    { kind: "mesa", at: 0.5387, offset: 62 },
+    { kind: "mesa", at: 0.3, offset: 66, scale: 1.5 },
+    { kind: "mine-cart", at: 0.32, offset: 28, scale: 1.0, turn: -0.5 },
+    { kind: "dynamite-shack", at: 0.352, offset: 26, scale: 1.0 },
+    { kind: "cactus-grove", at: 0.4, offset: 34 },
+    { kind: "mesa", at: 0.4, offset: -80, scale: 1.7 },
+    { kind: "rope-bridge", at: 0.5395, offset: 0, span: 52 },
+    { kind: "mesa", at: 0.5, offset: 62 },
     { kind: "cactus-grove", at: 0.6501, offset: -32, scale: 1.2 },
+    { kind: "headframe", at: 0.68, offset: 36, scale: 1.0, turn: -2.4 },
     { kind: "mesa", at: 0.7355, offset: -80, scale: 1.4 },
     { kind: "cactus-grove", at: 0.8173, offset: -34 },
     { kind: "mesa", at: 0.8972, offset: -118, scale: 1.6 },

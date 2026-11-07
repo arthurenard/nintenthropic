@@ -7,6 +7,7 @@
 import { Group, Mesh, type Material } from "three";
 import { byHeight, grid, lathe, MeshBuilder, mixRgb, pipe, ramp, rgb, rockBlob, scaleRgb, shapes, torus, tube, xf, type Rgb, type Shade, type V3 } from "./kit";
 import { beam, drift, flutedPipe, hash, hazardGlass, noisyArch, taper, vec } from "./rockKit";
+import { MINE_LANDMARKS } from "./canyonMine";
 import type { Halo, HazardSpec, LandmarkSpec } from "./types";
 
 // ─── Palette ─────────────────────────────────────────────────────────────────
@@ -556,5 +557,6 @@ export const LANDMARKS: Record<string, LandmarkSpec> = {
   "cactus-grove": cactusGrove,
   "water-tower": waterTower,
   "mine-cart": mineCart,
+  ...MINE_LANDMARKS,
 };
 export const HAZARDS: Record<string, HazardSpec> = { boulder, tumbleweed };
