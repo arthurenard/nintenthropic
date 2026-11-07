@@ -595,7 +595,7 @@ export const FUN_FAIR: TrackDef = {
   theme: "funfair",
   laps: 3,
   width: 14,
-  blurb: "Dusk at the fair, every ride lit: under the arch, through the big top, across the bumper-car plaza, off the helter-skelter, home under the fireworks.",
+  blurb: "Dusk at the fair, every ride lit: under the Ferris wheel, up the coaster or round the midway, into the cannon, through the big top and home under the fireworks.",
   points: [
     { x: 0, z: 0 },
     { x: 0, z: 35 },
@@ -605,31 +605,33 @@ export const FUN_FAIR: TrackDef = {
     { x: 7.4, z: 167.5, bank: -0.12 },
     { x: 27.5, z: 187.6, bank: -0.12 },
     { x: 55, z: 195 },
-    // Along the top on the rollercoaster's own course: the lift hill (six and a half metres at 5%) with a weave
-    // either side of the crest, then the plunge (nearly nine metres in under ninety) to the dip under the
-    // coaster, and round the banked hairpin.
-    { x: 98.4, z: 201, y: 0.8, bank: 0.06 },
-    { x: 141.8, z: 214, y: 4.6, bank: 0.1 },
-    { x: 185.2, z: 203, y: 6.4, bank: -0.1 },
-    { x: 228.6, z: 192, y: 1.2, bank: -0.1 },
-    { x: 272, z: 195, y: -2.4 },
-    { x: 281, z: 192.6, y: -2.2, bank: -0.2 },
-    { x: 287.6, z: 186, y: -1.8, bank: -0.3 },
-    { x: 290, z: 177, y: -1.5, bank: -0.32 },
-    { x: 290, z: 174, y: -1.4, bank: -0.32 },
-    { x: 287.6, z: 165, y: -1, bank: -0.3 },
-    { x: 281, z: 158.4, y: -0.6, bank: -0.2 },
+    // The midway along the top: rolling ground under the coaster's rails, a hump and a dip, then the banked hairpin. The coaster
+    // itself is the other road (the split) on the trestle to the north.
+    { x: 98.4, z: 201, y: 0.6, bank: 0.05 },
+    { x: 141.8, z: 214, y: 2.6, bank: 0.08 },
+    { x: 185.2, z: 203, y: 3.2, bank: -0.08 },
+    { x: 228.6, z: 192, y: 0.8, bank: -0.08 },
+    { x: 272, z: 195, y: -2.0 },
+    { x: 281, z: 192.6, y: -1.9, bank: -0.2 },
+    { x: 287.6, z: 186, y: -1.6, bank: -0.3 },
+    { x: 290, z: 177, y: -1.3, bank: -0.32 },
+    { x: 290, z: 174, y: -1.2, bank: -0.32 },
+    { x: 287.6, z: 165, y: -0.9, bank: -0.3 },
+    { x: 281, z: 158.4, y: -0.5, bank: -0.2 },
     { x: 272, z: 156, y: -0.2 },
+    // The human cannonball's straight.
     { x: 236.3, z: 156 },
     { x: 200.7, z: 156 },
     { x: 165, z: 156 },
     { x: 145, z: 150.6, bank: 0.14 },
     { x: 130.4, z: 136, bank: 0.14 },
     { x: 125, z: 116 },
-    { x: 125, z: 78.8, width: 24 },
-    { x: 125, z: 41.6, width: 24 },
-    { x: 125, z: 4.4, width: 22.5 },
-    { x: 125, z: -32.8 },
+    // The plaza: a wide street that sways, the carousel in the middle.
+    { x: 121, z: 88, width: 24, bank: 0.06 },
+    { x: 130, z: 56, width: 24, bank: -0.06 },
+    { x: 121, z: 22, width: 23, bank: 0.06 },
+    { x: 125, z: -8, width: 21 },
+    { x: 125, z: -34, width: 15 },
     { x: 125, z: -70 },
     { x: 119.6, z: -90, bank: -0.14 },
     { x: 105, z: -104.6, bank: -0.14 },
@@ -642,14 +644,40 @@ export const FUN_FAIR: TrackDef = {
     { x: 0, z: -70 },
     { x: 0, z: -35 },
   ],
-  itemRows: [0.041, 0.3151, 0.4703, 0.6338],
+  itemRows: [0.1257, 0.3151, 0.4375, 0.6338],
   boostPads: [
     { at: 0.3515, offset: 0 },
-    { at: 0.4921, offset: -2 },
+    { at: 0.5415, offset: -2 },
     { at: 0.8456, offset: 2 },
   ],
   ramps: [
     { at: 0.7485 },
+  ],
+  // The human cannonball: the pack is fired off the start straight, over the entrance arch and the safety nets beyond it.
+  air: [{ kind: "cannon", at: 0.0215, length: 80, height: 7.5 }],
+  routes: [
+    {
+      // The coaster: a split off the midway. The midway is the low road, rolling ground under the rails; the other climbs the
+      // coaster's own track on its trestle (no barrier, a fall off it costs you) to the top of the lift hill and plunges
+      // down the far side to join the midway again, a line of boost at the bottom of the drop. Longer, higher, and faster.
+      id: "coaster",
+      kind: "split",
+      from: 0.2,
+      to: 0.36,
+      width: 11,
+      flare: 28,
+      appeal: 0.6,
+      points: [
+        { x: 85, z: 222, y: 3.2 },
+        { x: 118, z: 246, y: 9.5, bank: 0.12 },
+        { x: 158, z: 256, y: 14, bank: 0.06 },
+        { x: 192, z: 249, y: 10.2, bank: -0.1 },
+        { x: 212, z: 230, y: 4.2, bank: -0.12 },
+      ],
+      drops: [{ from: 0.2, to: 0.8, side: "both" }],
+      boostPads: [{ at: 0.84, offset: 0 }],
+      landmarks: [{ kind: "coaster-trestle", at: 0.5, offset: 0, span: 110 }],
+    },
   ],
   hazards: [
     // Test your strength: two mallets on the first straight, one up while the other comes down.
@@ -669,6 +697,10 @@ export const FUN_FAIR: TrackDef = {
   ],
   landmarks: [
     { kind: "entrance-arch", at: 0.0801, offset: 0, span: 16 },
+    { kind: "cannon-tent", at: 0.0215, offset: -26, scale: 1 },
+    { kind: "safety-net", at: 0.097, offset: -17 },
+    { kind: "safety-net", at: 0.097, offset: 17 },
+    { kind: "ferris-gate", at: 0.466, offset: 0 },
     { kind: "ferris-wheel", at: 0.0546, offset: -88, scale: 1.5 },
     { kind: "fireworks", at: 0.9836, offset: -30 },
     { kind: "fireworks", at: 0.0273, offset: 36, scale: 1.2 },

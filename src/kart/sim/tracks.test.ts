@@ -19,7 +19,7 @@ const LANDMARKS: Record<TrackTheme, string[]> = {
   kitchen: ["teapot", "fruit-bowl", "toaster", "grater", "drawer", "salt-shaker", "pepper-mill", "cookbook", "cereal-box", "mug", "fork-arch", "spoon-arch", "sink", "window", "wall-clock"],
   snow: ["igloo", "cabin", "snowman", "ice-arch", "ice-cave", "pine-snow", "gondola", "ski-jump"],
   volcano: ["volcano", "lava-fall", "basalt-columns", "stone-bridge", "obsidian-arch", "hot-spring"],
-  funfair: ["ferris-wheel", "carousel", "big-top", "rollercoaster", "entrance-arch", "food-stall", "balloon-stand", "hook-a-duck", "helter-skelter", "fireworks"],
+  funfair: ["ferris-wheel", "carousel", "big-top", "rollercoaster", "entrance-arch", "food-stall", "balloon-stand", "hook-a-duck", "helter-skelter", "fireworks", "ferris-gate", "coaster-trestle", "cannon-tent", "safety-net"],
   space: ["ringed-planet", "ring-gate", "asteroid", "satellite", "space-station", "nebula"],
   palm: ["palm-tree", "beach-hut", "surfboard", "sandcastle", "beach-towel", "giant-ring", "wristwatch"],
 };
@@ -28,7 +28,7 @@ const HAZARDS: Record<TrackTheme, string[]> = {
   canyon: ["boulder", "tumbleweed", "ore-cart", "wrecking-ball", "rock-crusher"],
   harbour: ["crab", "forklift", "swing-box"],
   kitchen: ["orange", "pea", "teacup", "toast"],
-  snow: ["penguin", "snowball", "yeti", "icicle"],
+  snow: ["penguin", "snowball", "yeti", "icicle", "avalanche"],
   volcano: ["fireball", "boulder", "geyser"],
   funfair: ["teacup-ride", "bumper-car", "arm-ball", "funhouse-panel", "mallet", "swing-boat"],
   space: ["asteroid", "comet"],

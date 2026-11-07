@@ -28,6 +28,7 @@ import { crushTop, hazardAt, type HazardPose } from "../../track/hazards";
 import { isPieceKind } from "../../track/pieces";
 import { MeshBuilder, rgb, shapes, xf, type Rgb } from "./builder";
 import type { HazardLayer, LandmarkMaterials, PlaceEnv } from "./landmarks/place";
+import { MODELS_2B } from "./pieceModels2B";
 
 // ─── The models ──────────────────────────────────────────────────────────────
 
@@ -122,6 +123,9 @@ const MODELS: Record<string, PieceModel> = {
     },
   },
 };
+
+// The second pass models (pieceModels2B.ts) replace the first pass's boxes and blobs, and add the avalanche.
+Object.assign(MODELS, MODELS_2B);
 
 const shapesDown = () => shapes.cone(6);
 const xfDown = (x: number, y: number, z: number, r: number, h: number) => xf(x, y, z, r, h, r, 0, Math.PI);
@@ -296,6 +300,7 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
   const TIMBER = new Color(0.42, 0.26, 0.14);
   const CANDY = new Color(1.0, 0.86, 0.86);
   const GOLD = new Color(1.6, 1.15, 0.3);
+  const CHUTE = new Color(0.9, 1.0, 1.15);
   /** Things drawn once for a group of pieces (a gantry over a row of crushers, a sweeper's hub): this frame's keys. */
   const seen = new Set<number>();
   const tint = new Color();
@@ -424,8 +429,11 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
               const dz = -Math.sin(h);
               const c = track.point(centre, def.offset ?? 0);
               const gy = roadAtCentre(centre, def.offset ?? 0);
-              if (building) for (const side of LANES) rod(c.x - dx * half - dz * side, gy + 0.12, c.z - dz * half + dx * side, c.x + dx * half - dz * side, gy + 0.12, c.z + dz * half + dx * side, 0.16, RAIL);
-              if (building) for (let n = -2; n <= 2; n++) cube(c.x + dx * n * (half / 2.2) * 0.9, gy + 0.05, c.z + dz * n * (half / 2.2) * 0.9, 0.35, 0.1, 2.2, h, SLEEPER);
+              const onRails = def.kind !== "avalanche";
+              if (building && onRails) for (const side of LANES) rod(c.x - dx * half - dz * side, gy + 0.12, c.z - dz * half + dx * side, c.x + dx * half - dz * side, gy + 0.12, c.z + dz * half + dx * side, 0.16, RAIL);
+              if (building && onRails) for (let n = -2; n <= 2; n++) cube(c.x + dx * n * (half / 2.2) * 0.9, gy + 0.05, c.z + dz * n * (half / 2.2) * 0.9, 0.35, 0.1, 2.2, h, SLEEPER);
+              // An avalanche has no rails: it has a chute, a scoured strip of the slope across the road, pale in the dark.
+              if (building && !onRails) cube(c.x, gy + 0.04, c.z, 2 * half, 0.05, 5.5, h, CHUTE);
               // A lamp on a post where it comes in.
               const ex = c.x - dx * half * d;
               const ez = c.z - dz * half * d;

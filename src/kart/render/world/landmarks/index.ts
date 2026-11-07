@@ -37,7 +37,7 @@ export const THEME_LANDMARKS: Readonly<Record<string, readonly string[]>> = {
   kitchen: ["teapot", "fruit-bowl", "toaster", "grater", "drawer", "salt-shaker", "pepper-mill", "cookbook", "cereal-box", "mug", "fork-arch", "spoon-arch", "sink", "window", "wall-clock"],
   snow: ["igloo", "cabin", "snowman", "ice-arch", "ice-cave", "pine-snow", "gondola", "ski-jump"],
   volcano: ["volcano", "lava-fall", "basalt-columns", "stone-bridge", "obsidian-arch", "hot-spring"],
-  funfair: ["ferris-wheel", "carousel", "big-top", "rollercoaster", "entrance-arch", "food-stall", "balloon-stand", "hook-a-duck", "helter-skelter", "fireworks"],
+  funfair: ["ferris-wheel", "carousel", "big-top", "rollercoaster", "entrance-arch", "food-stall", "balloon-stand", "hook-a-duck", "helter-skelter", "fireworks", "ferris-gate", "coaster-trestle", "cannon-tent", "safety-net"],
   space: ["ringed-planet", "ring-gate", "asteroid", "satellite", "space-station", "nebula"],
   palm: ["palm-tree", "beach-hut", "surfboard", "sandcastle", "beach-towel", "giant-ring", "wristwatch"],
 };
@@ -48,7 +48,7 @@ export const THEME_HAZARDS: Readonly<Record<string, readonly { kind: string; mot
   canyon: [{ kind: "boulder", motion: "roll" }, { kind: "tumbleweed", motion: "cross" }, { kind: "rock-crusher", motion: "crush" }, { kind: "wrecking-ball", motion: "swing" }, { kind: "ore-cart", motion: "slide" }],
   harbour: [{ kind: "crab", motion: "cross" }, { kind: "forklift", motion: "cross" }, { kind: "swing-box", motion: "orbit" }],
   kitchen: [{ kind: "orange", motion: "roll" }, { kind: "pea", motion: "cross" }, { kind: "teacup", motion: "orbit" }, { kind: "toast", motion: "bob" }],
-  snow: [{ kind: "penguin", motion: "cross" }, { kind: "snowball", motion: "roll" }, { kind: "yeti", motion: "bob" }, { kind: "icicle", motion: "crush" }, { kind: "arm-ball", motion: "orbit" }],
+  snow: [{ kind: "penguin", motion: "cross" }, { kind: "snowball", motion: "roll" }, { kind: "yeti", motion: "bob" }, { kind: "icicle", motion: "crush" }, { kind: "arm-ball", motion: "orbit" }, { kind: "avalanche", motion: "slide" }],
   volcano: [{ kind: "fireball", motion: "bob" }, { kind: "boulder", motion: "roll" }, { kind: "geyser", motion: "bob" }],
   funfair: [{ kind: "teacup-ride", motion: "orbit" }, { kind: "bumper-car", motion: "cross" }, { kind: "arm-ball", motion: "orbit" }, { kind: "mallet", motion: "crush" }, { kind: "funhouse-panel", motion: "slide" }, { kind: "swing-boat", motion: "swing" }],
   space: [{ kind: "asteroid", motion: "orbit" }, { kind: "comet", motion: "roll" }],

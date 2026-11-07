@@ -149,7 +149,7 @@ export const ferrisWheel: LandmarkSpec = {
 // ─── Carousel ────────────────────────────────────────────────────────────────
 
 /** A painted carousel horse, about 4.6 m nose to tail, facing +z, its body centred on y = 0 and its hooves 1.25 m below, pole through the middle. */
-function horse(coat: Rgb, mane: Rgb, saddle: Rgb): MeshBuilder {
+export function horse(coat: Rgb, mane: Rgb, saddle: Rgb): MeshBuilder {
   const b = new MeshBuilder();
   const dark = scaleRgb(coat, 0.55);
   b.blob(0, 0, -0.1, 0.78, 0.82, 1.45, ramp(dark, coat), 0);

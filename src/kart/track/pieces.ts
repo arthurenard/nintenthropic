@@ -23,6 +23,7 @@ export const PIECE_KINDS: readonly string[] = [
   "funhouse-panel",
   "mallet",
   "swing-boat",
+  "avalanche",
 ];
 
 export function isPieceKind(kind: string): boolean {
