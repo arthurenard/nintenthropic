@@ -24,11 +24,11 @@
  * would have them instead of sliding with the pitch, and the three crossfade.
  */
 import { biquad, bandpass, highpass, lowpass } from "../dsp/filters";
-import { pipeResonance, slowWander } from "../dsp/resonators";
+import { pipeResonance, settle, slowWander } from "../dsp/resonators";
 import { type Mono, normalize } from "../dsp/signal";
 import { addMode, white } from "../dsp/sources";
 import type { Take } from "../dsp/take";
-import { TAU, addCycles, addWrapped, circular, drive, noiseLoop, times } from "./kart-kit";
+import { TAU, addCycles, addWrapped, drive, noiseLoop, times } from "./kart-kit";
 
 /** The revs (src/kart/audio/engines.ts) at which the low, mid and high layers are made. */
 export const LAYER_REVS = { lo: 0.8, mid: 1.2, hi: 1.8 } as const;
@@ -166,7 +166,7 @@ export function engineLoop(t: Take, e: EngineSpec): Mono[] {
     edge[at[i]!]! += amp[i]! * e.edge;
     edge[(at[i]! + 1) % n]! -= 0.5 * amp[i]! * e.edge;
   }
-  circular(thump, (twice) => lowpass(twice, sr, e.sub.cut, 2));
+  settle(thump, (twice) => lowpass(twice, sr, e.sub.cut, 2));
   normalize(thump);
 
   // --- the intake's roar: an envelope half a cycle behind each firing, shared by both sides -----------------
@@ -190,7 +190,7 @@ export function engineLoop(t: Take, e: EngineSpec): Mono[] {
       const len = Math.max(6, Math.round(0.0012 * sr));
       for (let j = 0; j < len; j++) ticks[(start + j) % n]! += amp[i]! * (2 * r.next() - 1) * Math.exp((-4 * j) / len);
     }
-    circular(ticks, (twice) => bandpass(twice, sr, e.tick.low, e.tick.high, 2));
+    settle(ticks, (twice) => bandpass(twice, sr, e.tick.low, e.tick.high, 2));
     normalize(ticks);
   }
 
@@ -217,9 +217,10 @@ export function engineLoop(t: Take, e: EngineSpec): Mono[] {
     }
   }
   const series = (side: number): Mono => {
-    const sum = new Float32Array(n);
+    // One engine cycle's waveform in a table, laid end to end through the loop (the series is exactly periodic).
+    const size = 4096;
+    const table = new Float32Array(size);
     const top = Math.min(6500, e.lowpass ?? 6500);
-    const base = e.hz;
     const shape = (f: number): number => {
       let g = 0;
       for (const [hz, q, gain] of e.formants) {
@@ -233,11 +234,36 @@ export function engineLoop(t: Take, e: EngineSpec): Mono[] {
       }
       return (0.15 + g) / Math.sqrt(1 + (f / top) ** 4);
     };
-    for (let k = 1; base * k < top; k++) {
-      const f = base * k;
+    const amps: number[] = [];
+    let loudest = 0;
+    for (let k = 1; e.hz * k < top && k < size / 4; k++) {
+      amps[k] = shape(e.hz * k) / Math.pow(k, 0.35);
+      loudest = Math.max(loudest, amps[k]!);
+    }
+    for (let k = 1; k < amps.length; k++) {
+      // The partials more than 40 dB down are not worth their cost.
+      if (amps[k]! < 0.01 * loudest) continue;
       // The low partials are one engine in the middle; the upper ones are each ear's own.
       const stray = k <= 4 ? 0 : side * r.range(0, 0.55 * Math.PI) * Math.min(1, (k - 4) / 8);
-      addCycles(sum, cycles * k, shape(f) / Math.pow(k, 0.35), r.range(0, TAU) * 0 + (k * 2.399963 + stray));
+      const ph = k * 2.399963 + stray;
+      const w = (TAU * k) / size;
+      const cw = Math.cos(w);
+      const sw = Math.sin(w);
+      let re = Math.cos(ph);
+      let im = Math.sin(ph);
+      for (let i = 0; i < size; i++) {
+        table[i]! += amps[k]! * im;
+        const nr = re * cw - im * sw;
+        im = re * sw + im * cw;
+        re = nr;
+      }
+    }
+    const sum = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const pos = (((i * cycles) / n) % 1) * size;
+      const j = Math.floor(pos);
+      const u = pos - j;
+      sum[i] = table[j]! + (table[(j + 1) % size]! - table[j]!) * u;
     }
     normalize(sum);
     times(sum, strength);
@@ -254,29 +280,29 @@ export function engineLoop(t: Take, e: EngineSpec): Mono[] {
         env *= puffK;
       }
     }
-    circular(gas, (twice) => bandpass(twice, sr, e.gas.low, e.gas.high, 2));
+    settle(gas, (twice) => bandpass(twice, sr, e.gas.low, e.gas.high, 2));
     normalize(gas);
     const source = new Float32Array(n);
     for (let i = 0; i < n; i++) source[i] = edge[i]! + 0.55 * gas[i]!;
     const wide = 1 + side * e.pipe.spread;
     const tube = Float32Array.from(source);
-    circular(tube, (twice) => pipeResonance(twice, sr, e.pipe.hz * tune * wide, e.pipe.feedback, e.pipe.damp));
+    settle(tube, (twice) => pipeResonance(twice, sr, e.pipe.hz * tune * wide, e.pipe.feedback, e.pipe.damp));
     const ring = new Float32Array(n);
     for (let i = 0; i < n; i++) ring[i] = 0.5 * tube[i]!;
     for (const [hz, q, gain] of e.formants) {
       const band = Float32Array.from(tube);
-      circular(band, (twice) => biquad(twice, sr, "bandpass", hz * tune * (1 + side * e.pipe.spread * 0.7), q));
+      settle(band, (twice) => biquad(twice, sr, "bandpass", hz * tune * (1 + side * e.pipe.spread * 0.7), q));
       for (let i = 0; i < n; i++) ring[i]! += gain * band[i]!;
     }
     normalize(ring);
 
     const roar = white(n, r);
-    circular(roar, (twice) => lowpass(twice, sr, e.intake.cut, 2));
+    settle(roar, (twice) => lowpass(twice, sr, e.intake.cut, 2));
     times(roar, intakeEnv);
     normalize(roar);
 
     const hiss = white(n, r);
-    circular(hiss, (twice) => highpass(twice, sr, 4500, 2));
+    settle(hiss, (twice) => highpass(twice, sr, 4500, 2));
     times(hiss, breathe.map((b) => 0.7 + 0.3 * b));
     normalize(hiss);
 
@@ -292,7 +318,7 @@ export function engineLoop(t: Take, e: EngineSpec): Mono[] {
   for (const ch of out) {
     for (let i = 0; i < n; i++) ch[i]! /= peak || 1;
     drive(ch, e.drive);
-    if (e.lowpass) circular(ch, (twice) => lowpass(twice, sr, e.lowpass!, 2));
+    if (e.lowpass) settle(ch, (twice) => lowpass(twice, sr, e.lowpass!, 2));
   }
   return out;
 }
@@ -410,7 +436,7 @@ function electric(t: Take, revs: number): Mono[] {
       buzz[p % n]! += 1;
       buzz[(p + 1) % n]! -= 1;
     }
-    circular(buzz, (twice) => bandpass(twice, t.sr, 1200, 6000, 2));
+    settle(buzz, (twice) => bandpass(twice, t.sr, 1200, 6000, 2));
     normalize(buzz);
     const ch = new Float32Array(n);
     for (let i = 0; i < n; i++) ch[i] = body[i]! * (1 + 0.22 * wob[i]!) * (1 + 0.1 * Math.sin((TAU * 7 * i) / n + beat)) + 0.25 * buzz[i]! + 0.18 * shimmer[i]!;
@@ -453,7 +479,7 @@ export function engineGrit(t: Take): Mono[] {
     const click = Math.max(5, Math.round(0.001 * sr));
     for (let j = 0; j < click; j++) rattle[(((b.at + Math.round(period * 0.4) + j) % n) + n) % n]! += b.env * (2 * r.next() - 1) * Math.exp((-4 * j) / click);
   }
-  circular(rattle, (twice) => bandpass(twice, sr, 2600, 7000, 2));
+  settle(rattle, (twice) => bandpass(twice, sr, 2600, 7000, 2));
   normalize(rattle);
   const out: Mono[] = [];
   for (const side of [-1, 1]) {
@@ -465,9 +491,9 @@ export function engineGrit(t: Take): Mono[] {
         env *= b.k;
       }
     }
-    circular(ch, (twice) => bandpass(twice, sr, 750, 5200, 2));
+    settle(ch, (twice) => bandpass(twice, sr, 750, 5200, 2));
     const res = Float32Array.from(ch);
-    circular(res, (twice) => biquad(twice, sr, "bandpass", 1500 * (1 + 0.08 * side), 3.2));
+    settle(res, (twice) => biquad(twice, sr, "bandpass", 1500 * (1 + 0.08 * side), 3.2));
     for (let i = 0; i < n; i++) ch[i]! += 0.7 * res[i]!;
     normalize(ch);
     for (let i = 0; i < n; i++) ch[i]! += 0.22 * rattle[i]!;

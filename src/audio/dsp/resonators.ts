@@ -38,6 +38,22 @@ export function pipeResonance(buf: Mono, sr: number, hz: number, feedback: numbe
 }
 
 /**
+ * Apply a filter to a loop so the seam is as smooth as anywhere, like ``circular`` in kart-kit but cheaper: the filter is
+ * primed with the loop's own last ``warm`` samples (a filter that forgets in a few thousand samples, which is all of
+ * these) instead of a whole second copy of it, and the loop is the part after them.
+ */
+export function settle(buf: Mono, filter: (run: Mono) => void, warm = 4800): Mono {
+  const n = buf.length;
+  const pre = Math.min(warm, n);
+  const run = new Float32Array(pre + n);
+  run.set(buf.subarray(n - pre), 0);
+  run.set(buf, pre);
+  filter(run);
+  buf.set(run.subarray(pre));
+  return buf;
+}
+
+/**
  * A comb: the input plus itself ``hz`` later, ``gain`` as loud (positive: peaks at hz and its multiples; negative:
  * notches there). In place; the cheap way to give noise a metallic or tubular ring.
  */

@@ -13,14 +13,14 @@
  */
 import { midiHz } from "../dsp/curves";
 import { bandpass, highpass, lowpass, svf } from "../dsp/filters";
-import { slowWander, stickSlip } from "../dsp/resonators";
+import { settle, slowWander, stickSlip } from "../dsp/resonators";
 import { type Mono, normalize } from "../dsp/signal";
 import { addMode, bandNoise, brown, pink, white } from "../dsp/sources";
 import type { Take } from "../dsp/take";
 import { loopify } from "../dsp/master";
 import { narrow } from "./kart-engines";
 import { bubble } from "./kit";
-import { TAU, addCycles, addWrapped, circular, cyclic, drive, expo, grains, noiseLoop, times } from "./kart-kit";
+import { TAU, addCycles, addWrapped, cyclic, drive, expo, grains, noiseLoop, times } from "./kart-kit";
 
 /**
  * Both ears, each made by ``make`` with its own draws of the noise, then pulled towards the middle so the sum to
@@ -139,7 +139,7 @@ export function driftSparks(t: Take): Mono[] {
       for (let i = 0; i < len; i++) g[i]! *= Math.exp((-4 * i) / len) * (0.4 + s * s);
       return g;
     });
-    circular(crackle, (twice) => bandpass(twice, t.sr, 2400, 10000, 2));
+    settle(crackle, (twice) => bandpass(twice, t.sr, 2400, 10000, 2));
     normalize(crackle);
     const hiss = noiseLoop(t, seconds, (m) => bandNoise(m, t.sr, r, 4200, 10000, 2));
     times(hiss, cyclic(n, 9, 0.5, phase(t)));
@@ -234,7 +234,7 @@ export function surfaceSand(t: Take): Mono[] {
       for (let i = 0; i < len; i++) g[i]! *= Math.exp((-3 * i) / len) * s;
       return g;
     });
-    circular(patter, (twice) => bandpass(twice, t.sr, 2200, 9000, 2));
+    settle(patter, (twice) => bandpass(twice, t.sr, 2200, 9000, 2));
     normalize(patter);
     const stones = grains(t, seconds, 26, (s) => {
       const g = new Float32Array(t.n(0.03));
@@ -376,10 +376,9 @@ export function barrierScrape(t: Take): Mono[] {
     const panel = Float32Array.from(grit);
     // The panel's modes: the barrier rings at these pitches wherever the rubbing excites them.
     const rung = new Float32Array(n);
-    for (const [hz, q, g] of [[380, 9, 1], [760, 10, 0.7], [1900, 12, 0.5], [3300, 14, 0.3]] as const) {
+    for (const [hz, g] of [[380, 1], [760, 0.7], [1900, 0.5], [3300, 0.3]] as const) {
       const band = Float32Array.from(panel);
-      circular(band, (twice) => bandpass(twice, t.sr, hz * (1 + 0.02 * side) * 0.9, hz * (1 + 0.02 * side) * 1.1, 2));
-      void q;
+      settle(band, (twice) => bandpass(twice, t.sr, hz * (1 + 0.02 * side) * 0.9, hz * (1 + 0.02 * side) * 1.1, 2));
       for (let i = 0; i < n; i++) rung[i]! += g * band[i]!;
     }
     normalize(rung);
@@ -411,7 +410,7 @@ export function suspensionCreak(t: Take): Mono[] {
       body[i] = Math.sin(ph) + 0.45 * Math.sin(2 * ph) + 0.25 * Math.sin(3.02 * ph);
     }
     times(body, stickSlip(len, t.sr, 38, 0.1, () => r.next()));
-    for (let i = 0; i < len; i++) body[i]! *= Math.sin((Math.PI * Math.min(1, (i / len) * 1.3)) * 0.5 + 0.0) * Math.pow(1 - i / len, 1.4);
+    for (let i = 0; i < len; i++) body[i]! *= Math.sin(0.5 * Math.PI * Math.min(1, (i / len) * 4)) * Math.pow(1 - i / len, 1.4);
     const rattle = bandpass(white(len, r), t.sr, 1800, 5200, 2);
     for (let i = 0; i < len; i++) rattle[i]! *= Math.exp((-5 * i) / len) * (r.next() < 0.18 ? 1 : 0.15);
     for (let i = 0; i < len; i++) body[i]! += 0.14 * rattle[i]!;
