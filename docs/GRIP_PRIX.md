@@ -520,8 +520,8 @@ the tracks that do (24 to 34 when the machine was quiet): under 0.4% of a frame.
   `data:image/jpeg;base64,`, nothing more), any kart the sender does not drive,
   any race but this one, and a second photo of a kart. They are kept for one
   race, in memory, and a new race (a restart too) starts with none.
-- **The wire** (protocol 8; 7 changed only how devices connect, 8 added the
-  `photo` message both ways). A snapshot is one JSON line, about 1.1 KB for
+- **The wire** (protocol 9; 7 changed only how devices connect, 8 added the
+  `photo` message both ways, 9 the new tracks' set pieces and air sections, which every device must build alike). A snapshot is one JSON line, about 1.1 KB for
   eight karts: the tick, the dice, the items in the air, the eggs, and the
   kart table, 54 numbers a kart (where it is and how fast, drift, boost, item,
   lap, the bot's own state...). A kart's row is mostly zeros and what the kart
