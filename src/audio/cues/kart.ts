@@ -124,14 +124,14 @@ import type { CueSpec } from "./table";
 export const KART_CUES: Record<string, CueSpec> = {
   // --- engines: loops the game steers (rate = pitch, volume, pan, distance) ---------------------------
   // Each engine twice, low and high in its revs (src/kart/audio/engines.ts crosses them over), all equally loud.
-  kart_engine_light_lo: { recipe: engineLightLo, pack: "kart", bus: "sfx", level: -7, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.95, 1.06] },
-  kart_engine_light_hi: { recipe: engineLightHi, pack: "kart", bus: "sfx", level: -7, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.95, 1.06] },
-  kart_engine_middle_lo: { recipe: engineMiddleLo, pack: "kart", bus: "sfx", level: -7, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.95, 1.06] },
-  kart_engine_middle_hi: { recipe: engineMiddleHi, pack: "kart", bus: "sfx", level: -7, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.95, 1.06] },
-  kart_engine_heavy_lo: { recipe: engineHeavyLo, pack: "kart", bus: "sfx", level: -7, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.95, 1.06] },
-  kart_engine_heavy_hi: { recipe: engineHeavyHi, pack: "kart", bus: "sfx", level: -7, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.95, 1.06] },
-  kart_engine_electric_lo: { recipe: engineElectricLo, pack: "kart", bus: "sfx", level: -7, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.9, 1.1] },
-  kart_engine_electric_hi: { recipe: engineElectricHi, pack: "kart", bus: "sfx", level: -7, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.9, 1.1] },
+  kart_engine_light_lo: { recipe: engineLightLo, pack: "kart", bus: "sfx", level: -7.5, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.95, 1.06] },
+  kart_engine_light_hi: { recipe: engineLightHi, pack: "kart", bus: "sfx", level: -7.5, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.95, 1.06] },
+  kart_engine_middle_lo: { recipe: engineMiddleLo, pack: "kart", bus: "sfx", level: -7.5, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.95, 1.06] },
+  kart_engine_middle_hi: { recipe: engineMiddleHi, pack: "kart", bus: "sfx", level: -7.5, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.95, 1.06] },
+  kart_engine_heavy_lo: { recipe: engineHeavyLo, pack: "kart", bus: "sfx", level: -7.5, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.95, 1.06] },
+  kart_engine_heavy_hi: { recipe: engineHeavyHi, pack: "kart", bus: "sfx", level: -7.5, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.95, 1.06] },
+  kart_engine_electric_lo: { recipe: engineElectricLo, pack: "kart", bus: "sfx", level: -7.5, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.9, 1.1] },
+  kart_engine_electric_hi: { recipe: engineElectricHi, pack: "kart", bus: "sfx", level: -7.5, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect: [0.9, 1.1] },
   // The rasp of a working engine, steered with the load (the player's own karts only).
   kart_engine_grit: { recipe: engineGrit, pack: "kart", bus: "sfx", level: -14, loop: true, priority: 2, fadeIn: 0.08, fadeOut: 0.2, vary: 0, expect: [0.9, 1.1] },
   kart_idle: { recipe: engineIdle, pack: "kart", bus: "sfx", level: -12.5, loop: true, priority: 2, fadeIn: 0.2, fadeOut: 0.25, vary: 0, expect: [0.9, 1.1] },

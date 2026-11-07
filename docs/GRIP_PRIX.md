@@ -846,7 +846,10 @@ heard and let go after half a second of silence, and is told only what has moved
   the kart's acceleration and the climb under it: working, it sings higher, louder and rougher (its rasp, a loop
   pulsing on its firings, comes up); lifting off or rolling downhill it softens, and lifting off hard after pulling at
   high revs, the exhaust pops (at most once in 2.5 s; not the motor's). Near a standstill the idle takes over (the motor hums). A
-  boost's growl roars under it. Each note wavers a little, as an engine never holds one quite still.
+  boost's growl roars under it. Each note wavers a little, as an engine never holds one quite still. The revs run
+  through four gears (`gearFactor`, a pure function of speed): ±6 % through a gear, a dip of about two semitones at each
+  change, fading to nothing standing still, at top speed and in the air. In the last second before Go the whole grid
+  blips its throttle (`gridFlare`: revs up by three quarters, the idle handing over to the engine, gone at Go).
 - **Other karts.** Every local kart's engine and the nearest others' (at most four others, six karts in all), heard
   from the nearest local kart: louder close (to nothing at 70 m, the engine's distance roll-off and air on top), the
   nearest standing out of the pack (each further one stepped down), to the side it lies on (a kart 3.5 m to one side
@@ -869,6 +872,15 @@ heard and let go after half a second of silence, and is told only what has moved
   (kitchen), water lapping, a sea breeze and gulls (harbour), a dry wind and a hawk (canyon), a crowd, generators and
   the high striker's bell (funfair), a thin wind and creaking ice (snow), the mountain's rumble and lava (volcano), a
   spaceship's drone, the void's hiss and a radio's bleeps (space), surf, wind in the palms and tropical birds (palm).
+- **Rooms.** Every track has its own reverb (`space.ts`: an impulse response made once from the theme, with its own
+  length, decay by band, pre-delay and return level: a meadow's is 0.9 s and airy, a kitchen hard tile, the funfair a
+  big top, the glacier and the volcano caves of two seconds, space 2.6 s and dark). The arcade's engine takes it with
+  `setImpulse` (`RaceAudio.load` hands it over), and the one-shots that matter send into it (`reverb` in the cue
+  table: finish, cheer, laps, blasts, storms, the skyrocket's burst, hits, landings and boosts most, the countdown a
+  little). The loops (engines, tyres, wind) stay dry: they are the near, steady ground the rest rings against. The
+  countdown climbs the A major triad (one beep at A4, C#5, E5) and Go is the A above with the triad blooming over it
+  and the crowd a beat behind; a drift boost at the second and third charge has the flame roaring behind it, longer the
+  hotter.
 - **The mix.** Levels are dB at the bus, in `src/audio/cues/kart.ts` (its header has the ladder); the tests hold it
   (`cues.test.ts`: every take under the bus's −1 dBFS ceiling, the kinds stepped, the engines' eight layers within
   3 dB, the places under the engines). The music dips under the big moments: the finish (to 0.3 of its level), the
