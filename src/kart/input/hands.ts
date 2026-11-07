@@ -39,6 +39,11 @@ export const GRIP = {
   fistFingers: 1,
   /** A hand changes between fist and open only after the new reading has lasted this long, seconds. */
   hold: 0.12,
+  /**
+   * ...and has been backed by at least this many frames, however few the camera gave in that time: a hand read on one
+   * frame in three (three or four players on one camera) must not flip on a single misread frame.
+   */
+  frames: 2,
 } as const;
 
 export type GripState = "fist" | "open";
@@ -130,6 +135,17 @@ export class Grip {
   private pending: GripState | null = null;
   private pendingSince = 0;
   private pendingLast = 0;
+  private pendingFrames = 0;
+  /** Frames in a row that backed the state (1 on first sight): a state not yet backed twice is a guess, not a grip. */
+  private agreeing = 0;
+
+  /**
+   * Has the state been seen on two frames (or arrived by a change that held)? A hand's first frame back in the picture
+   * is the one most likely misread, and takes the state at once; it is not braked on until a second frame says the same.
+   */
+  get steady(): boolean {
+    return this.state !== null && this.agreeing >= GRIP.frames;
+  }
 
   /** Feeds one frame's finger count; returns true when the state changed. */
   update(fingers: number, now: number, hold: number = GRIP.hold): boolean {
@@ -138,11 +154,13 @@ export class Grip {
       // First sight: take what is there at once, there is nothing to hold against.
       this.state = reading ?? "fist";
       this.since = now;
+      this.agreeing = 1;
       return true;
     }
     if (reading === null) return false; // in the dead band: a change under way waits
     if (reading === this.state) {
       this.pending = null;
+      this.agreeing++;
       return false;
     }
     // A change under way that has gone unsupported for a while (a hand that sat
@@ -150,12 +168,15 @@ export class Grip {
     if (this.pending !== reading || now - this.pendingLast > GAP) {
       this.pending = reading;
       this.pendingSince = now;
+      this.pendingFrames = 0;
     }
     this.pendingLast = now;
-    if (now - this.pendingSince >= hold) {
+    this.pendingFrames++;
+    if (now - this.pendingSince >= hold && this.pendingFrames >= GRIP.frames) {
       this.state = reading;
       this.since = this.pendingSince;
       this.pending = null;
+      this.agreeing = this.pendingFrames;
       return true;
     }
     return false;
@@ -166,5 +187,7 @@ export class Grip {
     this.state = null;
     this.pending = null;
     this.since = 0;
+    this.agreeing = 0;
+    this.pendingFrames = 0;
   }
 }
