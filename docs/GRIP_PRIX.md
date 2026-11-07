@@ -942,10 +942,7 @@ calypso on steel pans), the menu and lobby, the two result screens, the podium a
   `music("jingle-lose")`) are one-shots, a fanfare of brass over timpani and a rueful descent on a muted trumpet.
 - **Off the main thread, and what it costs.** The worker renders a piece in one go (the stages are the fallback's
   slices) while the loading bar shows its progress; the final-lap version, its stinger and the comet layer render in the
-  background after the race loads. Measured in Node at 32 kHz on a machine shared with ten other jobs (load average 40
-  on 16 cores, so a quiet machine is several times faster): 1.2 to 15 s a race theme, the volcano and canyon at the
-  quick end, the synthwave (many long supersaw notes) at the slow. Before this rework the same pieces took 1.8 to 6.6 s
-  on a similar load (the snow took 30 s once, in a burst of load). A race theme's loop is 18 to 21 MB at 32 kHz (27 to
+  background after the race loads. Measured in Node at 32 kHz on a quiet 16-core machine: 0.5 to 1.5 s a race theme, 0.5 to 0.9 s a screen's piece (the synthwave and the snow at the slow end; on the same machine shared with ten other jobs, load 40, the same pieces took 1.2 to 15 s). A race theme's loop is 18 to 21 MB at 32 kHz (27 to
   32 MB at 48 kHz) and its final-lap version 16 to 19 (24 to 29); `RaceAudio` keeps only the current theme's pair, the
   menu's and the screens'. The comet layer (2 s) and the stinger (about 6 s) are a few hundred kilobytes.
 - **Checking without hearing.** `production.test.ts` holds the tools (a limiter that lets nothing through, a pump, a
