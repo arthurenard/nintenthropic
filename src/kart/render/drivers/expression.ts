@@ -8,14 +8,16 @@
  * is probed where each brow and the mouth go, as the eyelids do). One mesh
  * per driver, in the kart material, whose geometry is swapped for the mood:
  * a geometry per species and mood is built once and shared by every driver of
- * the species, so a change of face costs nothing but the swap and there is
- * one extra draw call per near driver, no new shader.
+ * the species. The face is welded into the head's own mesh (the head's
+ * geometry with the mood's face, made the first time a driver wears that
+ * mood), so a change of face is a swap of geometry and costs no draw call
+ * and no shader.
  *
  * Only the modelled drivers wear it (the code-built stand-ins have their own
  * brows and mouths built in).
  */
-import { BufferGeometry, CatmullRomCurve3, Matrix4, Mesh, TubeGeometry, Vector3, type Material } from "three";
-import { MeshBuilder, rgb, type Rgb } from "../kartBuilder";
+import { BufferGeometry, CatmullRomCurve3, Matrix4, TubeGeometry, Vector3, type Mesh } from "three";
+import { MeshBuilder, mergeBaked, rgb, type Rgb } from "../kartBuilder";
 import { SURF } from "../kartMaterial";
 import type { Species } from "./types";
 
@@ -187,19 +189,37 @@ export function moodOf(m: { happy: number; dizzy: number; steer: number; rest: n
 
 /** The brows and mouth on one driver's head. */
 export class Face {
-  readonly mesh: Mesh;
-  private readonly geometries: (BufferGeometry | null)[];
+  private readonly faces: (BufferGeometry | null)[];
+  /** The head with each mood's face welded on, made when first worn. */
+  private readonly worn: (BufferGeometry | null)[] = MOODS.map(() => null);
   private mood: Mood = "calm";
   private since = -Infinity;
 
-  constructor(species: Species, head: BufferGeometry, material: Material) {
-    this.geometries = MOODS.map((m) => faceGeometry(species, head, m));
-    if (!this.geometries[0]) throw new Error("no face");
-    this.mesh = new Mesh(this.geometries[0]!, material);
+  /** `head` is the head's own geometry, `mesh` the mesh that draws it (its geometry is swapped for the mood's). */
+  constructor(
+    species: Species,
+    private readonly head: BufferGeometry,
+    private readonly mesh: Mesh,
+  ) {
+    this.faces = MOODS.map((m) => faceGeometry(species, head, m));
+    if (!this.faces[0]) throw new Error("no face");
+    this.show(0);
   }
 
   get current(): Mood {
     return this.mood;
+  }
+
+  private show(i: number): void {
+    let g = this.worn[i];
+    if (!g) {
+      g = mergeBaked([
+        { geometry: this.head, matrix: new Matrix4() },
+        { geometry: this.faces[i] ?? this.faces[0]!, matrix: new Matrix4() },
+      ]);
+      this.worn[i] = g;
+    }
+    this.mesh.geometry = g;
   }
 
   /** Shows `mood` at `time`: a mood is held a moment before it gives way to a milder one, so a flick of the wheel does not flicker a face. */
@@ -209,8 +229,12 @@ export class Face {
       if (urgent || time - this.since > 0.22 || time < this.since) {
         this.mood = mood;
         this.since = time;
-        this.mesh.geometry = this.geometries[MOODS.indexOf(mood)] ?? this.geometries[0]!;
+        this.show(MOODS.indexOf(mood));
       }
     }
+  }
+
+  dispose(): void {
+    for (const g of this.worn) g?.dispose();
   }
 }

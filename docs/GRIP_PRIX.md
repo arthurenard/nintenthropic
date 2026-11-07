@@ -764,7 +764,41 @@ that file exists (`render/art.ts`).
   so no frame turns through more than 1.9 rad of it, which keeps it a buzz at
   30 fps; none of this for Reduce Motion), a whole flat turn in the air for a
   trick; a blob shadow
-  (`render/kart.ts`). **Faces and looks.** Each driver blinks (`drivers/face.ts`:
+  (`render/kart.ts`). **Three bodies and a livery** (`kartArt.ts`, `livery.ts`,
+  `art/kart/karts/build.py`). A driver's weight class picks the kart: the light
+  drivers (Bun, Pepper, Moss) a nimble open buggy (`kart.body.light`: a slim tub
+  on a painted roll cage with a dash arch, side rails and braces, a bare engine
+  with cooling fins and an air filter, an aerial with a pennant, a small nose
+  with one round lamp, springs out in the open, eight-spoke wheels), the middle
+  drivers (Kit, Juniper, Mango, Dabble) the classic sprint kart (`kart.body`, also
+  named `kart.body.middle`: rounded tub, wing on curved struts, chrome bumpers,
+  coil springs on the front dampers), the heavy drivers (Bramble, Rivet) a wide
+  muscle kart (`kart.body.heavy`: flared fenders over all four wheels, a hood
+  scoop, a grille and a deep bumper bar, twin stacks and big pipes, a ducktail
+  wing, a thick roll hoop, deep-dish wheels with lug nuts: `kart.wheel.heavy`). The
+  hubs, the exhaust mouths and the number plate are the same on all three, so the
+  wheels, the flames, the skid marks and the collisions do not change; a file
+  without the class bodies gives the sprint kart to everyone. Each driver's kart
+  also wears a **livery**: a pattern in a second colour on the flanks and the hood
+  (`kart.livery.<class>.<pattern>`, material "livery": spots Bun, waves Pepper,
+  tiger stripes Moss, flames Kit, diamonds Juniper, lightning Mango, chevrons
+  Bramble, checks Rivet, rally stripes Dabble; the pattern and the colour wanted
+  are in `characters.ts`). The paint is the player's colour; the pattern's colour
+  is the driver's own unless it would vanish into the paint (cream on yellow),
+  when it becomes near-black or white; on the golden kart it is cream. The
+  pattern is welded into the kart's body geometry when it is made: no draw call,
+  no shader. The far kart is the same welded mesh. The coachwork below is placed
+  for the sprint kart and moves for the buggy and the muscle kart (`weight` in
+  `kartExtras`). **Faces and looks.** The modelled drivers' eyes are 14% bigger
+  with a larger glint (`EYE_GROW`), and their brows and mouths are drawn live
+  (`drivers/expression.ts`): determined while racing (brows slanted and low,
+  a small tight smile), gritted in a hard bend (steer over 0.72: low thick brows
+  over a slot of teeth), raised with an O when dizzy, arched over a wide open
+  grin with a tongue at a cheer or the finish, relaxed on the grid; a mood is held
+  0.22 s before a milder one replaces it, a hit or a cheer shows at once. The
+  face is welded onto the head's own geometry (one per mood, made when first
+  worn and shared by the species' brow and mouth shapes), so it costs no draw call.
+  The code-built stand-ins keep their own fixed faces. Each driver blinks (`drivers/face.ts`:
   one lid mesh in the face's colour that slides down over the bead eyes, every
   2.2 to 5.4 s, now and then twice, about 0.2 s, each driver at its own
   times; no draw call while the eyes are open) and shuts its eyes in a

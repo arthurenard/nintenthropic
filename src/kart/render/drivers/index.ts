@@ -119,7 +119,8 @@ export class Driver {
     const headAt = built.headAt ?? HEAD_AT;
     this.head.position.set(headAt[0], headAt[1], headAt[2]);
     this.head.rotation.order = "YXZ";
-    this.head.add(this.solid(built.head, material));
+    const headMesh = this.solid(built.head, material);
+    this.head.add(headMesh);
     this.root.add(this.head);
     if (species) {
       try {
@@ -133,8 +134,7 @@ export class Driver {
     // The modelled heads carry no brows or mouth of their own: this draws them, so they can change.
     if (species && modelled) {
       try {
-        this.face = new Face(species, built.head, material);
-        this.head.add(this.face.mesh);
+        this.face = new Face(species, built.head, headMesh);
       } catch {
         this.face = null;
       }
@@ -270,6 +270,7 @@ export class Driver {
 
   dispose(): void {
     for (const g of this.geometries) g.dispose();
+    this.face?.dispose();
   }
 }
 
