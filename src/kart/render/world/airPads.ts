@@ -12,9 +12,9 @@ const UP: V3 = [0, 1, 0];
 
 /** Each kind's light, and the colour of its posts. */
 const LOOK: Record<ArcKind, { light: Rgb; post: Rgb }> = {
-  cannon: { light: [3.0, 1.15, 0.2], post: rgb("#3a3f4d") },
-  glide: { light: [0.5, 2.3, 3.2], post: rgb("#eef4ff") },
-  lip: { light: [2.6, 0.5, 2.4], post: rgb("#5b3d8f") },
+  cannon: { light: [1.7, 0.6, 0.1], post: rgb("#3a3f4d") },
+  glide: { light: [0.25, 1.2, 1.7], post: rgb("#eef4ff") },
+  lip: { light: [1.5, 0.3, 1.4], post: rgb("#5b3d8f") },
 };
 
 export function buildAirPads(b: TrackBuild): void {

@@ -37,6 +37,21 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   turns): the kart twirls, and boosts when it lands.
   Shake right at a ramp's lip and the kart springs off higher and further,
   and boosts longer.
+- **Air sections** (`sim/air.ts`; `TrackDef.air`, see Track features). A pad across the road throws the kart into a
+  planned flight: `flight` 3 (a cannon or a lip, tricks allowed) or 4 (a glide, parasol up). The flight is not
+  integrated with gravity: its height over the road is a function of the metres the kart has run since the pad
+  (`arcHeight`: a parabola for a cannon and a lip, a quick climb and a long, bending float down for a glide), so where
+  it comes down is designed, a slow kart only takes longer, and the sim, a guest's prediction and every picture agree
+  without a byte more on the wire. Nothing moves with the race clock here, only with the kart's own place along the road.
+  A cannon takes any kart over 2 m/s and throws it at 21 m/s along the road; a glide takes one over 5 m/s, a lip one over
+  9 m/s. In flight the wheel turns the course (0.45 rad/s a cannon or lip, 1.1 a glide; a jump is 0.55) while an
+  autopilot swings the course toward the road's direction ahead (2.4/s, at most 1.2 rad/s) so a bend under the flight
+  does not carry a kart that lets go into the scenery; steer past an open edge by more than the edge's metre and a half
+  and the kart falls (the drone) as on the ground. The trick button is a trick in a cannon or lip flight (a boost
+  on landing), not in a glide; a glide that lands within 3 m of the road's middle (the rings painted there) boosts 0.7 s.
+  `jump` events carry `arc` ("cannon" | "glide" | "lip"); `KartView.glide` is 1 under the parasol. Bots (`bots.ts`)
+  steer a planned flight toward a lane (a glide: the middle, each bot a little off it by its number) and trick in a
+  cannon or lip flight by skill.
 - **Slipstream.** Tuck in right behind another kart: you go a little faster
   and, after a moment, are flung out past it with a boost.
 - **Hills.** A climb slows you a little; coming down, you gather speed and
@@ -1371,7 +1386,7 @@ out when the lobby changes and not every frame: 1.0 style recalculation a frame 
   and never leaves it, braking reverses, a drift slides, tightens, widens,
   straightens out and charges three boosts, jumps leave the wedge the picture
   draws and land pointing where they fly, a shake tricks only in the air and
-  kicks at the lip, crests throw and hills pull, the slipstream slings, items
+  kicks at the lip, cannons, glides and lips fly the same arc every time and set a kart down on its mark (`air.test.ts`), crests throw and hills pull, the slipstream slings, items
   hit, places and laps count, the race ends, `snapshot`/`restore` round-trips,
   the same seed replays); the bots (`bots.test.ts`: temperaments mixed on every
   grid and kept through a cup, laps that differ, a pass on a side without a
@@ -1458,6 +1473,16 @@ front of them (or a laptop), and the TV is the host's screen.
   a kart that lands short falls, and one shoved over the lip by another
   between its own steps jumps rather than falls. A kart higher than 2.4 m
   flies over an item box.
+- **Launch and air sections** (`air`): `{ kind, at, length, height, offset?, width? }`. A **cannon** is a pad of chevrons
+  with a pair of barrels beside the road that fires the kart in an arc of `height` m that comes down `length` m on;
+  a **glide** lifts the kart off a brow to `height` m and floats it down the next `length` m under a striped parasol
+  (target rings are painted where it lands: the middle of the road, the boost); a **lip** is a short, steep arc at
+  one side of the road (`offset`, `width`) for a trick. Put the landing on a stretch the kart can drive (a long gap
+  in the road under a cannon needs `drops` with `gap: true`, an open edge under a glide `drops` without), give a
+  cannon 20 m of road after its landing before a hard bend, and keep hazards out of the landing (a kart in the air is
+  above them: they are met when it comes down). The picture is `render/world/airPads.ts` (flat light, and posts
+  beyond the barrier and the camera's margin, like the start gantry's legs) and `render/parasol.ts`; the map draws
+  the flight as a band. Mirror mode flips the pad's offset.
 - **Drops** (`drops`): edges with no barrier. Over the edge (or into lava,
   a sink, space) the kart **falls**, and a **rescue drone** (a little
   propeller drone with a hook, Grip Prix's own) lifts it back to the road a
@@ -1588,26 +1613,52 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    ice-fishing hole on the lake.
 7. **Volcano Rush** (volcano): black rock and rivers of lava (drops). Up the
    volcano's flank in switchbacks (two banked hairpins, boulders rolling down
-   the legs at you), along a ridge twenty-two metres up that weaves between
-   lava on the outside of its bends with fireballs leaping from it, then
-   straight down the mountain: over a brow to fly, a jump over a lava gap, and
-   a stone bridge over the lava lake with nothing either side, a boost strip
-   along its left half only. The volcano smokes behind it all; the duck
-   relaxes in a hot spring beside the second hairpin.
+   the first leg at you); on the second leg a **geyser cannon** (`air` cannon,
+   82 m, 8 m up) fires you across a tongue of lava that has eaten 66 m of the
+   road (a `gap`: there is no way across on the ground); a ridge twenty-two
+   metres up that weaves between lava on the outside of its bends, where the
+   **eruption** goes off on the race clock: a pair of lava bombs leaps from
+   either side every seven seconds (the middle is clear), the next pair half
+   a beat later; then off the brow on a **glide** (140 m, 11 m up, a parasol)
+   down the mountain over the open lava fields, steering for the rings painted
+   where the road comes back (the boost), and the stone bridge over the lava
+   lake with nothing either side, a boost strip along its left half only. The
+   volcano smokes behind it all; the duck relaxes in a hot spring beside the
+   second hairpin. *Design note:* the old jump over a lava gap became the
+   glide, because a ramp can only throw a kart one way and the brow is the
+   best view on the track; the cannon is the flank's wow moment and the
+   eruption the ridge's; the glide's landing is a straight, level run before
+   the last bends.
 8. **Starlight Ribbon** (space): the finale. A glowing ribbon of road high
    over a ringed planet: up the twist, where the ribbon rolls one way and
-   then the other, two crests to fly along the top, a banked carousel round
-   the far end that falls all the way, back along a lower ribbon and down to
-   the long jump between two ribbons. Almost no barriers (fall and the drone
-   brings you back), boost strips, ring gates, asteroids orbiting the road.
-   The duck floats in an astronaut's helmet by a satellite.
+   then the other, two crests with **low-gravity lips** (`air` lip, 64 m, 5 m
+   up: a slow, floaty arc each, a trick boosts on landing), a banked carousel
+   round the far end that falls all the way, with a **meteor shower** down it
+   (two comets a beat apart, one each side) and an asteroid circling it, back
+   along a lower ribbon and down it on a **solar-sail glide** (70 m, 7 m up,
+   landing rings) and into the **cannon between two ribbons** (88 m, 9 m up,
+   over 56 m of nothing). Almost no barriers (fall and the drone brings you
+   back), boost strips, ring gates. The duck floats in an astronaut's helmet by
+   a satellite. *Design note:* the lips replace the natural crest jumps so the
+   floaty arcs are always the same, the asteroid moved off the dip so that
+   nothing waits where the lips land, and glide then cannon on one straight is
+   the finale's crescendo (a kart that lands the glide on its mark has speed
+   for the cannon).
 
 **Secret: Five Finger Circuit** (palm): an island shaped like an open hand,
 seen from above — the hand you play with. The road runs up and down every finger
 (the fingertips are hairpins), round the thumb, across the palm and back
 along the wrist, where a giant wristwatch is the start gantry; a ring to
 drive through on the straight by the wrist (the fingers are too close to one
-another for anything to stand between them); palm trees, beach huts, crabs, coconuts. The
+another for anything to stand between them); palm trees, beach huts, crabs, coconuts.
+A **wrist cannon** (36 m, 5 m up) on the first diagonal hops a kart up from the wrist
+toward the first finger, a **fingertip lip** (34 m, 3.5 m up) hops the first finger's
+long leg, and the **thumb glide** (95 m, 8 m up, a parasol) takes a kart off the thumb's
+tip and down to the wrist over the water, to rings painted at the foot of the thumb.
+*Design note:* the fingers are too close together and the legs too short for long
+flights (a cannon needs 20 m of road after it before a hard bend), so the hand gets
+short hops and one long glide down the thumb, the one long straight on the map; waves
+washing the beach road on a timer are not built (see the timed set pieces). The
 minimap is a hand, tilted: every finger climbs to its tip and back. The duck
 sunbathes, in sunglasses, in the middle of the palm.
 Unlocked by winning both cups (or, for those who know, the Konami code on the
