@@ -13,10 +13,10 @@
  * place and time (finishGallery.ts).
  */
 import type { GrandPrixState, LobbyState, RaceResult, RacerSetup, Session } from "../contract";
-import { $, element, setText } from "../../ui/dom";
+import { $, element, setText, toast } from "../../ui/dom";
 import { photoFinish, resultLine, sofaLine, type PhotoFinish } from "./eggs";
 import { FinishGallery, type ShotCard } from "./finishGallery";
-import { sharePhotos } from "./finishShare";
+import { clipType, shareClip, sharePhotos } from "./finishShare";
 import { cupById, pointsFor } from "../grandprix";
 import { lapsLabel, ordinal, raceTime } from "./format";
 import { hostName, standingRows, type StandingRow } from "./roster";
@@ -70,24 +70,34 @@ export class ResultsScreen {
     $("results-lobby").addEventListener("click", () => hooks.lobby());
     $("results-next").addEventListener("click", () => hooks.next());
     $("results-share").addEventListener("click", () => void this.share());
+    $("results-share-clip").addEventListener("click", () => void this.share(true));
   }
 
   /** Share is offered once there is a photo to share. */
   private offerShare(): void {
     $("results-share").hidden = !this.gallery.hasPhotos;
+    // The short clip of the effects, only where this browser can record one.
+    $("results-share-clip").hidden = !this.gallery.hasPhotos || clipType() === null;
   }
 
-  /** The photos as one picture, to the share sheet or the Downloads: made only now, when asked. */
-  private async share(): Promise<void> {
+  /** The photos as one picture (or, with `clip`, a few seconds of them moving), to the share sheet or the Downloads: made only now, when asked. */
+  private async share(clip = false): Promise<void> {
     if (this.sharing || !this.gallery.hasPhotos) return;
     this.sharing = true;
-    const button = $<HTMLButtonElement>("results-share");
-    button.disabled = true;
+    const buttons = [$<HTMLButtonElement>("results-share"), $<HTMLButtonElement>("results-share-clip")];
+    for (const button of buttons) button.disabled = true;
     try {
-      await sharePhotos({ cards: this.gallery.pictures(), ...this.race });
+      const results = { cards: this.gallery.pictures(), ...this.race };
+      if (clip) {
+        toast("Recording a short clip…");
+        // A browser that cannot make the clip gets the picture instead.
+        if (!(await shareClip(results))) await sharePhotos(results);
+      } else {
+        await sharePhotos(results);
+      }
     } finally {
       this.sharing = false;
-      button.disabled = false;
+      for (const button of buttons) button.disabled = false;
     }
   }
 
@@ -185,7 +195,7 @@ export class ResultsScreen {
     const first = !this.cards.some((candidate) => candidate.photo);
     card.photo = photo;
     // The first photo of a race nobody expected one from brings the cards; otherwise it develops on its own.
-    if (first && $("finish-photos").hidden) this.gallery.show(this.cards);
+    if (first && $("finish-photos").hidden) this.gallery.show(this.cards, this.race.trackId);
     else this.gallery.add(kart, photo);
   }
 
@@ -203,10 +213,10 @@ export class ResultsScreen {
         const slot = lobby.karts[row.kart];
         const character = racers.find((racer) => racer.id === row.kart)?.character ?? lobby.players.find((player) => player.slot === slot)?.character;
         const { kart, place, placeLabel, name, colour, time } = row;
-        return { kart, place, placeLabel, name, colour, time, character, photo: photos.get(kart) ?? null };
+        return { kart, place, placeLabel, name, colour, time, field: rows.length, character, photo: photos.get(kart) ?? null };
       });
     const any = this.cards.some((card) => card.photo || cameras.has(card.kart));
-    this.gallery.show(any ? this.cards : []);
+    this.gallery.show(any ? this.cards : [], this.race.trackId);
   }
 
   /** Two karts over the line together for a top-three place: a flash, the still, "Photo Finish!", and then the results. */
