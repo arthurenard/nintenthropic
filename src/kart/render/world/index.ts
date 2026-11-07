@@ -251,10 +251,14 @@ export async function createWorld(
     const layer = buildLandmarks(routeEnv, [...(road.def.landmarks ?? [])], mats);
     own(layer);
     group.add(layer.group);
-    const moving = buildHazards(routeEnv, road.def.hazards ?? [], mats, shadowTex);
+    const moving = buildHazards(routeEnv, (road.def.hazards ?? []).filter((h) => !isPiece(h)), mats, shadowTex);
     own(moving);
     group.add(moving.group);
-    return { layer, moving };
+    // The timed pieces on a branch (a shower of meteors on a comet trail) are drawn as the main road's are.
+    const routePieces = buildPieces(routeEnv, road.def.hazards ?? [], mats, shadowTex);
+    own(routePieces);
+    group.add(routePieces.group);
+    return { layer, moving, routePieces };
   });
 
   // Glows: lamps (static) and the three start lights (changing).
@@ -441,6 +445,7 @@ export async function createWorld(
       for (const r of routeLayers) {
         r.layer.update(time);
         r.moving.update(raceTime, dt);
+        r.routePieces.update(raceTime, dt);
       }
     },
     install(scene) {

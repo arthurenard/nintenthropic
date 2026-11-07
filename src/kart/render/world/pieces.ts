@@ -24,9 +24,10 @@ import {
   type Texture,
 } from "three";
 import type { HazardDef } from "../../track/geometry";
-import { crushTop, hazardAt, type HazardPose } from "../../track/hazards";
+import { CRUSH, crushTop, hazardAt, type HazardPose } from "../../track/hazards";
 import { isPieceKind } from "../../track/pieces";
 import { MeshBuilder, rgb, shapes, xf, type Rgb } from "./builder";
+import { MODELS_2C, STYLES_2C } from "./pieces2C";
 import type { HazardLayer, LandmarkMaterials, PlaceEnv } from "./landmarks/place";
 
 // ─── The models ──────────────────────────────────────────────────────────────
@@ -123,6 +124,9 @@ const MODELS: Record<string, PieceModel> = {
   },
 };
 
+// The second pass's pieces (pieces2C.ts): falling rocks and meteors, a surge of lava, a breaker, a plasma orb.
+Object.assign(MODELS, MODELS_2C);
+
 const shapesDown = () => shapes.cone(6);
 const xfDown = (x: number, y: number, z: number, r: number, h: number) => xf(x, y, z, r, h, r, 0, Math.PI);
 
@@ -189,6 +193,18 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
     k.roadY.push(Number.NaN);
   }
   const all: Kind[] = [...kinds.values()];
+  // A wave front or a surge is several pieces side by side that come together: only the first of them has the lamp post.
+  const lampOwner = new Set<HazardDef>();
+  {
+    const groups = new Set<string>();
+    for (const d of defs) {
+      if (!isPiece(d) || d.motion !== "slide" || !STYLES_2C[d.kind]?.bare) continue;
+      const key = `${d.kind}/${d.period}/${d.phase ?? 0}/${d.offset ?? 0}/${d.span ?? 0}`;
+      if (groups.has(key)) continue;
+      groups.add(key);
+      lampOwner.add(d);
+    }
+  }
   for (const k of all) {
     const model = MODELS[k.defs[0]!.kind]!;
     k.scale = k.defs[0]!.radius / model.radius;
@@ -296,6 +312,7 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
   const TIMBER = new Color(0.42, 0.26, 0.14);
   const CANDY = new Color(1.0, 0.86, 0.86);
   const GOLD = new Color(1.6, 1.15, 0.3);
+  const PLASMA = new Color(0.5, 1.5, 2.3);
   /** Things drawn once for a group of pieces (a gantry over a row of crushers, a sweeper's hub): this frame's keys. */
   const seen = new Set<number>();
   const tint = new Color();
@@ -360,8 +377,32 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
           const sx = kind.scale;
           let tilt = 0;
           let hidden = false;
+          let grow = 1;
           switch (def.motion) {
             case "crush": {
+              if (STYLES_2C[def.kind]?.sky) {
+                // Out of the sky: nothing to see until it warns; then its shadow grows and reddens on the road while the
+                // rock comes in from on high, it falls, lies a moment and cools away.
+                const top = crushTop(def);
+                const c = pose.cycle;
+                hidden = c < CRUSH.warn;
+                if (!hidden) {
+                  if (c < CRUSH.fall) {
+                    const eased = 1 - (1 - pose.warn) * (1 - pose.warn);
+                    y += (1 - eased) * top * 0.75;
+                    grow = 0.45 + 0.55 * eased;
+                  } else if (c >= CRUSH.rise) {
+                    // Cooling: it sinks into the road and shrinks.
+                    const u = (c - CRUSH.rise) / (1 - CRUSH.rise);
+                    y = roadY - u * 0.8;
+                    grow = Math.max(0.001, 1 - u);
+                  } else {
+                    y = roadY + pose.y;
+                  }
+                  blobShadow(x, roadY, z, def.radius * (1.2 + 1.9 * Math.min(1, pose.warn)) * (c >= CRUSH.rise ? grow : 1), shade.setRGB(0.03 + 0.8 * pose.warn * pose.warn, 0.03 + 0.06 * pose.warn, 0.06 * (1 - pose.warn)));
+                }
+                break;
+              }
               // The shake: a rattle sideways and a tilt that grows through the warning.
               const rattle = !calm && pose.warn < 1 ? pose.warn * 0.16 * Math.sin(time * 52 + i * 3) : 0;
               _a.set(Math.cos(pose.heading), 0, -Math.sin(pose.heading));
@@ -414,7 +455,15 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
               break;
             }
             case "slide": {
+              const style = STYLES_2C[def.kind];
               hidden = !pose.active;
+              if (style?.rise && !pose.active) {
+                // The telegraph of a swell: it rises out of the lake or the sea, beside the road, before it runs across.
+                hidden = pose.warn <= 0;
+                const e = pose.warn * pose.warn * (3 - 2 * pose.warn);
+                y = roadY + pose.y * (1 - e);
+                grow = 0.5 + 0.5 * e;
+              }
               // Rails across the road under its path (sleepers, two rails), and a lamp post at the way in.
               const centre = def.at * track.length;
               const half = Math.abs(def.span ?? track.at(centre).width / 2 + 3);
@@ -424,17 +473,25 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
               const dz = -Math.sin(h);
               const c = track.point(centre, def.offset ?? 0);
               const gy = roadAtCentre(centre, def.offset ?? 0);
-              if (building) for (const side of LANES) rod(c.x - dx * half - dz * side, gy + 0.12, c.z - dz * half + dx * side, c.x + dx * half - dz * side, gy + 0.12, c.z + dz * half + dx * side, 0.16, RAIL);
-              if (building) for (let n = -2; n <= 2; n++) cube(c.x + dx * n * (half / 2.2) * 0.9, gy + 0.05, c.z + dz * n * (half / 2.2) * 0.9, 0.35, 0.1, 2.2, h, SLEEPER);
+              if (building && !style?.bare) for (const side of LANES) rod(c.x - dx * half - dz * side, gy + 0.12, c.z - dz * half + dx * side, c.x + dx * half - dz * side, gy + 0.12, c.z + dz * half + dx * side, 0.16, RAIL);
+              if (building && !style?.bare) for (let n = -2; n <= 2; n++) cube(c.x + dx * n * (half / 2.2) * 0.9, gy + 0.05, c.z + dz * n * (half / 2.2) * 0.9, 0.35, 0.1, 2.2, h, SLEEPER);
               // A lamp on a post where it comes in.
               const ex = c.x - dx * half * d;
               const ez = c.z - dz * half * d;
-              if (building) cube(ex, gy + 1.6, ez, 0.25, 3.2, 0.25, 0, POST);
+              const lamp = style?.post !== false && (!style?.bare || lampOwner.has(def));
+              if (building && lamp) cube(ex, gy + 1.6, ez, 0.25, 3.2, 0.25, 0, POST);
               flush(pose.warn, time, tint);
-              tint.r = tint.r * 0.35 + (pose.warn > 0 ? 2.2 * (calm ? 0.8 : 0.5 + 0.5 * Math.sin(time * 16)) : 0.1);
-              tint.g = pose.warn > 0 ? 0.1 : 0.12;
-              tint.b = pose.warn > 0 ? 0.08 : 0.12;
-              if (!building) cube(ex, gy + 3.35, ez, 0.7, 0.55, 0.7, 0, tint);
+              if (style?.lamp) {
+                const on = pose.warn > 0 ? (calm ? 0.85 : 0.6 + 0.4 * Math.sin(time * 16)) : 0;
+                const [ir, ig, ib] = style.lamp.idle;
+                const [wr, wg, wb] = style.lamp.warn;
+                tint.setRGB(ir + (wr - ir) * on, ig + (wg - ig) * on, ib + (wb - ib) * on);
+              } else {
+                tint.r = tint.r * 0.35 + (pose.warn > 0 ? 2.2 * (calm ? 0.8 : 0.5 + 0.5 * Math.sin(time * 16)) : 0.1);
+                tint.g = pose.warn > 0 ? 0.1 : 0.12;
+                tint.b = pose.warn > 0 ? 0.08 : 0.12;
+              }
+              if (!building && lamp) cube(ex, gy + 3.35, ez, 0.7, 0.55, 0.7, 0, tint);
               if (!hidden) blobShadow(x, roadY, z, def.radius * 2.2, shade.setRGB(0.03, 0.04, 0.09));
               break;
             }
@@ -442,11 +499,12 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
               // The pole from the hub to the ball, and (once for the whole sweeper) a post at the hub.
               const c = track.point(def.at * track.length, def.offset ?? 0);
               const hubKey = def.at * 1e4 + (def.offset ?? 0);
-              if (!building) rod(c.x, roadY + 1.2, c.z, x, roadY + 1.3 * kind.scale, z, 0.5, def.kind === "arm-ball" ? CANDY : IRON);
+              const plasma = def.kind === "plasma-orb";
+              if (!building) rod(c.x, roadY + 1.2, c.z, x, roadY + 1.3 * kind.scale, z, plasma ? 0.35 : 0.5, plasma ? PLASMA : def.kind === "arm-ball" ? CANDY : IRON);
               if (building && !seen.has(hubKey)) {
                 seen.add(hubKey);
-                rod(c.x, roadY, c.z, c.x, roadY + 5.5, c.z, 1.1, def.kind === "arm-ball" ? CANDY : IRON);
-                rod(c.x, roadY + 5.5, c.z, c.x, roadY + 6.3, c.z, 1.6, GOLD);
+                rod(c.x, roadY, c.z, c.x, roadY + 5.5, c.z, 1.1, plasma ? BEAM : def.kind === "arm-ball" ? CANDY : IRON);
+                rod(c.x, roadY + 5.5, c.z, c.x, roadY + 6.3, c.z, 1.6, plasma ? PLASMA : GOLD);
               }
               blobShadow(x, roadY, z, def.radius * 2.2, shade.setRGB(0.03, 0.04, 0.09));
               break;
@@ -462,7 +520,7 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
           if (hidden) {
             mesh.setMatrixAt(i, _m.makeScale(0, 0, 0));
           } else {
-            mesh.setMatrixAt(i, _m.compose(_p.set(x, y, z), _q, _s.set(sx, sx, sx)));
+            mesh.setMatrixAt(i, _m.compose(_p.set(x, y, z), _q, _s.set(sx * grow, sx * grow, sx * grow)));
           }
           mesh.setColorAt(i, flush(pose.warn, time, tint));
         }

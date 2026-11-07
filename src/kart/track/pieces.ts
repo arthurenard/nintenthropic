@@ -23,6 +23,12 @@ export const PIECE_KINDS: readonly string[] = [
   "funhouse-panel",
   "mallet",
   "swing-boat",
+  // The second pass: falling rocks and meteors, lava and tide, plasma.
+  "ember-rock",
+  "meteor",
+  "lava-surge",
+  "tide-wave",
+  "plasma-orb",
 ];
 
 export function isPieceKind(kind: string): boolean {
