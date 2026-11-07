@@ -171,12 +171,13 @@ describe("braking", () => {
   it("eases on as the brake is held, as a pedal does: a little at first, never most of the speed at once", () => {
     const v = curve(() => input({ brake: 1 }), 150);
     const top = 24;
-    // After 0.2 s only a little is gone, 0.5 s a quarter, 1 s about 60%.
-    expect(v[11]!).toBeGreaterThan(21.2);
-    expect(v[29]!).toBeGreaterThan(15.5);
-    expect(v[29]!).toBeLessThan(19);
-    expect(v[59]!).toBeGreaterThan(5);
-    expect(v[59]!).toBeLessThan(11);
+    // After 0.2 s only a little is gone (21.1), 0.5 s about a third (15.2), 1 s three quarters (6.0).
+    expect(v[11]!).toBeGreaterThan(20.4);
+    expect(v[11]!).toBeLessThan(22);
+    expect(v[29]!).toBeGreaterThan(13.8);
+    expect(v[29]!).toBeLessThan(17);
+    expect(v[59]!).toBeGreaterThan(4);
+    expect(v[59]!).toBeLessThan(8.5);
     // No tick sheds more than 0.7 m/s: the old brake took 0.5 every tick from the first.
     for (let i = 1; i < v.length; i++) expect(v[i - 1]! - v[i]!).toBeLessThan(0.7);
     expect(v[0]!).toBeGreaterThan(top - 0.4);
@@ -185,8 +186,8 @@ describe("braking", () => {
   it("takes about 1.5 to 2 s from top speed to a crawl, then backs up with no stop at zero, up to 7 m/s", () => {
     const v = curve(() => input({ brake: 1 }), 360);
     const crawl = v.findIndex((s) => s < 2);
-    expect(crawl).toBeGreaterThan(80);
-    expect(crawl).toBeLessThan(125);
+    expect(crawl).toBeGreaterThan(70);
+    expect(crawl).toBeLessThan(110);
     const zero = v.findIndex((s) => s <= 0);
     const reversing = v.findIndex((s) => s < -0.5);
     // It flows through zero: the speed at the crawl keeps falling at much the same rate, not held for a moment.
@@ -194,6 +195,18 @@ describe("braking", () => {
     expect(v[crawl]! - v[crawl + 6]!).toBeGreaterThan(0.5);
     expect(Math.min(...v)).toBeLessThan(-6.5);
     expect(Math.min(...v)).toBeGreaterThanOrEqual(-7.001);
+  });
+
+  it("backs up from a standstill at once: no pedal build-up to wait for", () => {
+    const r = solo();
+    const w: number[] = [];
+    for (let i = 0; i < 60; i++) {
+      run(r, 1, () => input({ brake: 1 }));
+      w.push(view(r).speed);
+    }
+    expect(w[14]!).toBeLessThan(-1.2);
+    expect(w[59]!).toBeLessThan(-4);
+    expect(w[59]!).toBeGreaterThan(-6.5);
   });
 
   it("is hardly felt in a flicker of open hands", () => {

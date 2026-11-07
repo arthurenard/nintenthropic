@@ -37,10 +37,12 @@ export const TUNING = {
      * brake` with the rate constant `brakeRate` (1/s), so a held brake slows smoothly, never stops dead, and flows on
      * into backing up. Brake and throttle together settle between (top - reverseTop); the brake alone, at -reverseTop.
      */
-    brakeRate: 1.1,
+    brakeRate: 1.3,
     /** The pedal comes on: the pull starts at `brakeFloor` of its rate and builds with this time constant (s) as the brake is held, so a flicker of open hands barely costs speed. */
     brakeRamp: 0.5,
     brakeFloor: 0.2,
+    /** Under this speed (m/s) the pedal is at full pull at once, so a kart at rest backs up without waiting. */
+    brakeRampBelow: 3,
     /** Letting go of the brake, the pedal's build-up fades this many times faster than it came. */
     brakeFade: 3,
     /** The most a backing-up kart goes, m/s. */

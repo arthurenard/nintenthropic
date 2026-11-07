@@ -4,7 +4,7 @@
  *
  *   Left / Right or A / D   steer
  *   Up or W                 throttle
- *   Down or S               brake, and back up if held at a standstill
+ *   Down or S               brake, and back up if held
  *   Space                   drift, held (in the air: a trick)
  *   Left, Right, Left fast  a shake (in the air: a trick)
  *   E or Shift              use the item

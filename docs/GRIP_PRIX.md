@@ -23,8 +23,8 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   that is gentle near the centre.
 - **Brake and back up.** Open both hands, going straight or slowly: brake.
   The brake is a pedal that comes on: a flick of open hands barely costs
-  speed, held it takes about a second to lose most of it and under two to
-  crawl, and the kart flows on into backing up without stopping dead. You
+  speed, held it takes about a second to lose most of it and under one and
+  a half to crawl, and the kart flows on into backing up without stopping dead. You
   still steer while reversing — open hands are tracked as well as fists.
 - **Drift.** Open both hands in a bend at speed, as if braking into it: the
   kart hops into a power-slide that way, its tail swinging out, and keeps its
@@ -249,21 +249,26 @@ The numbers (all in `sim/tuning.ts`):
   slide (negative reversing); `course` is the way it goes.
 - **Brake.** A pull toward a target speed, the way the throttle is one (the
   idea of a kart racer's eased speed, built here): the speed eases toward
-  `throttle × top − 7 × brake` with rate 1.1/s (`drive.brakeRate`, times the
+  `throttle × top − 7 × brake` with rate 1.3/s (`drive.brakeRate`, times the
   ground's `brake`), so a brake alone heads for −7 m/s with no stop at zero
   and no reverse delay, and brake with throttle settles near top − 7. The
   pedal comes on: the pull starts at 20% of its rate and builds with a 0.5 s
-  time constant (`brakeRamp`) while the brake is held, and fades three times
+  time constant (`brakeRamp`) while the brake is held (under 3 m/s it is at full pull at
+  once, so backing up from rest does not wait), and fades three times
   faster than it came when let go (`kart.stand` is this build-up, in ticks, so
   a second tap picks up where the first left off). From 24 m/s on the road,
-  held: 0.2 s 22.0 (the old brake: 18.0), 0.5 s 17.4 (9.0), 1.0 s 9.5 (0),
-  1.7 s a crawl under 2, zero at 2.0 s and backing up (the old brake reached
-  zero at 0.8 s, then waited 0.3 s). A 0.15 s flicker costs under 1 m/s. Ice
-  brakes at a quarter of the pull. Why the old one felt like 90% at once: a
+  held: 0.2 s 21.1 (the old brake: 18.0), 0.5 s 15.2 (9.0), 1.0 s 6.0 (0),
+  a crawl under 2 at 1.35 s, zero at 1.5 s and backing up (the old brake reached
+  zero at 0.8 s, then waited 0.3 s), -3.3 at 2 s, -7 by 6 s. From rest, held:
+  -1.9 at 0.25 s, -3.3 at 0.5 s, -5.1 at 1 s. Brake with throttle: 21.4 at
+  0.5 s, 19.5 at 1 s, 18.2 at 1.5 s, 16.7 settled. A 0.15 s flicker costs under
+  1 m/s. Ice brakes at a quarter of the pull. Why the old one felt like 90% at once: a
   flat 30 m/s² from the first tick against a 24 m/s top, so 0.7 s took 21 of
   the 24 m/s, with nothing to build on and a dead stop before the reverse.
   Bots plan their bends for 16 m/s² (`bots.planBrake`), which the new brake
-  gives over a typical 10 m/s shed (24 to 14 m/s takes about 0.65 s).
+  gives over a typical 10 m/s shed (24 to 14 m/s takes about 0.6 s). 18 and 20
+  were tried on five tracks, two seeds each: laps within noise, no falls
+  either way, so it stays at 16.
 - **Hop and drift.** `drift` rising at over 10 m/s with |steer| > 0.3 hops
   (0.25 s, up to 0.35 m) into a drift that way: a power-slide. The way the
   kart goes turns at 0.9 + 0.5 × own of a full turn (own: the wheel into the
