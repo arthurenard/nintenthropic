@@ -113,7 +113,7 @@ function fireworks(c: Ctx, s: Scene, look: Look): void {
       c.scale(1, -0.35);
       c.translate(0, -s.h * 0.86);
       c.globalAlpha = 0.18;
-      burst(c, cx + Math.sin(s.t * 3 + i) * s.u * 0.01, cy + s.h * 0.62, radius, q, 14, rnd(i, 4) * 3, s.u * 0.014);
+      burst(c, cx + sine(s.t, 3, i / 3) * s.u * 0.01, cy + s.h * 0.62, radius, q, 14, rnd(i, 4) * 3, s.u * 0.014);
       c.restore();
     }
   }
