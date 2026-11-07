@@ -14,7 +14,7 @@ import { ITEM_KINDS } from "../sim/state";
 import { estimatePitch, peakOfBuffer, spectralCentroid, toDb } from "./analysis";
 import { AMBIENCE, ambienceCues } from "./ambience";
 import { ENGINE_CUES, ENGINE_LAYERS, ENGINE_NOTE, REV_HI, REV_LO, SURFACE_CUES } from "./engines";
-import { HORNS, emoteOrder, ordersFor } from "./events";
+import { HORNS, chimeOrder, emoteOrder, ordersFor } from "./events";
 import { SOUND_CUES } from "./kinds";
 import { SIM_EVENTS } from "./simulate";
 
@@ -203,6 +203,7 @@ describe("the kart pack", () => {
       ...racers.map((r) => ({ type: "horn", kart: r.id })),
     ];
     for (const event of more) for (const o of ordersFor({ id: 1, tick: 0, ...event } as RaceEvent, wide)) names.add(o.cue);
+    for (const item of items) names.add(chimeOrder(item, 0).cue);
     for (const emote of ["cheer", "wave"] as const) names.add(emoteOrder(emote, 0)!.cue);
     for (const name of names) expect(Object.prototype.hasOwnProperty.call(CUES, name), name).toBe(true);
     for (const cue of KART) expect(names.has(cue), `${cue} is never played`).toBe(true);

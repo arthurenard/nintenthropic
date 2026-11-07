@@ -54,7 +54,7 @@ import {
   surfaceTarget,
   windTarget,
 } from "./engines";
-import { type Order, emoteOrder, ordersFor } from "./events";
+import { type Order, chimeOrder, emoteOrder, ordersFor } from "./events";
 import { type KartSound, type MusicKind, type TrackTheme, SOUND_CUES, pieceFor } from "./kinds";
 import { type MusicRenderer, createMusicRenderer } from "./music/loader";
 import { type MusicTrack, MusicPlayer, beatTimes } from "./music/player";
@@ -932,7 +932,9 @@ class RaceAudioImpl implements RaceAudio {
       const have = this.seekers.get(s.id);
       // A little doppler: the whistle rises as it comes closer and falls as it goes.
       const closing = have ? (have.lastDistance - s.distance) / Math.max(dt, 1 / 120) : 0;
-      const rate = 1 + 0.1 * Math.max(-1, Math.min(1, closing / 40));
+      // And its beeps quicken as it closes in: up to a third faster inside 40 m.
+      const near = 1 - Math.max(0, Math.min(1, s.distance / 40));
+      const rate = (1 + 0.1 * Math.max(-1, Math.min(1, closing / 40))) * (1 + 0.33 * near);
       const volume = (0.35 + 0.65 * falloff(s.distance, 90)) * fx;
       const loop = this.drive(this.seekers, s.id, "kart_seeker", { rate, volume, pan: s.pan, distance: s.distance }, dt);
       (loop as Looper & { lastDistance: number }).lastDistance = s.distance;
@@ -957,7 +959,8 @@ class RaceAudioImpl implements RaceAudio {
       if (heard) heard.place = k.place;
       else this.places.set(l.kart, { place: k.place, at: -9 });
       // A cheer or a wave, as it begins.
-      const emote = k.emote ?? null;
+      // (Only one a person made: a finished kart's cheer is the sim's own, and the finish has its fanfare.)
+      const emote = k.finished === null ? k.emote ?? null : null;
       if (emote !== (this.emotes.get(l.kart) ?? null)) {
         const o = emoteOrder(emote, l.pan);
         if (o) this.start(o);
@@ -1063,7 +1066,10 @@ class RaceAudioImpl implements RaceAudio {
         }
       } else if (r) {
         this.rolls.delete(l.kart);
-        if (k.item !== null) this.start({ cue: "kart_item_ready", volume: 1, pan: l.pan, distance: 0, rate: 1, delay: 0, priority: 3 });
+        if (k.item !== null) {
+          this.start({ cue: "kart_item_ready", volume: 1, pan: l.pan, distance: 0, rate: 1, delay: 0, priority: 3 });
+          this.start(chimeOrder(k.item, l.pan));
+        }
       }
     }
   }

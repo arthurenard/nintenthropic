@@ -115,14 +115,10 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
     }
 
     case "pickup": {
-      // The box bursts for everyone near; only the player who took it hears the reel stop on its item, a second later, with the item's own chime.
+      // The box bursts for everyone near. (The item's own chime is not here: the reel plays it when it stops, race-audio.ts, so it always matches the item held.)
       const who = hearKart(scene, event.kart);
       if (!who) return [];
-      const own = !!localOf(scene, event.kart);
-      return keep(
-        order("kart_box_smash", who, own, { radius: RADIUS.medium, volume: 1 }),
-        own ? order(`kart_get_${event.item}`, who, true, { delay: ROULETTE, priority: 3 }) : null,
-      );
+      return keep(order("kart_box_smash", who, !!localOf(scene, event.kart), { radius: RADIUS.medium, volume: 1 }));
     }
 
     case "use": {
@@ -360,6 +356,12 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
  * What a driver's emote sounds like, when it begins: both hands up is a cheer (a party blower, confetti, a "yay"), one hand waving is a friendly
  * "hello". Only the player's own karts' (a kart's emote is read from its camera; the rest are the pictures' business). Null for none.
  */
+/** The chime of the item the reel has landed on, for the player who holds it. */
+export function chimeOrder(item: string, pan: number): Order {
+  return { cue: `kart_get_${item}`, volume: 1, pan, distance: 0, rate: 1, delay: 0, priority: 3 };
+}
+
+/** A cheer or a wave, as it begins. */
 export function emoteOrder(emote: Emote | null | undefined, pan: number): Order | null {
   if (emote !== "cheer" && emote !== "wave") return null;
   return { cue: emote === "cheer" ? "kart_emote_cheer" : "kart_emote_wave", volume: 1, pan, distance: 0, rate: 1, delay: 0, priority: 1 };

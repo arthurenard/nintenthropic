@@ -694,7 +694,11 @@ export class KartApp {
     const mine = new Set(localPlayers(lobby, session.device).map((player) => kartOf(lobby, player.slot)));
     const first = result.standings.find((row) => row.place === 1);
     this.services.sound.music(first && mine.has(first.kart) ? "results-win" : "results");
-    this.services.sound.play("applause");
+    // The crowd joins after the tune's opening, not on top of it.
+    const raceId = this.raceId;
+    window.setTimeout(() => {
+      if (this.screen === "results" && this.raceId === raceId) this.services.sound.play("applause");
+    }, 1800);
   }
 
   /**

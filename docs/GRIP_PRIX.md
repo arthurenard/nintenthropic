@@ -872,8 +872,8 @@ heard and let go after half a second of silence, and is told only what has moved
   box, the roulette and every item), `kart-events.ts` (sparks, boosts, the start), `kart-impacts.ts` (hits, bumps, the
   air, the fall) and `kart-jingles.ts` (the tunes, the crowd, the horns, the interface).
   - *The roulette.* Ticks of a wooden reel (pitch steered by `race-audio.ts`: they climb as the reel slows), the
-    ratchet's latch when it stops (`kart_item_ready`), and, a second after the pick-up (`ROULETTE`, the sim's own
-    roulette time), a chime of the item's own: nitro a fifth climbing with a puff of gas, triple nitro three pips and a
+    ratchet's latch when it stops (`kart_item_ready`), and, with the latch, a chime of the item's own (`chimeOrder`,
+    played by `race-audio.ts` when the reel stops, so it always matches the item held): nitro a fifth climbing with a puff of gas, triple nitro three pips and a
     high one, puck two wooden taps, triple puck three climbing, seeker a sonar ping and its echo, slick a wet bubble
     sliding down, comet a run of glass to the top, storm a bell against its tritone over a low tick of thunder, skyrocket
     a whistle and a pop of stars, blast a thump under a wide chord, decoy the right chime a hair flat with a wink. Only
@@ -907,9 +907,9 @@ heard and let go after half a second of silence, and is told only what has moved
     pick-ups and a brass chord with a crash, under two seconds and over before the music's own final-lap change
     matters; a place won is two plucks up, one lost two marimba notes down; the finish is timpani, brass, a pad, a
     crash, confetti cannons, a run of bells and a roaring crowd (second place and below a warmer, smaller one); the
-    results open with applause (`applause`, a `KartSound` the app asks for); a driver's cheer (both hands up) is a party
+    results open with applause (`applause`, a `KartSound` the app asks for, 1.8 s in so it does not stack on the win or loss jingle); a driver's cheer (both hands up) is a party
     blower, confetti and a "yay", a wave a two-tine hello and a swish of the hand (`emoteOrder`, from the
-    emote on the kart's view, once as it begins); the photo finish's flash charges, then the shutter clacks and pops.
+    emote on the kart's view, once as it begins, and not for a finished kart: that cheer is the sim's own); the photo finish's flash charges, then the shutter clacks and pops.
   - *Horns.* A clap honks the driver's own horn (`HORNS` in `events.ts`): Bun a party blower, Pepper a bulb horn, Moss a
     ribbit, Kit the classic two-tone, Juniper a steam whistle, Mango a bicycle bell, Bramble a tuba, Rivet a robot's
     honk, Dabble a quack; each kart's a little different in pitch.

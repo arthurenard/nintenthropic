@@ -217,7 +217,7 @@ describe("the countdown", () => {
 
 describe("events become sounds", () => {
   const cases: [string, RaceEvent, string[]][] = [
-    ["a pickup", ev("pickup", { kart: 0, item: "puck" }), ["kart_box_smash", "kart_get_puck"]],
+    ["a pickup", ev("pickup", { kart: 0, item: "puck" }), ["kart_box_smash"]],
     ["nitro", ev("use", { kart: 0, item: "nitro" }), ["kart_nitro"]],
     ["triple nitro", ev("use", { kart: 0, item: "nitro3" }), ["kart_nitro_triple"]],
     ["a puck", ev("use", { kart: 0, item: "puck" }), ["kart_puck_fire"]],
@@ -713,6 +713,25 @@ describe("loops that follow state", () => {
     expect(bus.cues).not.toContain("kart_item_ready");
     frame([kart(0, { rolling: false, item: "puck" })]);
     expect(bus.cues).toContain("kart_item_ready");
+    expect(bus.cues).toContain("kart_get_puck");
+  });
+
+  it("quickens a seeker's beeps as it closes in", () => {
+    const rateAt = (z: number): number => {
+      const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+      const thing: ThingView = { id: 77, kind: "seeker", x: 0, y: 0, z, heading: 0, active: true };
+      for (let i = 0; i < 5; i++) frame([kart(0, { z: 0 })], {}, [], [thing], 0.1);
+      return bus.lastSet("kart_seeker")!.rate!;
+    };
+    expect(rateAt(10)).toBeGreaterThan(rateAt(35) + 0.1);
+    expect(rateAt(35)).toBeGreaterThan(rateAt(80));
+  });
+
+  it("makes no emote sound for a kart that has finished (the sim's own cheer)", () => {
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    frame([kart(0)]);
+    for (let i = 0; i < 5; i++) frame([kart(0, { emote: "cheer", finished: 40 })]);
+    expect(bus.cues).not.toContain("kart_emote_cheer");
   });
 
   it("coughs when the sim says the start flooded, and not for a kart that was only slow away", () => {

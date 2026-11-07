@@ -8,7 +8,7 @@ import { ITEM_CHIMES } from "../../audio/cues/kart-items";
 import type { HitCause, ItemKind, KartView, RaceEvent } from "../contract";
 import { ITEM_KINDS } from "../sim/state";
 import { TUNING } from "../sim/tuning";
-import { CLONK_FROM, HORNS, ROULETTE, emoteOrder, ordersFor } from "./events";
+import { CLONK_FROM, HORNS, ROULETTE, chimeOrder, emoteOrder, ordersFor } from "./events";
 import type { Scene } from "./scene";
 
 const event = (e: object): RaceEvent => ({ id: 1, tick: 0, ...e }) as RaceEvent;
@@ -30,10 +30,7 @@ describe("the item reel", () => {
   it("has a chime of its own for every item, heard by the player who took the box and nobody else", () => {
     expect([...ITEM_CHIMES].sort()).toEqual([...ITEM_KINDS].sort());
     for (const item of ITEM_KINDS) {
-      const own = ordersFor(event({ type: "pickup", kart: 0, item }), scene());
-      const chime = own.find((o) => o.cue === `kart_get_${item}`);
-      expect(chime, item).toBeDefined();
-      expect(chime!.delay).toBe(ROULETTE);
+      const chime = chimeOrder(item, 0);
       expect(chime!.distance).toBe(0);
       expect(CUES[chime!.cue], item).toBeDefined();
       // Another kart's box bursts for the screen, and says nothing of what was in it.
