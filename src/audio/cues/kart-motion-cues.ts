@@ -41,7 +41,7 @@ import {
 import type { CueSpec } from "./table";
 
 const engine = (recipe: CueSpec["recipe"], expect: [number, number] = [1.5, 1.7]): CueSpec => ({
-  recipe, pack: "kart", bus: "sfx", level: -10.5, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect,
+  recipe, pack: "kart", bus: "sfx", level: -10, loop: true, priority: 2, fadeIn: 0.12, fadeOut: 0.2, vary: 0, expect,
 });
 
 export const MOTION_CUES: Record<string, CueSpec> = {

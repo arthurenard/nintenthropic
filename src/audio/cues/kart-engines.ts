@@ -62,6 +62,8 @@ export interface EngineSpec {
   intake: { cut: number; level: number; decay: number };
   tick: { level: number; low: number; high: number };
   hiss: number;
+  /** The periodic part of the firing sequence as a harmonic series (every multiple of the note, shaped by the pipe's and the body's resonances, each ear's upper partials in their own phase), in step with the firings' strength; its level. */
+  harm?: number;
   /** Soft-clip drive: the grain of a small engine flat out. */
   drive: number;
   lowpass?: number;
@@ -125,10 +127,20 @@ export function engineLoop(t: Take, e: EngineSpec): Mono[] {
   // --- the firings -------------------------------------------------------------------------------------
   const at: number[] = [];
   const amp: number[] = [];
+  // The loop's seam goes in the middle of the longest gap between firings, so it falls in a tail and never on an onset.
+  const where = e.pattern.map((p) => p[0]).sort((x, y) => x - y);
+  let seam = 0;
+  let widest = -1;
+  where.forEach((p, i) => {
+    const gap = (where[(i + 1) % where.length]! - p + 1) % 1 || 1;
+    if (gap > widest) {
+      widest = gap;
+      seam = p + 0.5 * gap;
+    }
+  });
   for (let c = 0; c < cycles; c++) {
     for (const [pos, strength] of e.pattern) {
-      // A third of a cycle in, so the loop's seam falls in a firing's tail and not on its onset.
-      const k = Math.round((c + pos + 0.37) * cycleLen + r.gauss() * 0.5 * e.jitter * period);
+      const k = Math.round((c + ((pos - seam + 2) % 1)) * cycleLen + r.gauss() * 0.5 * e.jitter * period);
       const wrapped = ((k % n) + n) % n;
       let a = strength * clamp(Math.exp(e.wobble * r.gauss()), 0.45, 1.8) * (1 + 0.28 * breathe[wrapped]!);
       if (r.next() < e.misfire) a *= r.range(0.25, 0.5);
@@ -188,6 +200,50 @@ export function engineLoop(t: Take, e: EngineSpec): Mono[] {
   const tune = r.range(0.97, 1.03);
   const out: Mono[] = [];
 
+  // --- the harmonic series, lockstep with the firings' strength ------------------------------------------------------
+  // Each firing's strength held between firings and eased across them: the series swells and dips as the combustion does.
+  const strength = new Float32Array(n);
+  if (e.harm) {
+    const order = at.map((_, i) => i).sort((a, b) => at[a]! - at[b]!);
+    for (let m = 0; m < order.length; m++) {
+      const a = at[order[m]!]!;
+      const b = m + 1 < order.length ? at[order[m + 1]!]! : at[order[0]!]! + n;
+      const va = amp[order[m]!]!;
+      const vb = amp[order[(m + 1) % order.length]!]!;
+      for (let i = a; i < b; i++) {
+        const u = (i - a) / Math.max(1, b - a);
+        strength[i % n]! = 0.3 + 0.7 * (va + (vb - va) * u * u * (3 - 2 * u)) / (e.pattern.reduce((s, p) => Math.max(s, p[1]), 1));
+      }
+    }
+  }
+  const series = (side: number): Mono => {
+    const sum = new Float32Array(n);
+    const top = Math.min(6500, e.lowpass ?? 6500);
+    const base = e.hz;
+    const shape = (f: number): number => {
+      let g = 0;
+      for (const [hz, q, gain] of e.formants) {
+        const x = (f / (hz * tune) - (hz * tune) / f) * q;
+        g += gain / Math.sqrt(1 + x * x);
+      }
+      for (let m = 0; m < 5; m++) {
+        const hz = e.pipe.hz * tune * (2 * m + 1);
+        const x = (f / hz - hz / f) * 4;
+        g += 0.7 * Math.pow(e.pipe.feedback, m) / Math.sqrt(1 + x * x);
+      }
+      return (0.15 + g) / Math.sqrt(1 + (f / top) ** 4);
+    };
+    for (let k = 1; base * k < top; k++) {
+      const f = base * k;
+      // The low partials are one engine in the middle; the upper ones are each ear's own.
+      const stray = k <= 4 ? 0 : side * r.range(0, 0.55 * Math.PI) * Math.min(1, (k - 4) / 8);
+      addCycles(sum, cycles * k, shape(f) / Math.pow(k, 0.35), r.range(0, TAU) * 0 + (k * 2.399963 + stray));
+    }
+    normalize(sum);
+    times(sum, strength);
+    return sum;
+  };
+
   for (const side of [-1, 1]) {
     // The pipe rings to the firings' edges (and a little of the gas).
     const gas = new Float32Array(n);
@@ -224,9 +280,10 @@ export function engineLoop(t: Take, e: EngineSpec): Mono[] {
     times(hiss, breathe.map((b) => 0.7 + 0.3 * b));
     normalize(hiss);
 
+    const harmonics = e.harm ? series(side) : null;
     const ch = new Float32Array(n);
     for (let i = 0; i < n; i++) {
-      ch[i] = e.sub.level * thump[i]! + e.ring * ring[i]! + e.gas.level * gas[i]! + e.intake.level * roar[i]! + e.tick.level * ticks[i]! + e.hiss * hiss[i]!;
+      ch[i] = (harmonics ? e.harm! * harmonics[i]! : 0) + e.sub.level * thump[i]! + e.ring * ring[i]! + e.gas.level * gas[i]! + e.intake.level * roar[i]! + e.tick.level * ticks[i]! + e.hiss * hiss[i]!;
     }
     out.push(ch);
   }
@@ -253,7 +310,7 @@ const LIGHT: Character = {
   sub: { level: 0.6, cut: 650 }, ring: 0.95,
   gas: { low: 1700, high: 7200, level: 0.17, decay: 0.16 },
   intake: { cut: 2600, level: 0.22, decay: 0.3 },
-  tick: { level: 0.05, low: 3500, high: 8000 }, hiss: 0.025, drive: 2.2,
+  tick: { level: 0.05, low: 3500, high: 8000 }, hiss: 0.025, harm: 0.34, drive: 2.2,
 };
 
 /** A middleweight: a punchy twin, one stroke hard and its partner half as hard, rounder, with a mid-range bark. */
@@ -265,7 +322,7 @@ const MIDDLE: Character = {
   sub: { level: 0.8, cut: 430 }, ring: 0.85,
   gas: { low: 420, high: 3300, level: 0.16, decay: 0.24 },
   intake: { cut: 1500, level: 0.38, decay: 0.34 },
-  tick: { level: 0.07, low: 2500, high: 6000 }, hiss: 0.02, drive: 1.8,
+  tick: { level: 0.07, low: 2500, high: 6000 }, hiss: 0.02, harm: 0.3, drive: 1.8,
 };
 
 /** A heavyweight: a V-twin's uneven lope (two firings close, then a gap), deep, throaty, with a wide muffler's boom. */
@@ -277,7 +334,7 @@ const HEAVY: Character = {
   sub: { level: 0.7, cut: 240 }, ring: 1,
   gas: { low: 180, high: 2700, level: 0.24, decay: 0.3 },
   intake: { cut: 1000, level: 0.5, decay: 0.4 },
-  tick: { level: 0.08, low: 1800, high: 4500 }, hiss: 0.018, drive: 2, lowpass: 5200,
+  tick: { level: 0.08, low: 1800, high: 4500 }, hiss: 0.018, harm: 0.26, drive: 2, lowpass: 5200,
 };
 
 /**
