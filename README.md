@@ -1,4 +1,4 @@
-# Super Claude Bros.
+# Nintenthropic
 
 **An arcade you play with your hand.** Point your finger at the screen, fold
 your thumb to fire. It runs in your browser, sees your hand through your

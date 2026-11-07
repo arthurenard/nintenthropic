@@ -2,7 +2,7 @@
   "name": "nintenthropic",
   "private": true,
   "version": "0.3.0",
-  "description": "Super Claude Bros.: games you play with your hands in the browser, four finger-gun shooters and a kart racer for up to four.",
+  "description": "Nintenthropic: games you play with your hands in the browser, four finger-gun shooters and a kart racer for up to four.",
   "type": "module",
   "scripts": {
     "dev": "vite",
