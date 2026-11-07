@@ -10,6 +10,8 @@
  */
 import { $, element } from "../../ui/dom";
 import { layoutPodium, type PhotoBox } from "./finishPhotos";
+import { lookFor } from "./photoFx/looks";
+import { FxPlayer, type FxHandle } from "./photoFx/player";
 import type { SharedCard } from "./finishShare";
 import { raceTime } from "./format";
 import { colourDot } from "./ui";
@@ -22,6 +24,8 @@ export interface ShotCard {
   name: string;
   colour: string;
   time: number | null;
+  /** How many raced (bots too), so the last place is known: it has its own rain cloud. */
+  field?: number;
   /** Their driver (characters.ts), for the portrait that stands in for a photo. */
   character?: string;
   /** Their finish-line photo, a JPEG data URL, when there is one. */
@@ -42,6 +46,8 @@ interface Shown {
   card: ShotCard;
   figure: HTMLElement;
   picture: HTMLElement;
+  /** The colour wash, stamp and animated effects over the card (photoFx). */
+  fx: FxHandle;
   /** The photo's width over its height once it is decoded, or null for a stand-in. */
   aspect: number | null;
 }
@@ -55,6 +61,9 @@ export class FinishGallery {
   private generation = 0;
   /** The shape a card with no photo is given: the photos' own (their middle one) when there are some. */
   private standInAspect = STAND_IN_ASPECT;
+  private readonly player = new FxPlayer();
+  /** The track raced: its look is on every card. */
+  private trackId = "";
 
   /** `changed`: a photo was put on a card (the results offer Share once there is one). */
   constructor(private readonly changed: () => void = () => {}) {
@@ -67,8 +76,10 @@ export class FinishGallery {
   }
 
   /** The cards for these results (an empty list: none, and the gallery is gone). */
-  show(cards: readonly ShotCard[]): void {
+  show(cards: readonly ShotCard[], trackId = this.trackId): void {
     const mine = ++this.generation;
+    this.trackId = trackId;
+    for (const shown of this.shown) shown.fx.dispose();
     this.shown = [];
     this.root.replaceChildren();
     this.root.hidden = cards.length === 0;
@@ -119,7 +130,8 @@ export class FinishGallery {
     name.append(colourDot(card.colour), element("span", "shot-who", card.name));
     caption.append(element("span", "medal", card.placeLabel), name, element("span", "shot-time num", raceTime(card.time)));
     figure.append(picture, caption);
-    return { card, figure, picture, aspect: null };
+    const fx = this.player.mount(figure, { look: lookFor(this.trackId), place: card.place, field: card.field ?? 0, placeLabel: card.placeLabel });
+    return { card, figure, picture, fx, aspect: null };
   }
 
   /** Puts the photo in the card once it is decoded (so the layout knows its shape); `late` develops it over what was there. */
@@ -205,6 +217,7 @@ export class FinishGallery {
       const shown = this.shown[i]!;
       Object.assign(shown.figure.style, { left: `${box.x + offset}px`, top: `${box.y}px`, width: `${box.w}px`, height: `${box.h}px` });
       // A small card says less: its words come down a size, and a narrow one keeps who over how long (the table has the time).
+      shown.fx.resize(box.w, box.h);
       shown.figure.classList.toggle("small", box.h < 150 || box.w < 190);
       shown.figure.classList.toggle("tiny", box.w < 150);
       // The leader's says more, larger.

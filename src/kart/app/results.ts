@@ -185,7 +185,7 @@ export class ResultsScreen {
     const first = !this.cards.some((candidate) => candidate.photo);
     card.photo = photo;
     // The first photo of a race nobody expected one from brings the cards; otherwise it develops on its own.
-    if (first && $("finish-photos").hidden) this.gallery.show(this.cards);
+    if (first && $("finish-photos").hidden) this.gallery.show(this.cards, this.race.trackId);
     else this.gallery.add(kart, photo);
   }
 
@@ -203,10 +203,10 @@ export class ResultsScreen {
         const slot = lobby.karts[row.kart];
         const character = racers.find((racer) => racer.id === row.kart)?.character ?? lobby.players.find((player) => player.slot === slot)?.character;
         const { kart, place, placeLabel, name, colour, time } = row;
-        return { kart, place, placeLabel, name, colour, time, character, photo: photos.get(kart) ?? null };
+        return { kart, place, placeLabel, name, colour, time, field: rows.length, character, photo: photos.get(kart) ?? null };
       });
     const any = this.cards.some((card) => card.photo || cameras.has(card.kart));
-    this.gallery.show(any ? this.cards : []);
+    this.gallery.show(any ? this.cards : [], this.race.trackId);
   }
 
   /** Two karts over the line together for a top-three place: a flash, the still, "Photo Finish!", and then the results. */

@@ -301,7 +301,7 @@ tr[data-place="3"] .medal,
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 2;
+  z-index: 4;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -415,6 +415,102 @@ tr[data-place="3"] .medal,
 }
 :root[data-reduce-motion] .shot.has-photo .shot-picture::after {
   display: none;
+}
+
+/* --- the track's look on a photo (photoFx/): a colour wash that flatters faces, a frame and stamp, and the effects that play
+   over it (a canvas, drawn by photoFx/player.ts only while the card is on screen). Only a real photo is graded. ---------- */
+.shot.has-photo .shot-picture {
+  filter: var(--grade, none);
+}
+.shot-tint,
+.shot-frame,
+.shot-fx {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.shot-tint {
+  z-index: 1;
+  display: none;
+  background: linear-gradient(180deg, var(--tint-top, transparent), var(--tint-foot, transparent));
+  mix-blend-mode: soft-light;
+  opacity: var(--tint-k, 0);
+}
+.shot.has-photo .shot-tint {
+  display: block;
+  animation: shot-fade 900ms var(--ease) backwards;
+  animation-delay: calc(var(--i, 0) * 110ms + 260ms);
+}
+.shot-fx {
+  z-index: 2;
+  animation: shot-fade 700ms var(--ease) backwards;
+  animation-delay: calc(var(--i, 0) * 110ms + 900ms);
+}
+.shot-frame {
+  z-index: 3;
+  border-radius: inherit;
+  box-shadow: inset 0 0 70px rgba(0, 0, 0, var(--vignette, 0));
+}
+.shot-frame::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border-radius: calc(var(--r-card) - 4px);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+}
+/* The stamp: the track and the place, top right, in the track's accent. */
+.shot-stamp {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  padding: 4px 10px 4px 8px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(6, 12, 30, 0.55);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.shot-stamp::before {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent, #ffd60a);
+}
+.shot.small .shot-stamp {
+  top: 9px;
+  right: 9px;
+  font-size: 9px;
+  padding: 3px 8px 3px 7px;
+}
+.shot.tiny .shot-stamp {
+  display: none;
+}
+.shot.lead .shot-stamp {
+  top: 16px;
+  right: 16px;
+  font-size: 12px;
+  padding: 5px 12px 5px 10px;
+}
+/* Reduce Motion: the effects show one frame, still, and fade in with the card. */
+:root[data-reduce-motion] .shot-fx,
+:root[data-reduce-motion] .shot-tint {
+  animation: shot-fade 250ms var(--ease) backwards;
+  animation-delay: 0s;
 }
 
 /* Above the table on a narrow screen; beside it, the two a pair in the middle, once there is room for both (the photos'
