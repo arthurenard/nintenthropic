@@ -140,7 +140,7 @@ function drop(c: Ctx, x: number, y: number, r: number): void {
  * card with a small splash, and a few stay on the glass and run.
  */
 export function cloud(c: Ctx, s: Scene): void {
-  const x = s.w * 0.22;
+  const x = s.w * 0.15;
   const y = s.h * 0.15 + Math.sin(TAU * ph(s.t, 1)) * s.u * 0.01;
   const r = s.u * 0.05;
   const floor = s.h * 0.84;

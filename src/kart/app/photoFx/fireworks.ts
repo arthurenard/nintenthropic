@@ -119,8 +119,8 @@ const FAIR = [
 const SPOTS: readonly { x: number; y: number; from: number }[] = [
   { x: 0.17, y: 0.32, from: 0.04 },
   { x: 0.85, y: 0.3, from: 0.97 },
-  { x: 0.32, y: 0.1, from: 0.05 },
-  { x: 0.68, y: 0.1, from: 0.95 },
+  { x: 0.2, y: 0.22, from: 0.05 },
+  { x: 0.8, y: 0.22, from: 0.95 },
 ];
 
 function rocket(c: Ctx, s: Scene, from: number, cx: number, cy: number, q: number, colour: string): void {
@@ -186,7 +186,7 @@ export function fireworks(c: Ctx, s: Scene, look: Look): void {
     }
     const q = (p - climb) / life;
     if (q >= 1) continue;
-    const radius = s.u * (0.26 + 0.05 * rnd(i, 3));
+    const radius = s.u * (0.26 + 0.05 * rnd(i, 3)) * (spot.y < 0.25 ? 0.72 : 1);
     const o = { n: fair ? 30 : 26, ...colours, seed: i * 7 + 1 };
     bloom(c, cx, cy, radius, q, o, s.u);
     if (!fair) {

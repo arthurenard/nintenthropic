@@ -18,7 +18,17 @@ interface Stem {
 }
 
 /** The stems: along each edge, and the longest from the corners, growing inward. Fixed by the card's size. */
+const stemCache = new Map<string, Stem[]>();
 function stems(s: Scene): Stem[] {
+  const key = `${s.w}x${s.h}x${s.u}`;
+  const hit = stemCache.get(key);
+  if (hit) return hit;
+  if (stemCache.size > 12) stemCache.clear();
+  const made = buildStems(s);
+  stemCache.set(key, made);
+  return made;
+}
+function buildStems(s: Scene): Stem[] {
   const out: Stem[] = [];
   const edge = (n: number, salt: number, place: (f: number) => [number, number, number], len: number) => {
     for (let i = 0; i < n; i++) {
@@ -48,7 +58,6 @@ function stems(s: Scene): Stem[] {
 
 /** One fern into the current path: `grow` (0..1) is how much of it has crept out. */
 function fern(c: Ctx, st: Stem, grow: number): [number, number] {
-  const length = st.len * grow;
   let x = st.x;
   let y = st.y;
   let a = st.a;
@@ -56,10 +65,11 @@ function fern(c: Ctx, st: Stem, grow: number): [number, number] {
   const segs = 6;
   c.moveTo(x, y);
   let tip: [number, number] = [x, y];
-  for (let i = 1; i <= segs; i++) {
-    const f = i / segs;
-    if (f > grow + 0.001 && grow < 1) break;
-    const step = length / segs;
+  // Fixed segments; the last one drawn grows by its fraction, so the fern creeps smoothly and nothing pops in.
+  const reach = clamp01(grow) * segs;
+  for (let i = 1; i <= Math.ceil(reach - 1e-6); i++) {
+    const part = Math.min(1, reach - (i - 1));
+    const step = (st.len / segs) * part;
     a += (bend / segs) * 2;
     const nx = x + Math.cos(a) * step;
     const ny = y + Math.sin(a) * step;
@@ -67,7 +77,7 @@ function fern(c: Ctx, st: Stem, grow: number): [number, number] {
     // Branches off the stem, each a little feather of its own: shorter toward the tip.
     const along = (i - 0.5) / segs;
     const room = 1 - along * 0.85;
-    const bl = length * 0.38 * room;
+    const bl = st.len * 0.38 * room * part;
     for (const side of [-1, 1]) {
       const ba = a + side * 0.95;
       const bx = x + Math.cos(a) * step * 0.55;
