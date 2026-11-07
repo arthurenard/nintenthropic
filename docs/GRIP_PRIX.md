@@ -879,16 +879,21 @@ heard and let go after half a second of silence, and is told only what has moved
   table: finish, cheer, laps, blasts, storms, the skyrocket's burst, hits, landings and boosts most, the countdown a
   little). The loops (engines, tyres, wind) stay dry: they are the near, steady ground the rest rings against. The
   countdown climbs the A major triad (one beep at A4, C#5, E5) and Go is the A above with the triad blooming over it
-  and the crowd a beat behind; a drift boost at the second and third charge has the flame roaring behind it, longer the
-  hotter.
+  and the crowd a beat behind (the cheer has a 1.5 s gap, so a restart never stacks it); a drift boost at the second and
+  third charge has its own flame cue behind it (`kart_flame_short`, 1 s; `kart_flame_long`, 1.8 s), while the plain
+  whoosh stays as it was for pads, kicks and the start boost.
+- **The bus.** In a race the master gets a glue compressor (threshold −20 dB, 2.5:1, soft knee) and a −2.7 dB trim for
+  its make-up gain ahead of the limiter, whose ceiling is −2 dBFS (`enterRoom` sets them; `leaveRoom` hands back the
+  arcade's plain master and town room when the race audio is disposed). A new room is swapped in with the reverb return
+  faded out for 70 ms, so a ringing send never clicks.
 - **The mix.** Levels are dB at the bus, in `src/audio/cues/kart.ts` (its header has the ladder); the tests hold it
   (`cues.test.ts`: every take under the bus's −1 dBFS ceiling, the kinds stepped, the engines' eight layers within
   3 dB, the places under the engines). The music dips under the big moments: the finish (to 0.3 of its level), the
   final lap (0.45), being hit, a storm's bolt or a skyrocket bursting near (0.5), a blast or a fall (0.6), the start
   boost (0.65), the third drift boost (0.72), a nitro (0.78); a lighter dip never cuts a deeper one short. Measured
   over three laps of eight bots on Meadow Loop with one kart in view, the sliders where a new player finds them: the
-  whole mix −17.0 LUFS (true peak −1.4 dBTP), the effects −18.2 (−19.7 before the engines were raised 2.5 dB and the
-  rooms added) and the music −22.9; each place alone −34 to −36.
+  whole mix −16.2 LUFS (true peak −3.7 dBTP; Glacier Pass −15.9 / −4.0, Volcano Rush −15.8 / −3.8, Kitchen Rally with
+  four views −15.5 / −3.3), the music −22.9; each place alone −34 to −36.
 - **What it costs.** Measured over a race of eight bots on Kitchen Rally with four views (Meadow Loop with one), against
   a bus that only counts, in Node on the M4 Max: the audio code takes 0.011 ms a frame with four views and 0.007 with one
   (CPU time, the least of three runs for each second of the race, medians of three alternating runs of the checkout

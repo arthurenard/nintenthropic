@@ -92,6 +92,34 @@ describe("the engine", () => {
   });
   afterEach(() => warn.mockRestore());
 
+  it("swaps a game's room in quietly, and hands the arcade's own back after", () => {
+    vi.useFakeTimers();
+    try {
+      const { e, ctx } = engine();
+      const conv = () => (e as unknown as { convolver: { buffer: { length: number } } }).convolver;
+      const town = conv().buffer.length;
+      const room = new Float32Array(500);
+      e.setImpulse(room, room, 0.3);
+      // Not yet: the return is faded out first, so a ringing send does not click.
+      expect(conv().buffer.length).toBe(town);
+      vi.advanceTimersByTime(100);
+      expect(conv().buffer.length).toBe(500);
+      expect((e as unknown as { reverbLevel: number }).reverbLevel).toBe(0.3);
+      e.setMix({ glue: { threshold: -20, ratio: 2.5 }, ceiling: -3 });
+      const g = (e as unknown as { glue: { ratio: { value: number } }; limiter: { threshold: { value: number } } });
+      expect(g.glue.ratio.value).toBe(2.5);
+      expect(g.limiter.threshold.value).toBe(-3);
+      e.resetRoom();
+      vi.advanceTimersByTime(100);
+      expect(conv().buffer.length).toBe(town);
+      expect(g.glue.ratio.value).toBe(1);
+      expect(g.limiter.threshold.value).toBe(-1.5);
+      expect(ctx).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("plays nothing for an unknown cue, and says so once", () => {
     const { e, ctx } = engine();
     const before = ctx.sources.length;

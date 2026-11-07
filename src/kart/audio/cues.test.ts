@@ -42,7 +42,7 @@ describe("the kart pack", () => {
     const wanted = [
       // engines (four, each low and high in its revs), their rasp, idle and growl, the drift and its sparks, boosts
       ...ENGINE_CUES, "kart_engine_grit", "kart_idle", "kart_growl", "kart_backfire", "kart_drift", "kart_drift_sparks",
-      "kart_spark_blue", "kart_spark_orange", "kart_mini_turbo", "kart_super_turbo", "kart_boost_whoosh", "kart_slingshot", "kart_boost_pad", "kart_start_boost", "kart_flood",
+      "kart_spark_blue", "kart_spark_orange", "kart_mini_turbo", "kart_super_turbo", "kart_boost_whoosh", "kart_flame_short", "kart_flame_long", "kart_slingshot", "kart_boost_pad", "kart_start_boost", "kart_flood",
       // another kart going by close
       "kart_pass",
       // item boxes and items
@@ -168,7 +168,7 @@ describe("the kart pack", () => {
     const names = new Set<string>([
       ...Object.values(SOUND_CUES), ...ENGINE_CUES, ...Object.values(SURFACE_CUES), ...AMBIENCE_CUES,
       "kart_engine_grit", "kart_idle", "kart_growl", "kart_backfire", "kart_drift", "kart_drift_sparks", "kart_seeker", "kart_drone", "kart_roulette_tick", "kart_item_ready", "kart_flood",
-      "kart_duck", "kart_puck_bounce", "kart_wind", "kart_thud", "kart_place_up", "kart_place_down", "kart_slingshot", "kart_super_turbo", "kart_pass",
+      "kart_duck", "kart_puck_bounce", "kart_wind", "kart_thud", "kart_place_up", "kart_place_down", "kart_slingshot", "kart_super_turbo", "kart_pass", "kart_flame_short", "kart_flame_long",
     ]);
     const scene = {
       locals: [{ kart: 0, pan: 0 }],

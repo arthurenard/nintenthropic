@@ -165,10 +165,15 @@ describe("gears and the start", () => {
   it("climbs through each gear and falls back a little at the change, joining the plain curve at both ends", () => {
     expect(gearFactor(0)).toBe(1);
     expect(gearFactor(1)).toBe(1);
-    expect(gearFactor(0.2999)).toBeGreaterThan(1.04);
-    expect(gearFactor(0.3001)).toBeLessThan(0.96);
-    expect(gearFactor(0.5199)).toBeGreaterThan(1.04);
-    expect(gearFactor(0.5201)).toBeLessThan(0.96);
+    for (const edge of [0.26, 0.42, 0.6]) {
+      expect(gearFactor(edge - 0.0001)).toBeGreaterThan(1.035);
+      expect(gearFactor(edge + 0.0001)).toBeLessThan(0.965);
+    }
+    // Continuous inside a gear: no step but the intended drop at the edges.
+    for (let f = 0.121; f < 0.78; f += 0.002) {
+      if ([0.26, 0.42, 0.6].some((e) => Math.abs(f - e) < 0.003)) continue;
+      expect(Math.abs(gearFactor(f + 0.002) - gearFactor(f))).toBeLessThan(0.01);
+    }
     for (let f = 0; f <= 1.2; f += 0.01) expect(Math.abs(gearFactor(f) - 1)).toBeLessThanOrEqual(0.0601);
   });
 
@@ -229,7 +234,7 @@ describe("events become sounds", () => {
     ["orange sparks", ev("drift-level", { kart: 0, level: 2 }), ["kart_spark_orange"]],
     ["the hottest sparks", ev("drift-level", { kart: 0, level: 3 }), ["kart_spark_orange"]],
     ["a slipstream's fling", ev("boost", { kart: 0, source: "draft", level: 1 }), ["kart_slingshot"]],
-    ["the hottest drift let go", ev("boost", { kart: 0, source: "drift", level: 3 }), ["kart_mini_turbo", "kart_boost_whoosh", "kart_super_turbo"]],
+    ["the hottest drift let go", ev("boost", { kart: 0, source: "drift", level: 3 }), ["kart_mini_turbo", "kart_flame_long", "kart_super_turbo"]],
     ["a hard landing", ev("land", { kart: 0, boost: false, strength: 0.8 }), ["kart_land", "kart_thud"]],
     ["a kick at the lip", ev("trick", { kart: 0, kick: true }), ["kart_trick", "kart_boost_whoosh"]],
     ["a bump", ev("bump", { a: 0, b: 1, strength: 0.5 }), ["kart_bump"]],
@@ -299,7 +304,7 @@ describe("events become sounds", () => {
   it("raises the pitch of a level-two mini-turbo", () => {
     const { bus, frame } = setup();
     frame([kart(0), kart(1)], {}, [ev("boost", { kart: 0, source: "drift", level: 1 }), ev("boost", { kart: 0, source: "drift", level: 2 })]);
-    const rates = bus.played.map((p) => p.options.rate!).sort();
+    const rates = bus.played.filter((p) => p.cue === "kart_mini_turbo").map((p) => p.options.rate!).sort((a, b) => a - b);
     expect(rates[1]!).toBeGreaterThan(rates[0]!);
   });
 

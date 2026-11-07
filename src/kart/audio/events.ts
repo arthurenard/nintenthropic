@@ -150,7 +150,7 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
           return keep(
             order("kart_mini_turbo", who, own, { radius: RADIUS.medium, rate: event.level >= 3 ? 1.22 : event.level >= 2 ? 1.12 : 1, volume: event.level >= 2 ? 1 : 0.8 }),
             // The flame behind it, longer the hotter the charge.
-            event.level >= 2 ? order("kart_boost_whoosh", who, own, { radius: RADIUS.small, volume: event.level >= 3 ? 0.6 : 0.35, rate: event.level >= 3 ? 0.92 : 1.1, delay: 0.03 }) : null,
+            event.level >= 2 ? order(event.level >= 3 ? "kart_flame_long" : "kart_flame_short", who, own, { radius: RADIUS.small, volume: event.level >= 3 ? 0.9 : 0.8, delay: 0.03 }) : null,
             event.level >= 3 ? order("kart_super_turbo", who, own, { radius: RADIUS.medium, ...(own ? { duck: { depth: 0.72, hold: 0.45 } } : {}) }) : null,
           );
         // Flung out of another kart's slipstream: a stretched band let go.

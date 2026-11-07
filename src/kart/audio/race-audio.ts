@@ -60,7 +60,7 @@ import { type MusicRenderer, createMusicRenderer } from "./music/loader";
 import { type MusicTrack, MusicPlayer, beatTimes } from "./music/player";
 import { type PieceId, THEME_PIECES } from "./music/pieces";
 import { MUSIC_SAMPLE_RATE, type RenderedMusic } from "./music/render";
-import { enterRoom } from "./space";
+import { enterRoom, leaveRoom } from "./space";
 import { type LocalKart, type Scene, falloff, hearThing, listenerAt, localOf } from "./scene";
 
 export type { KartSound, MusicKind, TrackTheme } from "./kinds";
@@ -585,6 +585,7 @@ class RaceAudioImpl implements RaceAudio {
     if (this.disposed) return;
     this.stopLoops();
     this.disposed = true;
+    leaveRoom(this.bus);
     this.player?.dispose();
     this.renderer?.dispose();
     this.tracks.clear();

@@ -138,14 +138,27 @@ function flameRoar(t: Take, seconds: number, attack: number): Mono {
   return shapeBy(gas, (u) => smooth(u / attack) * Math.pow(Math.max(0, 1 - u), 1.2));
 }
 
-/** A boost's whoosh: a long rush of air, a low fwoom under it and the flame roaring behind. */
+/** A boost's whoosh: a long rush of air, a low fwoom under it. */
 export function boostWhoosh(t: Take): Mono {
-  const out = t.canvas(1.5);
+  const out = t.canvas(1.3);
   t.put(out, whoosh(t, 1.2, 450, 3800, 1.0, swoosh(0.08, 1.4)), 0, 1);
   const fwoom = glide(t, 0.9, 85, 230, 0.7, 0.3, 0.1);
   shapeBy(fwoom, swell);
   t.put(out, fwoom, 0, 0.5);
-  t.put(out, flameRoar(t, 1.4, 0.05), 0.02, 0.55);
+  return out;
+}
+
+/** The flame behind a hot drift boost (the second spark level): a second of fire. */
+export function flameShort(t: Take): Mono {
+  const out = t.canvas(1.0);
+  t.put(out, flameRoar(t, 1.0, 0.04), 0, 1);
+  return out;
+}
+
+/** The flame behind the hottest drift boost: nearly two seconds, throatier as it dies. */
+export function flameLong(t: Take): Mono {
+  const out = t.canvas(1.8);
+  t.put(out, flameRoar(t, 1.8, 0.06), 0, 1);
   return out;
 }
 

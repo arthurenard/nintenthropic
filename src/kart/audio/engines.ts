@@ -99,9 +99,9 @@ export function gridFlare(view: { phase: string; countdown: number }): number {
  * snapshot. The factor is 1 on average, ±6 % through a gear (a dip of about two semitones at a change); it fades to
  * nothing standing still, at top speed and in the air.
  */
-const GEAR_EDGES = [0.12, 0.3, 0.52, 0.78] as const;
+const GEAR_EDGES = [0.12, 0.26, 0.42, 0.6, 0.78] as const;
 export function gearFactor(f: number): number {
-  if (f <= GEAR_EDGES[0] || f >= GEAR_EDGES[3]) return 1;
+  if (f <= GEAR_EDGES[0] || f >= GEAR_EDGES[GEAR_EDGES.length - 1]!) return 1;
   let g = 0;
   while (g < GEAR_EDGES.length - 2 && f >= GEAR_EDGES[g + 1]!) g++;
   const u = (f - GEAR_EDGES[g]!) / (GEAR_EDGES[g + 1]! - GEAR_EDGES[g]!);

@@ -52,6 +52,8 @@ export function spaceImpulse(theme: TrackTheme, sr: number): [Float32Array, Floa
 /** What a bus must offer to take a room (the arcade's Web Audio engine does; a test double does not). */
 export interface HasRoom {
   setImpulse(left: Float32Array, right: Float32Array, level?: number): void;
+  setMix?(mix: { glue?: { threshold: number; ratio: number; knee?: number }; ceiling?: number; trimDb?: number }): void;
+  resetRoom?(): void;
   readonly ctx?: { readonly sampleRate: number };
 }
 
@@ -62,5 +64,12 @@ export function enterRoom(bus: unknown, theme: TrackTheme): boolean {
   const sr = b.ctx?.sampleRate ?? 48000;
   const [l, r] = spaceImpulse(theme, sr);
   b.setImpulse(l, r, (SPACES[theme] ?? SPACES.meadow).level);
+  // The race's finish: glue so eight engines and the effects sit together, and a ceiling with room for the true peak.
+  b.setMix?.({ glue: { threshold: -20, ratio: 2.5, knee: 12 }, ceiling: -2, trimDb: -2.7 });
   return true;
+}
+
+/** Hand the bus back to the arcade's plain room and master when the race is over. */
+export function leaveRoom(bus: unknown): void {
+  (bus as Partial<HasRoom> | null)?.resetRoom?.();
 }
