@@ -251,10 +251,15 @@ export async function createWorld(
     const layer = buildLandmarks(routeEnv, [...(road.def.landmarks ?? [])], mats);
     own(layer);
     group.add(layer.group);
-    const moving = buildHazards(routeEnv, road.def.hazards ?? [], mats, shadowTex);
+    const routeHazards = road.def.hazards ?? [];
+    const moving = buildHazards(routeEnv, routeHazards.filter((h) => !isPiece(h)), mats, shadowTex);
     own(moving);
     group.add(moving.group);
-    return { layer, moving };
+    // The branch's timed set pieces (a mine's carts, a cave's icicles) are drawn as the main road's are.
+    const routePieces = buildPieces(routeEnv, routeHazards, mats, shadowTex);
+    own(routePieces);
+    group.add(routePieces.group);
+    return { layer, moving, pieces: routePieces };
   });
 
   // Glows: lamps (static) and the three start lights (changing).
@@ -441,6 +446,7 @@ export async function createWorld(
       for (const r of routeLayers) {
         r.layer.update(time);
         r.moving.update(raceTime, dt);
+        r.pieces.update(raceTime, dt);
       }
     },
     install(scene) {

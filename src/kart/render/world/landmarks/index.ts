@@ -35,7 +35,7 @@ export const THEME_LANDMARKS: Readonly<Record<string, readonly string[]>> = {
   canyon: ["mesa", "rock-arch", "cactus-grove", "water-tower", "mine-cart", "mine-tunnel", "rope-bridge", "headframe", "dynamite-shack"],
   harbour: ["crane", "lighthouse", "ship", "ship-deck", "containers", "warehouse", "buoy"],
   kitchen: ["teapot", "fruit-bowl", "toaster", "grater", "drawer", "salt-shaker", "pepper-mill", "cookbook", "cereal-box", "mug", "fork-arch", "spoon-arch", "sink", "window", "wall-clock"],
-  snow: ["igloo", "cabin", "snowman", "ice-arch", "ice-cave", "pine-snow", "gondola", "ski-jump"],
+  snow: ["igloo", "cabin", "snowman", "ice-arch", "ice-cave", "pine-snow", "gondola", "ski-jump", "frozen-falls"],
   volcano: ["volcano", "lava-fall", "basalt-columns", "stone-bridge", "obsidian-arch", "hot-spring"],
   funfair: ["ferris-wheel", "carousel", "big-top", "rollercoaster", "entrance-arch", "food-stall", "balloon-stand", "hook-a-duck", "helter-skelter", "fireworks", "ferris-gate", "coaster-trestle", "cannon-tent", "safety-net"],
   space: ["ringed-planet", "ring-gate", "asteroid", "satellite", "space-station", "nebula"],
