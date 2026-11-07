@@ -3,7 +3,7 @@
 // the TURN key is two secrets, TURN_KEY_ID and TURN_KEY_API_TOKEN (README).
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "super-claude-bros",
+  "name": "nintenthropic",
   "main": "cloudflare/worker.js",
   "compatibility_date": "2026-10-01",
   "assets": {

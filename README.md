@@ -4,7 +4,11 @@
 your thumb to fire. It runs in your browser, sees your hand through your
 webcam, and never sends the picture anywhere.
 
-**Play it at https://super-claude-bros.arthurenard.workers.dev**
+**Play it at https://nintenthropic.arthurenard.workers.dev**
+
+The former address, https://super-claude-bros.arthurenard.workers.dev, remains
+available during the transition. New deployments target `nintenthropic`;
+existing links and running sessions on the former address keep working.
 
 ![Dust Creek at golden hour](public/assets/western/poster.webp)
 
