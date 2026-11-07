@@ -26,6 +26,9 @@ interface Eyes {
   flat?: boolean;
 }
 
+/** The modelled drivers' eyes are drawn this much bigger than the code-built ones (art/kart/drivers/shared.py EYE_GROW). */
+export const EYE_GROW = 1.14;
+
 export const EYES: Record<Species, Eyes> = {
   rabbit: { x: 0.115, y: 0.05, r: 0.045, skin: "#f3ede6" },
   penguin: { x: 0.1, y: 0.035, r: 0.043, skin: "#f8f9ff" },
@@ -51,14 +54,15 @@ function frontAt(head: BufferGeometry, x: number, y: number, r: number): number 
 }
 
 /** The lid geometry for `species` (both lids, and their lashes), about the eyes' mid point (0, eye y, eye z), or null if the head has no eyes there. */
-function lidGeometry(species: Species, head: BufferGeometry): { geometry: BufferGeometry; y: number; z: number; reach: number } | null {
-  const e = EYES[species];
+function lidGeometry(species: Species, head: BufferGeometry, grow: number): { geometry: BufferGeometry; y: number; z: number; reach: number } | null {
+  const base = EYES[species];
+  const e: Eyes = base.flat ? base : { ...base, r: base.r * grow };
   const front = frontAt(head, e.x, e.y, e.r * 0.8);
   if (!Number.isFinite(front)) return null;
   // The bead's centre sits a little under the face, its radius out along z being 0.8 of its size.
   const bead = e.flat ? 0.012 : e.r * 0.8;
   const z = front - bead;
-  const key = `${species}|${z.toFixed(3)}`;
+  const key = `${species}|${z.toFixed(3)}|${grow}`;
   const reach = e.r * 1.3;
   let geometry = cache.get(key);
   if (!geometry) {
@@ -118,8 +122,10 @@ export class Lids {
     material: Material,
     /** Drivers blink at their own times: this seeds when. */
     seed: number,
+    /** How much bigger than the code-built eye this head's eyes are (EYE_GROW for the modelled drivers). */
+    grow = 1,
   ) {
-    const made = lidGeometry(species, head);
+    const made = lidGeometry(species, head, grow);
     if (!made) throw new Error("no eyes");
     this.mesh = new Mesh(made.geometry, material);
     this.mesh.position.set(0, made.y, made.z);

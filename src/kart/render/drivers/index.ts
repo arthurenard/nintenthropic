@@ -39,7 +39,8 @@ import { buildPenguin } from "./penguin";
 import { buildRabbit } from "./rabbit";
 import { buildRobot } from "./robot";
 import { driverFromArt } from "./fromArt";
-import { Lids } from "./face";
+import { EYE_GROW, Lids } from "./face";
+import { Face, moodOf } from "./expression";
 
 export const BUILDERS: Record<Species, (l: Look) => DriverBuild> = {
   rabbit: buildRabbit,
@@ -95,6 +96,7 @@ export class Driver {
   private readonly geometries: BufferGeometry[] = [];
   private readonly base = new Vector3();
   private readonly lids: Lids | null = null;
+  private face: Face | null = null;
   /** How far the driver is looking back over a shoulder (-1..1, the side), eased; and how much at rest on the grid, eased. */
   private back = 0;
   private rest = 0;
@@ -106,7 +108,7 @@ export class Driver {
   private fin = 0;
   private dizzy = 0;
 
-  constructor(built: DriverBuild, base: V3 = [0, 0, 0], material: Material = kartMaterial(), species?: Species, seed = 0) {
+  constructor(built: DriverBuild, base: V3 = [0, 0, 0], material: Material = kartMaterial(), species?: Species, seed = 0, modelled = false) {
     this.base.set(base[0], base[1], base[2]);
     this.phase = seed * 1.618;
     this.root.position.copy(this.base);
@@ -121,11 +123,20 @@ export class Driver {
     this.root.add(this.head);
     if (species) {
       try {
-        this.lids = new Lids(species, built.head, material, seed);
+        this.lids = new Lids(species, built.head, material, seed, modelled ? EYE_GROW : 1);
         this.head.add(this.lids.mesh);
       } catch (e) {
         if (import.meta.env?.DEV) console.warn(`no eyelids for ${species}`, e);
         this.lids = null;
+      }
+    }
+    // The modelled heads carry no brows or mouth of their own: this draws them, so they can change.
+    if (species && modelled) {
+      try {
+        this.face = new Face(species, built.head, material);
+        this.head.add(this.face.mesh);
+      } catch {
+        this.face = null;
       }
     }
     for (const side of [1, -1] as const) {
@@ -219,6 +230,7 @@ export class Driver {
       -m.lean * 0.35 + Math.sin(t * 13) * 0.34 * this.dizzy,
     );
     this.lids?.update(t, happy, this.dizzy, m.shut ?? 0);
+    this.face?.update(t, moodOf({ happy, dizzy: this.dizzy, steer: m.steer, rest: this.rest }));
     this.stars.visible = this.dizzy > 0.05;
     if (this.stars.visible) this.stars.rotation.y = t * 6;
 
@@ -272,5 +284,6 @@ export function createDriver(species: Species, colour: string, base: V3 = [0, 0,
   const code = BUILDERS[species](l);
   let seed = (salt * 131) % 997;
   for (let i = 0; i < colour.length; i++) seed = (seed * 31 + colour.charCodeAt(i)) % 997;
-  return new Driver(driverFromArt(species, l, code) ?? code, base, material, species, seed);
+  const art = driverFromArt(species, l, code);
+  return new Driver(art ?? code, base, material, species, seed, art !== null);
 }
