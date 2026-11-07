@@ -1085,6 +1085,25 @@ Measured when three players side by side did not work well on the M4 Max, and tw
   adaptation is there so that it finds its own balance, and the Frame Rate readout says what it got ("60 fps · hands
   29/s").
 
+**Local multiplayer, measured as a whole** (2026-11-07; `tools/perf/split.mjs`: the real race page, real sim, renderer, HUD
+and net loop of a practice room, 2 to 4 scripted wheels, optionally the real camera so a tracking worker runs per column;
+1440x900 at 1x, M4 Max, Auto tier, 15 s of racing weaving about so bots, items and bumps happen, 60 s for the longest).
+Two, three and four players on Canyon Run and Fun Fair, scripted hands and the fake camera: 60 fps, p99 16.8 ms, no
+frame over 33 ms, no main-thread task over 50 ms, no shader program linked after the green light, 270 to 560 draw calls
+a frame (p99 up to 1020). Four players on Fun Fair with the camera for 60 s: the same, no hitch. The main thread is about
+a fifth busy with four views (`--profile`: three.js's own scene walk and draw submission, then `cull.select`, `project`
+and the minimap, each under half a millisecond a frame). It makes 20 MB/s of garbage (`--garbage`: four fifths is three.js
+uniform uploads); that is a minor collection every second or so and none showed as a frame. Against main (9742f80) at 1x
+the numbers are the same, because there was nothing to see on a fast machine. A weaker one is what `--cpu n` stands in for
+(the main thread n times slower, four players, medians of one run, so read as a direction): at 8x main drew 23.5 fps on
+Canyon Run (p99 100 ms, 72 frames over 50 ms) and 26.3 on Fun Fair (p99 67); this branch 25.9 (p99 67, 40 frames over 50) and
+31.0 (p99 83); at 4x this branch still holds 60 fps. What a hitch would be made of, and is not here: the shaders are all
+built behind the loading screen, the pictures are culled per view, the minimap redraws at 30 Hz, nothing allocates per
+item box. What remains is draw calls: four views at the high tier submit 500 to 560 a frame, and below about a quarter of
+this machine's single-thread speed four views stop holding 60 fps; the answer today is `onStrain` (the next race one tier
+lower). Proposals: karts (welded meshes sooner, fewer draw calls a kart), the tracks (fewer distinct materials in the
+landmarks) and a mid-race step down for the shadow pass of views 3 and 4.
+
 **Tiers.** `guessTier(gpu, cores, { splitScreen: true })` (Grip Prix passes it; the arcade's own guess is unchanged): a
 base Apple chip (M1 to M4) starts at medium, as do Safari and an iPad, which report only "Apple GPU" (unless the
 core count says a Pro or Max: 12 or more); Apple Pro, Max and Ultra start at high; old Intel graphics at low, Iris Xe
