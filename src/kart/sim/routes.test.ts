@@ -10,6 +10,7 @@ import { botField, trackStats } from "./trackStats";
 import { createSimRace } from "./race";
 import { planFor } from "./plan";
 import { GO_TICK } from "./kart";
+import { KART_AT } from "./snapshot";
 
 const NONE = new Map<number, DriveInput>();
 
@@ -114,6 +115,26 @@ describe("alternate routes in a race", () => {
     const sa = a.view();
     const sb = b.view();
     expect(sb.karts.map((k) => [k.x, k.z, k.lapProgress])).toEqual(sa.karts.map((k) => [k.x, k.z, k.lapProgress]));
+  });
+
+  it("restore mid-race on the real tracks puts every kart back on the road it was on", { timeout: 120000 }, async () => {
+    const { MEADOW_LOOP, KITCHEN_RALLY, HARBOUR_LIGHTS } = await import("../track/tracks");
+    for (const track of [MEADOW_LOOP, KITCHEN_RALLY, HARBOUR_LIGHTS]) {
+      const make = () => createSimRace({ track, laps: 3, seed: 4, racers: botField() });
+      const a = make();
+      const roads = (r: ReturnType<typeof make>) => (r.snapshot().k as number[][]).map((row) => row[KART_AT.route]);
+      for (const seconds of [8, 14, 20, 26]) {
+        while (a.view().tick < GO_TICK + 60 * seconds) a.step(NONE);
+        const b = make();
+        b.restore(a.snapshot());
+        expect(roads(b)).toEqual(roads(a));
+        for (let i = 0; i < 90; i++) {
+          a.step(NONE);
+          b.step(NONE);
+        }
+        expect(b.view().karts.map((k) => [k.x, k.z])).toEqual(a.view().karts.map((k) => [k.x, k.z]));
+      }
+    }
   });
 
   it("race on the mirror image too", { timeout: 60000 }, () => {

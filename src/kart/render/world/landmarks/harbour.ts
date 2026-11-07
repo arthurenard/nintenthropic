@@ -793,7 +793,32 @@ export const LANDMARKS: Record<string, LandmarkSpec> = {
   buoy,
 };
 
+/** A container on a crane's hook, swinging round over the dock; a ring of hazard stripes on the box, a shadow-blind hook above. */
+const swingBox: HazardSpec = {
+  build(ctx) {
+    const b = new MeshBuilder();
+    const red = lift("#c8402e", 1.5);
+    b.box(0, 1.2, 0, 2.2, 2.0, 4.4, ramp(scaleRgb(red, 0.7), red));
+    for (let k = 0; k < 7; k++) b.box(0, 1.2, -1.9 + k * 0.63, 2.24, 1.9, 0.08, STEEL_D);
+    // The hook cables and spreader on top.
+    b.box(0, 2.3, 0, 2.3, 0.2, 4.5, STEEL_D);
+    for (const sz of [-1, 1]) b.rod([0, 2.4, sz * 1.9], [0, 5.5, 0], 0.08, BLACK);
+    const root = new Group();
+    root.add(new Mesh(b.build(), ctx.lit));
+    return {
+      root,
+      radius: 2,
+      update(s) {
+        // Sways on its cables a little more than the swing needs.
+        root.rotation.z = Math.sin(s.time * 2.1) * 0.08;
+        root.position.y = 0.35 + Math.sin(s.time * 3.3) * 0.05;
+      },
+    };
+  },
+};
+
 export const HAZARDS: Record<string, HazardSpec> = {
   crab,
   forklift,
+  "swing-box": swingBox,
 };

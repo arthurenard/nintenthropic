@@ -26,8 +26,8 @@ const LANDMARKS: Record<TrackTheme, string[]> = {
 const HAZARDS: Record<TrackTheme, string[]> = {
   meadow: [],
   canyon: ["boulder", "tumbleweed"],
-  harbour: ["crab", "forklift"],
-  kitchen: ["orange", "pea", "teacup"],
+  harbour: ["crab", "forklift", "swing-box"],
+  kitchen: ["orange", "pea", "teacup", "toast"],
   snow: ["penguin", "snowball", "yeti"],
   volcano: ["fireball", "boulder", "geyser"],
   funfair: ["teacup-ride", "bumper-car"],

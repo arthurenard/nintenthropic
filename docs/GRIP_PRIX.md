@@ -1561,8 +1561,8 @@ front of them (or a laptop), and the TV is the host's screen.
 | --- | --- | --- |
 | meadow | windmill, barn, barn-run (span: a shortcut through a barn), pond, hay-bales, hot-air-balloon, sheep, flower-field | — |
 | canyon | mesa, rock-arch (span), cactus-grove, water-tower, mine-cart | boulder, tumbleweed |
-| harbour | crane, lighthouse, ship, ship-deck (span: a cargo ship's deck with a gantry crane), containers, warehouse, buoy | crab, forklift |
-| kitchen | teapot, fruit-bowl, toaster, grater (span: a tunnel), salt-shaker, pepper-mill, drawer (span: a drawer pulled out of the counter, cutlery across it), cookbook, cereal-box, mug, fork-arch (span), spoon-arch (span), sink, window, wall-clock | orange (roll), pea (cross), teacup (orbit) |
+| harbour | crane, lighthouse, ship, ship-deck (span: a cargo ship's deck with a gantry crane), containers, warehouse, buoy | crab, forklift, swing-box (orbit: a crane's container) |
+| kitchen | teapot, fruit-bowl, toaster, grater (span: a tunnel), salt-shaker, pepper-mill, drawer (span: a drawer pulled out of the counter, cutlery across it), cookbook, cereal-box, mug, fork-arch (span), spoon-arch (span), sink, window, wall-clock | orange (roll), pea (cross), teacup (orbit), toast (bob: pops from the toaster) |
 | snow | igloo, cabin, snowman, ice-arch (span), ice-cave (span: a tunnel), pine-snow, gondola, ski-jump | penguin (cross), snowball (roll), yeti (bob) |
 | volcano | volcano, lava-fall, basalt-columns, stone-bridge (span), obsidian-arch (span), hot-spring | fireball (bob), boulder (roll), geyser (bob) |
 | funfair | ferris-wheel, carousel, big-top (span: a tunnel), rollercoaster (span: over the road), entrance-arch (span), food-stall, balloon-stand, hook-a-duck, helter-skelter, fireworks | teacup-ride (orbit), bumper-car (cross) |
@@ -1607,7 +1607,8 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    across overhead), a pea rolling across its middle, a line of boost down it,
    and up onto the road again; a third shorter than the curve, narrow, and a
    fall into the counter's edge is the price. The sink's jump and the oranges
-   stay.
+   stay. The toaster pops: two slices spring up out of the road beside it in
+   turn (a bob hazard, harmless while down).
 3. **Harbour Lights** (harbour): night on the quay, cranes and ships, a
    humpback bridge over a dock and a swing bridge on the back straight to fly
    over, right angles that lean a little into their turns, crabs scuttling
@@ -1619,7 +1620,10 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    it) and down a gangway at the far end, a line of boost down the deck to pay
    for the longer way if nobody goes over the side. It parts from the quay far
    enough (and climbs late enough) that the ground between the two is never a
-   step for a kart.
+   step for a kart. Also on the quay: the **ferry ramp**, a gap where the long
+   straight meets the water with a trick lip to fly it, and a crane's container
+   that swings round over the dock road on the race clock. (A drawbridge needs
+   the moving set-pieces engine, not built here.)
 4. **Canyon Run** (canyon): the steep climb (sixteen metres), the ridge road,
    a jump over a gap in the ridge, a lip to fly off into the tumble down
    S-bends that lean one way and the other, boulders rolling down the

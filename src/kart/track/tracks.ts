@@ -257,6 +257,9 @@ export const KITCHEN_RALLY: TrackDef = {
     { kind: "orange", motion: "roll", period: 4.6, radius: 2.4, offset: 0, at: 0.518, span: 0.0592 },
     { kind: "orange", motion: "roll", period: 4.6, phase: 0.5, radius: 2.4, offset: 0, at: 0.518, span: 0.0592 },
     { kind: "teacup", motion: "orbit", period: 5.5, radius: 2.2, offset: 14, at: 0.8026, span: 9 },
+    // The toaster pops: two slices spring up out of the road in turn, by the toaster.
+    { kind: "toast", motion: "bob", period: 3.6, radius: 1.1, offset: -3.5, at: 0.7255 },
+    { kind: "toast", motion: "bob", period: 3.6, phase: 0.5, radius: 1.1, offset: 3.5, at: 0.7255 },
   ],
   landmarks: [
     { kind: "teapot", at: 0.0169, offset: 80, scale: 1.4, turn: 0.5 },
@@ -372,6 +375,9 @@ export const HARBOUR_LIGHTS: TrackDef = {
     { at: 0.5, offset: -3 },
     { at: 0.74, offset: 3 },
   ],
+  // The ferry ramp: a slip into the water where the quay's long straight ends, a gap to fly with a trick lip, and the far slip to land on.
+  ramps: [{ at: 0.534 }],
+  drops: [{ from: 0.5357, to: 0.5462, side: "both", gap: true }],
   routes: [
     {
       // The ship's deck: the quay is the quick, plain way; the other goes up a gangway onto the deck of a cargo ship moored beside
@@ -399,7 +405,9 @@ export const HARBOUR_LIGHTS: TrackDef = {
   hazards: [
     { kind: "crab", at: 0.8509, motion: "cross", period: 5.2, radius: 1.3 },
     { kind: "crab", at: 0.8773, motion: "cross", period: 5.2, phase: 0.5, radius: 1.3 },
-    { kind: "forklift", at: 0.5163, motion: "cross", period: 8, radius: 2.2 },
+    { kind: "forklift", at: 0.41, motion: "cross", period: 8, radius: 2.2 },
+    // The gantry crane swings a container round over the dock road; time it.
+    { kind: "swing-box", at: 0.64, motion: "orbit", period: 6.4, radius: 2, offset: 0, span: 7 },
   ],
   landmarks: [
     { kind: "containers", at: 0.033, offset: -30 },

@@ -46,8 +46,8 @@ export const THEME_LANDMARKS: Readonly<Record<string, readonly string[]>> = {
 export const THEME_HAZARDS: Readonly<Record<string, readonly { kind: string; motion: "cross" | "roll" | "bob" | "orbit" }[]>> = {
   meadow: [],
   canyon: [{ kind: "boulder", motion: "roll" }, { kind: "tumbleweed", motion: "cross" }],
-  harbour: [{ kind: "crab", motion: "cross" }, { kind: "forklift", motion: "cross" }],
-  kitchen: [{ kind: "orange", motion: "roll" }, { kind: "pea", motion: "cross" }, { kind: "teacup", motion: "orbit" }],
+  harbour: [{ kind: "crab", motion: "cross" }, { kind: "forklift", motion: "cross" }, { kind: "swing-box", motion: "orbit" }],
+  kitchen: [{ kind: "orange", motion: "roll" }, { kind: "pea", motion: "cross" }, { kind: "teacup", motion: "orbit" }, { kind: "toast", motion: "bob" }],
   snow: [{ kind: "penguin", motion: "cross" }, { kind: "snowball", motion: "roll" }, { kind: "yeti", motion: "bob" }],
   volcano: [{ kind: "fireball", motion: "bob" }, { kind: "boulder", motion: "roll" }, { kind: "geyser", motion: "bob" }],
   funfair: [{ kind: "teacup-ride", motion: "orbit" }, { kind: "bumper-car", motion: "cross" }],
