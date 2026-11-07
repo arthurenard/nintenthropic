@@ -61,8 +61,8 @@ export function shareName(trackName: string, ext: "png" | "mp4" | "webm"): strin
 /** The shared picture, ready to draw at any moment of the effects' loop: the still parts are drawn once. */
 export interface ShareScene {
   canvas: HTMLCanvasElement;
-  /** Draws the picture with the effects at `t` seconds into their loop. */
-  draw(t: number): void;
+  /** Draws the picture with the effects at `t` seconds into their loop (`intro`: seconds since the clip began, for the winner's flash). */
+  draw(t: number, intro?: number): void;
   /** The moment the still picture freezes on: the effects at their best. */
   peak: number;
 }
@@ -148,9 +148,9 @@ export async function makeScene(results: SharedResults): Promise<ShareScene> {
   const left = AREA.x + (AREA.width - laid.width) / 2;
   const top = AREA.y + (AREA.height - laid.height) / 2;
   const field = Math.max(0, ...results.cards.map((shared) => shared.card.field ?? 0));
-  const draw = (t: number) => {
+  const draw = (t: number, intro?: number) => {
     context.drawImage(back, 0, 0);
-    laid.boxes.forEach((box, i) => drawCard(context, results.cards[i]!, left + box.x, top + box.y, box.w, box.h, i === 0 && laid.boxes.length > 1, text, look, field, t, font));
+    laid.boxes.forEach((box, i) => drawCard(context, results.cards[i]!, left + box.x, top + box.y, box.w, box.h, i === 0 && laid.boxes.length > 1, text, look, field, t, font, intro));
   };
   return { canvas, draw, peak: look.peak };
 }
@@ -164,7 +164,7 @@ export async function drawPhotoCard(results: SharedResults, t?: number): Promise
 
 type Text = (words: string, x: number, y: number, size: number, weight: number, colour: string, align?: CanvasTextAlign, tracking?: number) => number;
 
-function drawCard(context: CanvasRenderingContext2D, shared: SharedCard, x: number, y: number, w: number, h: number, lead: boolean, text: Text, look: Look, field: number, t: number, font: string): void {
+function drawCard(context: CanvasRenderingContext2D, shared: SharedCard, x: number, y: number, w: number, h: number, lead: boolean, text: Text, look: Look, field: number, t: number, font: string, intro?: number): void {
   const { card, image, photo } = shared;
   const radius = Math.min(22, h * 0.1);
   context.save();
@@ -188,7 +188,7 @@ function drawCard(context: CanvasRenderingContext2D, shared: SharedCard, x: numb
       context.drawImage(image, x + (w - size) / 2, y + h - size, size, size);
     }
   }
-  paintFx(context, x, y, w, h, t, look, card.place, card.field ?? field);
+  paintFx(context, x, y, w, h, t, look, card.place, card.field ?? field, intro);
   // The stamp: a shade at the foot, the medal, the name, the time.
   const shade = context.createLinearGradient(0, y + h * 0.55, 0, y + h);
   shade.addColorStop(0, "rgba(3, 10, 28, 0)");
@@ -277,7 +277,7 @@ export async function recordClip(scene: ShareScene, type: string): Promise<Blob 
     recorder.addEventListener("error", () => resolve(), { once: true });
   });
   const from = scene.peak - 0.6;
-  const frameAt = (seconds: number) => scene.draw((from + seconds + LOOP) % LOOP);
+  const frameAt = (seconds: number) => scene.draw((from + seconds + LOOP) % LOOP, seconds);
   frameAt(0);
   try {
     recorder.start(250);

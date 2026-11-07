@@ -283,6 +283,14 @@ tr[data-place="3"] .medal,
   animation: shot-flash 520ms var(--ease) backwards;
   animation-delay: calc(var(--i, 0) * 110ms + 260ms);
 }
+.shot[data-place="1"].has-photo .shot-picture::after {
+  background: radial-gradient(circle at 50% 38%, #fff 0%, #fff 45%, rgba(255, 252, 235, 0.92) 100%);
+  animation: shot-flash-bulb 760ms var(--ease) backwards;
+  animation-delay: calc(var(--i, 0) * 110ms + 260ms);
+}
+.shot[data-place="1"].late .shot-picture::after {
+  animation-delay: 0s;
+}
 /* The driver's bust stands on the card's foot, where the caption's shade hides where the picture is cut. */
 .shot-stand-in {
   position: absolute;
@@ -400,6 +408,18 @@ tr[data-place="3"] .medal,
     opacity: 0;
   }
 }
+/* The winner's card gets the camera's real flash: a hard white pop that clears with a starburst's glow. */
+@keyframes shot-flash-bulb {
+  0% {
+    opacity: 1;
+  }
+  14% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
 @keyframes shot-fade {
   from {
     opacity: 0;
@@ -413,7 +433,8 @@ tr[data-place="3"] .medal,
 :root[data-reduce-motion] .shot-photo {
   animation: shot-fade 250ms var(--ease) backwards;
 }
-:root[data-reduce-motion] .shot.has-photo .shot-picture::after {
+:root[data-reduce-motion] .shot.has-photo .shot-picture::after,
+:root[data-reduce-motion] .shot[data-place="1"].has-photo .shot-picture::after {
   display: none;
 }
 
