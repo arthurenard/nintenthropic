@@ -1312,7 +1312,38 @@ tight type, springy motion; a white pill is the one main action of a screen;
    screen with place, name and time stamped on each, the winner's ringed in
    gold. It goes where the arcade's card goes (`ui/share.ts`, shared by both):
    the system's share sheet, or the Downloads with a toast. It is made only
-   when asked.
+   when asked. Files are named `nintenthropic-grip-prix-<track>.png`, and the
+   footer draws the logo (`assets/brand/wordmark.png`, the word where it does
+   not load).
+   **The track's look on each photo** (`src/kart/app/photoFx/`). Every track
+   has a `Look` (`looks.ts`): a colour filter that stays kind to faces (warm in
+   the meadow, cool on the glacier, a night sky over the harbour, the fair, the
+   volcano and the ribbon), a soft-light wash, a vignette, a stamp with the
+   track and the place ("Meadow Loop · 1st") inside a thin frame, and
+   the animated effects that play over the picture: petals, butterflies and a
+   hot-air balloon (Meadow); steam, sprinkles and a pop of flour (Kitchen);
+   fireworks over the water with their reflection and a lighthouse beam
+   (Harbour); a sun flare, a dust devil and a tumbleweed (Canyon); fireworks
+   and confetti (Fun Fair); frost creeping in, snow and glitter (Glacier);
+   embers and a lava glow (Volcano); a ringed planet, twinkles and shooting
+   stars (Starlight); palm-leaf shadows, bubbles and a sun glint (Five Finger).
+   By place (`flourishFor`): the winner has a bobbing crown and a gold show,
+   second and third silver and bronze sparkles, the last of three or more a
+   small rain cloud. Each effect (`effects.ts`) is a pure function of the clock
+   and the card's size, with no state, and repeats within `LOOP` (4 s): so the
+   shared picture can freeze it on its best frame (`Look.peak`), a clip can loop
+   without a join, and the tests compare frames. `player.ts` draws them on one
+   canvas per card, one loop for all at most 30 times a second at no more than
+   1.25 pixels a px, only for cards that are on screen (IntersectionObserver)
+   while the page shows; Reduce Motion draws the best frame once. The page's
+   grade is CSS (`filter` on the picture, a soft-light wash, a vignette), the
+   shared picture's the same in canvas calls (`compose.ts`; a browser whose
+   canvas has no `filter`, as Safari's, shares the wash without it).
+   **Share Clip** (next to Share, only where the browser has `MediaRecorder` and
+   `canvas.captureStream`) records the shared picture moving for one loop, 4 s at
+   30 fps, as mp4 where the browser makes it and else webm, and passes it to the
+   same share sheet or Downloads (`nintenthropic-grip-prix-<track>.mp4` or
+   `.webm`); where recording fails the picture is shared instead.
    **Standings** (a Grand Prix, between races) wear the same, on the
    postcard of the race just run; the **Podium** (its end)
    has its own stage, and says to a player who did not win how close they

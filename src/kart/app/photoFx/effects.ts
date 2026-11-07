@@ -465,13 +465,13 @@ function planet(c: Ctx, s: Scene): void {
 
 function leaves(c: Ctx, s: Scene): void {
   c.lineCap = "round";
-  c.strokeStyle = "rgba(6, 52, 40, 0.34)";
+  c.strokeStyle = "rgba(6, 52, 40, 0.26)";
   const sway = 0.05 * sine(s.t, 1);
   c.beginPath();
   for (const [ox, oy, flip] of [[-s.w * 0.04, -s.h * 0.04, 1], [s.w * 1.04, -s.h * 0.04, -1]] as const) {
     for (let f = 0; f < 3; f++) {
       const base = Math.PI * (0.18 + 0.2 * f) + sway * (f + 1);
-      const len = s.u * (0.62 - 0.08 * f);
+      const len = s.u * (0.48 - 0.06 * f);
       const dirx = Math.cos(base) * flip;
       const diry = Math.sin(base);
       // The spine bends down with its own weight; leaflets hang off it.
@@ -577,7 +577,7 @@ function crown(c: Ctx, s: Scene): void {
   }
   const w = s.u * 0.2;
   const x = s.w * 0.3;
-  const y = s.u * 0.06 + Math.sin(TAU * ph(s.t, 2)) * s.u * 0.008;
+  const y = s.u * 0.15 + Math.sin(TAU * ph(s.t, 2)) * s.u * 0.008;
   const gold = c.createLinearGradient(x, y, x, y + w * 0.6);
   gold.addColorStop(0, "#fff1a8");
   gold.addColorStop(0.5, "#ffd60a");
