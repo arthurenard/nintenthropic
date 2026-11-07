@@ -19,6 +19,7 @@ import { MAX_PLAYERS, type LobbyPlayer, type LobbySettings, type LobbyState, typ
 import { $, element, icon, setText, toast } from "../../ui/dom";
 import { cupById } from "../grandprix";
 import { relayReady } from "../net/ice";
+import { CHOICES, DAILY, cleanChoice, dailyCard, cardById, todayKey } from "../rules";
 import { CUPS, TRACKS, trackById } from "../track/tracks";
 import { isUnlocked, loadUnlocks } from "../unlocks";
 import { duckTracks } from "./eggs";
@@ -54,6 +55,14 @@ export function earnedTracks(): { id: string; name: string }[] {
   return TRACKS.filter((track) => track.secret).map((track) => ({ id: track.id, name: track.name }));
 }
 
+/** What the picker says about the chosen rules: the card's line, and for Today's Card which card today's is. */
+export function rulesLine(choice: string, day: string = todayKey()): string {
+  const line = CHOICES.find((c) => c.id === choice)?.line ?? "";
+  if (choice !== DAILY) return line;
+  const today = cardById(dailyCard(day));
+  return today ? `Today’s card is ${today.name}: ${today.line}` : line;
+}
+
 /** One racer's card, kept between renders so only what changed moves. */
 interface Card {
   root: HTMLElement;
@@ -71,6 +80,7 @@ export class LobbyScreen {
   private readonly mode: Segmented<"race" | "grand-prix">;
   private readonly cup: Segmented<string>;
   private readonly mirror: Switch;
+  private readonly rules: Segmented<string>;
   private readonly screen: Segmented<ScreenChoice>;
   private readonly display: Segmented<"own" | "host">;
   private readonly track: Segmented<string>;
@@ -103,6 +113,18 @@ export class LobbyScreen {
     this.display = new Segmented<"own" | "host">($("pick-display"), (display) => hooks.configure({ display }));
     this.mode = new Segmented<"race" | "grand-prix">($("pick-mode"), (mode) => hooks.configure({ mode }));
     this.mirror = new Switch($<HTMLButtonElement>("switch-mirror"), (mirror) => hooks.configure({ mirror }));
+    // Party Rules: a chip for each choice (no twist, the cards, Shuffle, Today's Card).
+    const rules = $("pick-rules");
+    rules.replaceChildren(
+      ...CHOICES.map((choice) => {
+        const chip = element("button", "rule-option", choice.name);
+        chip.type = "button";
+        chip.setAttribute("role", "radio");
+        chip.dataset.value = choice.id;
+        return chip;
+      }),
+    );
+    this.rules = new Segmented<string>(rules, (choice) => hooks.configure({ rules: choice }));
     // The cups, each with its four tracks to see and read.
     const cups = $("pick-cup");
     cups.replaceChildren(
@@ -176,7 +198,9 @@ export class LobbyScreen {
       waiting.hidden = false;
       const grand = lobby.settings.mode === "grand-prix";
       const what = grand ? ` the ${cupById(lobby.settings.cup).name}` : "";
-      setText(waiting, `Waiting for ${hostName(lobby)} to start${what}.${lobby.settings.mirror ? " Every track is mirrored." : ""}`);
+      const twist = cleanChoice(lobby.settings.rules);
+      const rules = twist === "normal" ? "" : ` Rules: ${CHOICES.find((c) => c.id === twist)?.name}.`;
+      setText(waiting, `Waiting for ${hostName(lobby)} to start${what}.${lobby.settings.mirror ? " Every track is mirrored." : ""}${rules}`);
     } else if (role === "solo") {
       setText("lobby-eyebrow", "Practice");
       setText("lobby-title", "Ready to Race");
@@ -337,6 +361,9 @@ export class LobbyScreen {
     this.mode.value = grandPrix ? "grand-prix" : "race";
     this.cup.value = cupById(settings.cup).id;
     this.mirror.on = settings.mirror === true;
+    const rules = cleanChoice(settings.rules);
+    this.rules.value = rules;
+    setText("foot-rules", rulesLine(rules));
     setText("label-laps", grandPrix ? "Laps per Race" : "Laps");
     setText(
       "foot-mode",

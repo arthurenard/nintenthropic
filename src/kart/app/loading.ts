@@ -9,6 +9,7 @@
 import type { DriverControl, GrandPrixState, LobbySettings } from "../contract";
 import { $, element, icon, setText } from "../../ui/dom";
 import { cupById, trackOfRace } from "../grandprix";
+import { cardById } from "../rules";
 import { trackById } from "../track/tracks";
 import { tipsFor } from "./eggs";
 import { lapsLabel } from "./format";
@@ -21,10 +22,22 @@ export interface RaceWords {
   trackName: string;
   /** "Acorn Cup · Race 2 of 4", or "Acorn Cup · 3 laps". */
   eyebrow: string;
+  /** The Party Rules card in play: its name and the line that says what it does. Absent for a race without one. */
+  rule?: { name: string; line: string };
 }
 
 /** The track and the cup, and where in the cup, from the room's settings and its Grand Prix (if one is under way). */
-export function raceWords(settings: Pick<LobbySettings, "track" | "laps" | "mirror">, grandPrix: Pick<GrandPrixState, "cup" | "race"> | null | undefined): RaceWords {
+export function raceWords(
+  settings: Pick<LobbySettings, "track" | "laps" | "mirror">,
+  grandPrix: Pick<GrandPrixState, "cup" | "race"> | null | undefined,
+  card?: string,
+): RaceWords {
+  const words = raceWordsOf(settings, grandPrix);
+  const dealt = cardById(card);
+  return dealt ? { ...words, rule: { name: dealt.name, line: dealt.line } } : words;
+}
+
+function raceWordsOf(settings: Pick<LobbySettings, "track" | "laps" | "mirror">, grandPrix: Pick<GrandPrixState, "cup" | "race"> | null | undefined): RaceWords {
   const trackId = trackOfRace(settings, grandPrix);
   const track = trackById(trackId);
   const mirror = settings.mirror ? " · Mirror" : "";
@@ -49,6 +62,10 @@ export class LoadingScreen {
   begin(words: RaceWords, kind: DriverControl["kind"] | null): void {
     setText("loading-cup", words.eyebrow);
     setText("loading-track", words.trackName);
+    // The twist for this race, if the host dealt one, said before the lights.
+    $("loading-rule").hidden = !words.rule;
+    setText("loading-rule-name", words.rule?.name ?? "");
+    setText("loading-rule-line", words.rule?.line ?? "");
     const art = $("loading-art");
     // The track's own picture first, so the screen is never bare; the postcard fades in over it.
     const outline = $("loading-outline");

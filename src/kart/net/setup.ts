@@ -12,6 +12,7 @@ import {
 } from "../contract";
 import { CHARACTERS } from "../characters";
 import type { TrackDef } from "../track/geometry";
+import { effectsOf } from "../rules";
 import { raceTrack } from "../track/mirror";
 import { seeded } from "./util";
 
@@ -33,12 +34,15 @@ export interface BuiltSetup {
  * grid is filled up to `settings.racers` (never fewer than the players, never
  * more than MAX_RACERS); with bots off it is the players alone. The track is
  * the room's chosen one (mirrored if it asks) unless a Grand Prix names its own.
+ * `rule` is the Party Rules card dealt for the race (rules.ts). Under Reverse Grid the players start at the back
+ * in reverse slot order, behind the bots, the sharpest of them on pole.
  */
 export function buildSetup(
   players: readonly LobbyPlayer[],
   settings: LobbySettings,
   seed: number,
   track: TrackDef = raceTrack(settings.track, settings.mirror),
+  rule?: string,
 ): BuiltSetup {
   const total = settings.bots ? Math.min(MAX_RACERS, Math.max(settings.racers, players.length)) : players.length;
   const botCount = total - players.length;
@@ -63,11 +67,11 @@ export function buildSetup(
   // outgrow the drivers, the extra bots would share the drivers the players picked.
   const spare = starters.filter((id) => !drivers.includes(id));
 
-  const racers: RacerSetup[] = [];
-  const karts: Record<number, number> = {};
+  const bots: RacerSetup[] = [];
+  const driving: RacerSetup[] = [];
   for (let i = 0; i < botCount; i++) {
-    racers.push({
-      id: racers.length,
+    bots.push({
+      id: bots.length,
       name: names[i % names.length]!,
       colour: BOT_COLOURS[i % BOT_COLOURS.length]!,
       player: null,
@@ -77,19 +81,26 @@ export function buildSetup(
     });
   }
   for (const player of players) {
-    const id = racers.length;
-    racers.push({
-      id,
+    driving.push({
+      id: 0,
       name: player.name,
       colour: player.colour,
       player: player.slot,
       ...(player.character ? { character: player.character } : {}),
       ...(player.golden ? { golden: true } : {}),
     });
-    karts[id] = player.slot;
   }
+  const reverse = effectsOf(rule).reverseGrid;
+  if (reverse) {
+    // Stable: bots of the same skill keep their order, and so does every device that builds this grid.
+    bots.sort((a, b) => (b.skill ?? 0) - (a.skill ?? 0));
+    driving.reverse();
+  }
+  const racers = [...bots, ...driving].map((racer, id) => ({ ...racer, id }));
+  const karts: Record<number, number> = {};
+  for (const racer of racers) if (racer.player !== null) karts[racer.id] = racer.player;
   return {
-    setup: { track, laps: settings.laps, seed, racers },
+    setup: { track, laps: settings.laps, seed, racers, ...(rule ? { rule } : {}) },
     karts,
   };
 }

@@ -866,3 +866,56 @@ body[data-screen="race"] #sound-button {
   top: 0;
   left: 0;
 }
+
+/* The Party Rules card, in a corner for the first seconds of the race: its name and one line. */
+.rule-chip {
+  position: absolute;
+  z-index: 3;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: max(16px, env(safe-area-inset-left));
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(360px, calc(100vw - 96px));
+  margin: 0;
+  padding: 10px 18px 10px 14px;
+  border-radius: 22px;
+  animation: rule-in 350ms var(--ease);
+  transition:
+    opacity 400ms var(--ease),
+    transform 400ms var(--ease);
+}
+.rule-chip[hidden] {
+  display: none;
+}
+.rule-chip[data-leaving] {
+  opacity: 0;
+  transform: translateY(6px);
+}
+@keyframes rule-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.rule-chip svg {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  color: var(--gold);
+}
+.rule-chip-words {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.rule-chip-name {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.rule-chip-line {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  line-height: 1.3;
+}

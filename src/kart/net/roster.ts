@@ -14,6 +14,7 @@ import {
   type LobbySettings,
   type LobbyState,
 } from "../contract";
+import { cleanChoice } from "../rules";
 import { CUPS, TRACKS } from "../track/tracks";
 import { clamp } from "./util";
 import type { WirePlayer } from "./protocol";
@@ -27,6 +28,7 @@ export const DEFAULT_SETTINGS: LobbySettings = {
   mode: "race",
   cup: CUPS[0]!.id,
   mirror: false,
+  rules: "normal",
 };
 
 const CONTROLS: readonly DriverControl["kind"][] = ["wheel", "keyboard", "gamepad"];
@@ -40,7 +42,8 @@ export function mergeSettings(current: LobbySettings, patch: Partial<LobbySettin
   const mode = patch.mode === "race" || patch.mode === "grand-prix" ? patch.mode : current.mode;
   const cup = typeof patch.cup === "string" && CUPS.some((c) => c.id === patch.cup) ? patch.cup : current.cup;
   const mirror = typeof patch.mirror === "boolean" ? patch.mirror : current.mirror;
-  return { track, laps, racers, display, bots: typeof patch.bots === "boolean" ? patch.bots : current.bots, mode, cup, mirror };
+  const rules = patch.rules === undefined ? cleanChoice(current.rules) : cleanChoice(patch.rules);
+  return { track, laps, racers, display, bots: typeof patch.bots === "boolean" ? patch.bots : current.bots, mode, cup, mirror, rules };
 }
 
 /** A name a person typed, cleaned up for display. */

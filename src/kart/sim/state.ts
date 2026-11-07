@@ -11,6 +11,7 @@
 import type { ItemKind, RaceEvent, RaceSetup } from "../contract";
 import type { WeightMods } from "../characters";
 import type { Surface, TrackGeometry } from "../track/geometry";
+import type { RuleEffects } from "../rules";
 import type { TrackPlan } from "./plan";
 
 export const ITEM_KINDS: readonly ItemKind[] = ["nitro", "nitro3", "puck", "seeker", "slick", "puck3", "comet", "storm", "skyrocket", "blast", "decoy"];
@@ -176,6 +177,9 @@ export interface KartState {
   band: number;
   /** The driver's weight in numbers (characters.ts WEIGHTS), fixed by the setup: not kept in a snapshot. */
   mods: WeightMods;
+  /** The Party Rules card's say in the kart's size (its bumping circle) and how quickly it turns: fixed by the setup, not kept in a snapshot. */
+  size: number;
+  turn: number;
 }
 
 export interface Puck {
@@ -267,6 +271,8 @@ export interface World {
   rng: { next(): number; draws(): number; reset(draws: number): void };
   /** Records an event; a no-op when only predicting. */
   emit(event: EventBody): void;
+  /** What the race's Party Rules card changes (rules.ts; nothing for a race without one). */
+  rule: Readonly<RuleEffects>;
   /** The best player's progress (for the bots' rubber band), or null when there is none racing. */
   bestPlayer: number | null;
 }

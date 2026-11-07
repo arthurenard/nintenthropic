@@ -37,6 +37,7 @@ import {
 import { WebGLUnavailable } from "../../engine/common";
 import { DynamicResolution, StrainWatch } from "../../engine/dynamicResolution";
 import { gpuName, guessTier, INITIAL_SCALE } from "../../engine/tier";
+import { effectsOf } from "../rules";
 import type { ControlKind, KartView, RaceEvent, RaceRenderer, RaceView, RacerSetup, TrackDef } from "../contract";
 import type { TrackTheme } from "../track/geometry";
 import { ChaseCamera, rampSeen, type CameraRoad } from "./cameras";
@@ -567,12 +568,16 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       // Karts, standing where the road really is (its banking and any ramp lift them) and, when they have fallen, where the drone has them.
       const byId = new Map<number, KartView>();
       const ctx = actorContext();
+      // Party Rules: the card's sizes (rules.ts).
+      const ruleFx = effectsOf(view.rule);
       for (const k0 of view.karts) {
         let a = actors.get(k0.id);
         if (!a) {
           const r = view.racers.find((x) => x.id === k0.id) ?? { id: k0.id, colour: "#ffffff" };
           a = makeActor(r);
         }
+        a.size = ruleFx.size;
+        a.headScale = ruleFx.headScale;
         a.update(k0, dt, ctx, time);
         // Everything below this line sees the kart as drawn.
         const k: KartView = { ...k0, x: a.x, y: a.roadY, z: a.z };

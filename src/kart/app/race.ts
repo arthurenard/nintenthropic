@@ -30,10 +30,11 @@ import { itemWords, lapLabel, list, ordinal } from "./format";
 import { FrameRate } from "./graphicsui";
 import { HandsFirst, type TrackerCounts } from "./handsFirst";
 import { LoadingScreen, raceWords } from "./loading";
+import { cardById } from "../rules";
 import { loadFinishPhoto, saveFinishPhoto } from "./prefs";
 import { hostName, kartOf } from "./roster";
 import type { Disposable, RaceSound, Services, Still } from "./services";
-import { colourDot, Switch } from "./ui";
+import { calm, colourDot, Switch } from "./ui";
 
 export type RaceFailure = "load" | "webgl";
 
@@ -62,6 +63,8 @@ export interface RaceContext {
 const LOST_FOR = 300;
 /** Hands gone this long, ms, before the host's big screen is told (it says it in their viewport). */
 const REPORT_AFTER = 1500;
+/** The Party Rules chip stays this long into the race (it is there through the countdown too), seconds. */
+const RULE_CHIP_SECONDS = 7;
 /** A viewport is taunted at most once in this long, ms. */
 const TAUNT_GAP = 2500;
 
@@ -121,6 +124,8 @@ export class RaceScreen {
   /** The small frame-rate readout, when the pause sheet's Frame Rate switch has it on. */
   private readonly rate = new FrameRate($("race-fps"));
   /** The pause sheet's Finish Photo switch (for a device with a wheel player): kept, and true for the photo still to come. */
+  /** The Party Rules chip now showing, as a key (the card and the race), so it is written once and gone after a few seconds. */
+  private ruleChipKey = "";
   private readonly photoSwitch = new Switch($<HTMLButtonElement>("pause-photo"), (on) => saveFinishPhoto(on));
 
   /** The readout on or off (the pause sheet's switch, and the setting as it was kept). */
@@ -212,7 +217,9 @@ export class RaceScreen {
     $("pause-veil").hidden = true;
     $("lost-hands").hidden = true;
     const lobby = ctx.session.lobby();
-    this.loadingUi.begin(raceWords(lobby.settings, lobby.grandPrix), ctx.controls[0]?.kind ?? null);
+    this.loadingUi.begin(raceWords(lobby.settings, lobby.grandPrix, lobby.card), ctx.controls[0]?.kind ?? null);
+    this.ruleChipKey = "";
+    $("rule-chip").hidden = true;
     this.loading(true, 0);
     this.pauseNote();
     const loop = (now: number) => {
@@ -361,6 +368,7 @@ export class RaceScreen {
     this.veil(lobby);
     if (!view) return;
     this.view = view;
+    this.ruleChip(view);
     this.snapPhotos(view, lobby, now);
     if (this.mode === "pending") this.choose(view);
     // While the room is stopped the picture holds still, effects and cameras too.
@@ -396,6 +404,36 @@ export class RaceScreen {
   private keepHands(now: number, counts: TrackerCounts | null): void {
     const renderer = this.renderer;
     if (renderer?.limitResolution && counts && this.handsFirst.sample(counts, now / 1000)) renderer.limitResolution(this.handsFirst.ceiling);
+  }
+
+  /**
+   * The Party Rules card, in a corner while the lights count down and for a few seconds after Go: its name and one line.
+   * Every device shows it (the card is in the view), and a race without one shows nothing.
+   */
+  private ruleChip(view: RaceView): void {
+    const card = cardById(view.rule);
+    const chip = $("rule-chip");
+    // Not under the loading screen: it is shown once the world is there (or at once on a phone that is only a wheel).
+    const ready = this.mode === "controller" || (this.mode === "world" && this.loaded);
+    const live = card !== undefined && ready && view.time < RULE_CHIP_SECONDS;
+    if (!live) {
+      if (!chip.hidden && this.ruleChipKey !== "gone") {
+        // Fade out, then take it away (at once with reduced motion).
+        this.ruleChipKey = "gone";
+        chip.dataset.leaving = "";
+        window.setTimeout(() => {
+          if (this.ruleChipKey === "gone") chip.hidden = true;
+        }, calm() ? 0 : 450);
+      }
+      return;
+    }
+    const key = `${card.id}|${view.laps}|${view.track.id}`;
+    if (key === this.ruleChipKey) return;
+    this.ruleChipKey = key;
+    setText("rule-chip-name", card.name);
+    setText("rule-chip-line", card.line);
+    delete chip.dataset.leaving;
+    chip.hidden = false;
   }
 
   /** The first view tells what this screen shows: the race, or only a controller. */

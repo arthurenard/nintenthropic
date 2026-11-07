@@ -9,7 +9,7 @@
  * It only moves the point the bot aims at across the road and caps its speed:
  * the bot still drives by the same wheel and pedals as anyone.
  */
-import { forwardSpeed } from "./kart";
+import { forwardSpeed, onIce } from "./kart";
 import { clamp, type KartState, type World } from "./state";
 import { noise, type Style } from "./temperament";
 import { TUNING } from "./tuning";
@@ -78,7 +78,7 @@ export function racecraft(w: World, k: KartState, style: Style, aim: number, lef
     if (Math.abs(ds) > 2.8 || Math.abs(across) > 4.2 || o.comet > 0) continue;
     const towards = across >= 0 ? 1 : -1;
     const level = Math.abs(forwardSpeed(o) - fwd) < 3 && o.spin === 0 && o.zap === 0;
-    const leans = racing && calm && level && o.finished === null && k.ground !== "ice" && style.lean > 0 && noise(seed, k.id, o.id, Math.floor(k.progress / 50)) < style.lean * B.leanChance;
+    const leans = racing && calm && level && o.finished === null && !onIce(w, k) && style.lean > 0 && noise(seed, k.id, o.id, Math.floor(k.progress / 50)) < style.lean * B.leanChance;
     if (leans) shove += towards * B.leanIn;
     else if (Math.abs(across) < 2 * TUNING.kartRadius + 0.3) shove -= towards * (2 * TUNING.kartRadius + 0.3 - Math.abs(across)) * 0.8;
   }

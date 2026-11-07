@@ -649,7 +649,7 @@ export function createProceduralKart(racer: Pick<RacerSetup, "id" | "colour" | "
       bodyGroup.scale.set(1 + squash * 0.035, 1 - squash * 0.06, 1 + squash * 0.035);
       farBody.position.y = bodyGroup.position.y;
       farBody.rotation.copy(bodyGroup.rotation);
-      driver.update({ time: p.time ?? 0, steer: p.steer, lean: p.lean, twirl: p.twirl ?? 0, emote: p.emote, finished: p.finished, dizzy: p.dizzy, lookBack: p.lookBack, rest: p.rest, shut: p.shut });
+      driver.update({ time: p.time ?? 0, steer: p.steer, lean: p.lean, twirl: p.twirl ?? 0, emote: p.emote, finished: p.finished, dizzy: p.dizzy, lookBack: p.lookBack, rest: p.rest, shut: p.shut, headScale: p.headScale });
       brake?.show(p.brake ?? 0);
       wheelRim.rotation.z = -p.steer * 1.5;
       for (const f of fronts) {
