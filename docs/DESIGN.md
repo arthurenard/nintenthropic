@@ -188,15 +188,19 @@ Needed: play, pause, restart, grid (choose a game), xmark (quit), speaker on/off
 camera, hand, checkmark, share, gear (settings), scope, chevrons (a row that leads on,
 a menu), carets (a man marked; a double one on a scope's rim, pointing the way to pan).
 
-The mark is the one exception: a sight in white (a ring, four ticks reaching out
-from it, a dot in the middle) on a rounded square with a sunset gradient (`#ffa40f`
-into `#ff2d55`), lit softly from the top left, the sight lifted off the colour by a
-soft shadow. No hand is drawn: the games are played with yours. The ticks make it a
-gun sight, never a bullseye. It reads down to the 16 px tab icon. It is pure vector,
-drawn in `tools/icons/mark.mjs`, and `node tools/icons/render.mjs` writes the app
-icons and the favicon to `public/icons/`. The wordmark, the Finger Guns tile, the
-share card and the trailer use `icon-192.png` or `icon-512.png`. Never redraw the mark
-elsewhere, and never use it as a button icon.
+The logo is the wordmark: "Nintenthropic" in a black serif inside a white pill with a thick
+orange-red ring (`#e1501b`). The source is `art/brand/nintenthropic-logo.webp`;
+`public/assets/brand/wordmark.png` and `.webp` (1200 px wide) and `wordmark-600.*`
+are trimmed tight, the white outside the pill transparent and the white inside it kept,
+so it sits on dark pages with no halo. On the dark pages it is a white pill with a soft
+`drop-shadow`, never a box, never recoloured, never stretched. It leads the bar, Grip Prix's
+start and loading screens and the share cards.
+
+The app icon is the logo's language as a mark: a white rounded tile, the orange-red ring and a
+black serif "N". It is pure vector, drawn in `tools/icons/mark.mjs`, and
+`node tools/icons/render.mjs` writes the app icons and the favicon to `public/icons/`. The
+theme colour is the ring's orange. Never redraw the mark elsewhere, and never use it as a
+button icon.
 
 ## Sound
 
@@ -208,19 +212,22 @@ click and remembered.
 ## The landing
 
 `./` is the front door of Nintenthropic: "Games you play with your hands."
-over two equal, cinematic tiles (Apple's two-up product tiles are the model: art
-first, a few big words, one white pill). Stacked, one above the other, on a
-phone.
+over two cinematic tiles (Apple's product tiles are the model: art first, a few big
+words, one white pill). The kart game comes first, in reading and keyboard order, and
+is about 80% of the width: Grip Prix large on the left, Finger Guns a slim tall tile on
+the right (never narrower than its words need). On a phone held upright Grip Prix is
+large on top and Finger Guns a compact band below (its name and Play); on a phone on its
+side they sit side by side again, about 75% and 25%. The tiles size their words by their
+own width, so none is ever clipped.
 
-- **Finger Guns** (dark): the four shooters' posters, one fading into the next
+- **Grip Prix** (bright, first): its sunny poster, eyebrow "Racing · Up to 4 Players",
+  the name, "Grip the wheel. Race your friends.", and Race, which goes to race.html. The
+  poster is `public/assets/kart/poster.webp`, its badge `icon.png`; where they are
+  missing the game's backdrop and no badge stand in.
+- **Finger Guns** (dark, slim): the four shooters' posters, one fading into the next
   every few seconds (still with Reduce Motion), a shade coming up from the
   foot. Eyebrow "Shooting · 4 Games", the name, one line ("Make a finger
   pistol. Take the shot."), and Play, which opens the arcade.
-- **Grip Prix** (bright): its sunny poster, the same shape of words
-  ("Racing · Up to 4 Players", "Grip the wheel. Race your friends."), and
-  Race, which goes to race.html. The poster is
-  `public/assets/kart/poster.webp`, its badge `icon.png`; where they are
-  missing the game's backdrop and no badge stand in.
 - **How It Plays**, quiet under each pill, opens a sheet with that family's
   gesture in words and its three steps, lit one after another (Point, Fold your
   thumb, Fire; or Grip, Turn left, Turn right). No hand is drawn anywhere in

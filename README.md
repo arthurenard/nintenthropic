@@ -1,8 +1,10 @@
 # Nintenthropic
 
-**An arcade you play with your hand.** Point your finger at the screen, fold
-your thumb to fire. It runs in your browser, sees your hand through your
-webcam, and never sends the picture anywhere.
+**Games you play with your hands.** Grip Prix, a kart race for up to four,
+steered by holding your fists like a wheel; and Finger Guns, shooters you play
+by pointing your finger at the screen and folding your thumb to fire. It runs in
+your browser, sees your hands through your webcam, and never sends the picture
+anywhere.
 
 **Play it at https://nintenthropic.arthurenard.workers.dev**
 

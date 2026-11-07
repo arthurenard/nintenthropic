@@ -1184,7 +1184,7 @@ tight type, springy motion; a white pill is the one main action of a screen;
    Practice; "Up to 4 players" under it. Where the art is missing or not
    fetched, the page's own meadow and road stand in. A phone that came with
    a `?join=` link does not fetch the art at all (it is on its way to a room).
-   The back link goes to the Nintenthropic landing (`./`). `race.html`
+   The back link is the Nintenthropic wordmark (a white pill with a soft shadow in the glass back link) and goes to the landing (`./`); the loading screen carries the same wordmark at its head. `race.html`
    carries `assets/kart/icon-180.png` as its icon and Apple touch icon.
 2. **Who's Driving?** (`you.ts`). One calm card: your name (a friendly default), how you
    drive as three tiles (Wheel, Keyboard, Gamepad), the wheel's steering, and

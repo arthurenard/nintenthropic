@@ -16,7 +16,7 @@ const env: Record<string, string | undefined> =
 /** E2E_PORT lets two checkouts run their tests side by side, each on its own build. */
 const PORT = Number(env.E2E_PORT) || 4174;
 /** E2E_OUT gives a checkout a build of its own: with node_modules shared between checkouts, the default folder inside it would be shared too. */
-const OUT = env.E2E_OUT ?? "node_modules/.cache/super-claude-bros-e2e/dist";
+const OUT = env.E2E_OUT ?? "node_modules/.cache/nintenthropic-e2e/dist";
 
 export default defineConfig({
   testDir: "e2e",

@@ -143,7 +143,7 @@ test("the browser's Back while a game gets ready cancels it, to where the addres
   expect(errors).toEqual([]);
 });
 
-test("the landing: two equal tiles, and the way into each", async ({ page }) => {
+test("the landing: Grip Prix large and first, Finger Guns slim, and the way into each", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await returningVisitor(page, { "handy.game.v1": "dead-of-night" });
@@ -153,7 +153,7 @@ test("the landing: two equal tiles, and the way into each", async ({ page }) => 
   expect((await snapshot(page)).view).toBe("landing");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Games you play with your hands.");
 
-  // Two tiles of one size, side by side: each with its name, a line, and the one thing to do.
+  // Two tiles side by side, the kart game first and about four times as wide: each with its name, a line, and the one thing to do.
   const arcade = page.locator("#tile-arcade");
   const grip = page.locator("#tile-grip");
   await expect(arcade.getByRole("heading", { name: "Finger Guns" })).toBeVisible();
@@ -162,10 +162,12 @@ test("the landing: two equal tiles, and the way into each", async ({ page }) => 
   await expect(grip).toContainText("Up to 4 Players");
   await expect(grip).toContainText("Grip the wheel. Race your friends.");
   const [a, g] = [(await arcade.boundingBox())!, (await grip.boundingBox())!];
-  expect(Math.abs(a.width - g.width)).toBeLessThan(2);
   expect(Math.abs(a.height - g.height)).toBeLessThan(2);
   expect(Math.abs(a.y - g.y)).toBeLessThan(2);
-  expect(g.x).toBeGreaterThan(a.x + a.width);
+  expect(a.x).toBeGreaterThan(g.x + g.width);
+  expect(g.width / a.width).toBeGreaterThan(3);
+  // Grip Prix first for the keyboard too: its Race is the first button in the page's order.
+  expect(await page.locator("#landing .tile-go").first().getAttribute("href")).toBe("race.html");
   // Grip Prix goes to its own page; Finger Guns' Play opens the arcade, not a game.
   await expect(grip.getByRole("link", { name: "Race" })).toHaveAttribute("href", "race.html");
   await expect(arcade.getByRole("link", { name: "Play" })).toHaveAttribute("href", "#finger-guns");
@@ -362,7 +364,7 @@ test("the landing and the arcade at every size", async ({ page }, info) => {
   ] as const;
   for (const [width, height] of sizes) {
     await page.setViewportSize({ width, height });
-    // The landing: side by side, whole in the window; stacked on a phone, wide as the page.
+    // The landing: side by side, Grip Prix large and first, whole in the window; stacked on a phone, Grip Prix on top, wide as the page.
     await page.goto("/");
     await expect(page.locator("#landing")).toBeVisible();
     await page.mouse.move(1, 1);
@@ -370,11 +372,12 @@ test("the landing and the arcade at every size", async ({ page }, info) => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     if (width > 860) {
       expect(Math.abs(a.y - g.y)).toBeLessThan(2);
-      expect(Math.abs(a.width - g.width)).toBeLessThan(2);
+      expect(g.width).toBeGreaterThan(a.width * 3);
       expect(a.y + a.height).toBeLessThanOrEqual(height);
     } else {
-      expect(g.y).toBeGreaterThan(a.y + a.height - 1);
-      expect(a.width).toBeGreaterThan(width - 40);
+      expect(a.y).toBeGreaterThan(g.y + g.height - 1);
+      expect(g.width).toBeGreaterThan(width - 40);
+      expect(g.height).toBeGreaterThan(a.height * 2.5);
     }
     await page.waitForTimeout(700);
     await shot(page, info, `landing-${width}x${height}`, 0);
