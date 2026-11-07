@@ -550,7 +550,6 @@ export const CANYON_RUN: TrackDef = {
     pendulum({ at: 0.594, reach: 4.5, period: 3.2 }),
     pendulum({ at: 0.61, reach: 4.5, period: 3.2, phase: 0.5 }),
     { kind: "boulder", at: 0.675, motion: "roll", period: 5, radius: 2.4, offset: -2.5, span: 0.04 },
-    { kind: "boulder", at: 0.675, motion: "roll", period: 5, phase: 0.55, radius: 2.4, offset: -2.5, span: 0.04 },
     // The rails cross the long way round the U as well, past the mesa.
     crosser({ at: 0.7625, reach: 10, period: 5.8, phase: 0.2 }),
     crosser({ at: 0.771, reach: -10, period: 5.8, phase: 0.7 }),
@@ -629,8 +628,8 @@ export const FUN_FAIR: TrackDef = {
     // The plaza: a wide street that sways, the carousel in the middle.
     { x: 121, z: 88, width: 24, bank: 0.06 },
     { x: 130, z: 56, width: 24, bank: -0.06 },
-    { x: 121, z: 22, width: 23, bank: 0.06 },
-    { x: 125, z: -8, width: 21 },
+    { x: 123, z: 26, width: 23, bank: 0.05 },
+    { x: 125, z: -14, width: 21 },
     { x: 125, z: -34, width: 15 },
     { x: 125, z: -70 },
     { x: 119.6, z: -90, bank: -0.14 },
