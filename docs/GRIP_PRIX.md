@@ -940,11 +940,14 @@ calypso on steel pans), the menu and lobby, the two result screens, the podium a
   leaving in half a second (`MusicPlayer.setComet`). The music opens up with the race: a high shelf rising to +3 dB
   and half a dB of level from the first lap to the last (`setIntensity`). The jingles (`music("jingle-win")`,
   `music("jingle-lose")`) are one-shots, a fanfare of brass over timpani and a rueful descent on a muted trumpet.
-- **Off the main thread, and what it costs.** The worker renders a piece in one go (about 2 to 4 s of one core for
-  a race theme at 32 kHz on a quiet machine, 1.5 times that at 48 kHz; the stages are the fallback's slices) while
-  the loading bar shows its progress; the final-lap version, its stinger and the comet layer render in the background
-  after the race loads. A race theme is 16 to 21 MB at 32 kHz (24 to 32 MB at 48 kHz) and its final-lap version 16
-  to 19; `RaceAudio` keeps only the current theme's pair, the menu's and the screens'.
+- **Off the main thread, and what it costs.** The worker renders a piece in one go (the stages are the fallback's
+  slices) while the loading bar shows its progress; the final-lap version, its stinger and the comet layer render in the
+  background after the race loads. Measured in Node at 32 kHz on a machine shared with ten other jobs (load average 40
+  on 16 cores, so a quiet machine is several times faster): 1.2 to 15 s a race theme, the volcano and canyon at the
+  quick end, the synthwave (many long supersaw notes) at the slow. Before this rework the same pieces took 1.8 to 6.6 s
+  on a similar load (the snow took 30 s once, in a burst of load). A race theme's loop is 18 to 21 MB at 32 kHz (27 to
+  32 MB at 48 kHz) and its final-lap version 16 to 19 (24 to 29); `RaceAudio` keeps only the current theme's pair, the
+  menu's and the screens'. The comet layer (2 s) and the stinger (about 6 s) are a few hundred kilobytes.
 - **Checking without hearing.** `production.test.ts` holds the tools (a limiter that lets nothing through, a pump, a
   compressor), the kits (a kick is low, a hat high, every kit finite and ending in silence), the instruments (each plays
   the pitch asked, finite, ending in silence), the crest and loudness, the lift being the chorus a tone up, the
