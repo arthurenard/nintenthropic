@@ -7,6 +7,7 @@
  * Like the rest of the DSP: plain Float32Arrays, no Web Audio.
  */
 import type { Mono } from "../../../audio/dsp/signal";
+import { softClip } from "../../../audio/dsp/voices";
 
 const TAU = 2 * Math.PI;
 const BLOCK = 16;
@@ -156,8 +157,8 @@ export function widen(left: Mono, right: Mono, width: number): void {
 /** A gentle tape-like saturation in place: odd harmonics creep in as the level rises. */
 export function saturate(buf: Mono, amount: number): void {
   const k = amount;
-  const norm = Math.tanh(k);
-  for (let i = 0; i < buf.length; i++) buf[i] = Math.tanh(buf[i]! * k) / norm;
+  const norm = 1 / softClip(k);
+  for (let i = 0; i < buf.length; i++) buf[i] = softClip(buf[i]! * k) * norm;
 }
 
 /**
@@ -167,13 +168,38 @@ export function saturate(buf: Mono, amount: number): void {
  * and it lets go over ``release`` seconds. Returns the deepest reduction, dB.
  */
 export function limit(left: Mono, right: Mono, sr: number, ceiling: number, look = 0.003, release = 0.08): number {
+  // The gain is worked out on blocks of eight samples and drawn between them: eight times cheaper, and no sample gets through,
+  // because every block's gain is held under the need of the blocks on either side of it.
+  const B = 8;
   const n = left.length;
-  const L = Math.max(2, Math.round(look * sr));
-  const need = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const p = Math.max(Math.abs(left[i]!), Math.abs(right[i]!));
-    need[i] = p > ceiling ? ceiling / p : 1;
+  const m = Math.ceil(n / B);
+  const need = new Float32Array(m).fill(1);
+  for (let b = 0; b < m; b++) {
+    const end = Math.min(n, (b + 1) * B);
+    let p = 0;
+    for (let i = b * B; i < end; i++) p = Math.max(p, Math.abs(left[i]!), Math.abs(right[i]!));
+    if (p > ceiling) need[b] = ceiling / p;
   }
+  const gain = gainFor(need, sr / B, look, release);
+  let deepest = 1;
+  for (let b = 0; b < m; b++) {
+    const g0 = gain[b]!;
+    const g1 = gain[b + 1 === m ? 0 : b + 1]!;
+    if (g0 < deepest) deepest = g0;
+    const end = Math.min(n, (b + 1) * B);
+    for (let i = b * B; i < end; i++) {
+      const g = g0 + ((g1 - g0) * (i - b * B)) / B;
+      left[i]! *= g;
+      right[i]! *= g;
+    }
+  }
+  return -20 * Math.log10(deepest);
+}
+
+/** The gain curve that holds a loop of per-block needs (1 = nothing needed), see ``limit``. */
+function gainFor(need: Float32Array, sr: number, look: number, release: number): Float32Array {
+  const n = need.length;
+  const L = Math.max(2, Math.round(look * sr));
   // Sliding minimum over ±L, round the loop (a monotonic deque over the buffer with L samples of its far end in front of it).
   const ext = new Float32Array(n + 2 * L);
   for (let k = 0; k < ext.length; k++) ext[k] = need[(((k - L) % n) + n) % n]!;
@@ -209,11 +235,5 @@ export function limit(left: Mono, right: Mono, sr: number, ceiling: number, look
       if (lap === 1) gain[i] = g;
     }
   }
-  let deepest = 1;
-  for (let i = 0; i < n; i++) {
-    left[i]! *= gain[i]!;
-    right[i]! *= gain[i]!;
-    if (gain[i]! < deepest) deepest = gain[i]!;
-  }
-  return -20 * Math.log10(deepest);
+  return gain;
 }

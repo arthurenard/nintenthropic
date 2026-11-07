@@ -5,6 +5,7 @@
  * decides how anything sounds.
  */
 import { type Voice, breathy, fm, modal, organ, plucked, subtractive } from "../../../audio/dsp/voices";
+import { buzz, drive, guitar, layer, rhodes, shaped } from "./synth";
 
 export const INSTRUMENTS = {
   // --- basses --------------------------------------------------------------------------------------
@@ -143,6 +144,103 @@ export const INSTRUMENTS = {
     cutoff: 1500, keytrack: 1.2, envOct: 0.8, fdecay: 0.2, fsustain: 0.7, q: 2,
     attack: 0.04, decay: 0.4, sustain: 0.8, release: 0.12, vibrato: { rate: 6, depth: 20, delay: 0.3 }, noise: 0.05,
   }),
+
+  // --- the produced band: layered and body-modelled instruments ----------------------------------------------------------------
+  /** An upright bass: a damped string with the wood's thump under it. */
+  upright: layer(
+    { voice: plucked({ t60: 0.9, brightness: 0.3, hardness: 1600, position: 0.3, damp: 0.07 }), gain: 1 },
+    { voice: subtractive({ oscs: [{ wave: "sine" }], cutoff: 500, attack: 0.003, decay: 0.12, sustain: 0.1, release: 0.06, fixedPhase: true }), gain: 0.55 },
+  ),
+  /** A slap bass: the thumb's thud, the string's pop an octave up, a flick of noise. */
+  slap: layer(
+    {
+      voice: subtractive({
+        oscs: [{ wave: "saw", level: 0.55 }, { wave: "square", level: 0.5, mult: 0.5 }],
+        cutoff: 80, keytrack: 1.6, envOct: 3.4, fdecay: 0.07, fsustain: 0.12, q: 2.2, noise: 0.05,
+        attack: 0.002, decay: 0.22, sustain: 0.35, release: 0.06, fixedPhase: true, velBright: 1,
+      }),
+      gain: 1,
+    },
+    { voice: guitar({ t60: 0.5, brightness: 0.95, hardness: 9000, position: 0.1, damp: 0.04, click: 0.4 }), gain: 0.28, mult: 2 },
+  ),
+  /** A picked electric bass: plucked string, a round sub, a little grit. */
+  "bass-pick": layer(
+    { voice: guitar({ t60: 0.8, brightness: 0.45, hardness: 3000, position: 0.15, damp: 0.05, click: 0.2 }), gain: 1 },
+    { voice: subtractive({ oscs: [{ wave: "sine" }], cutoff: 400, attack: 0.004, decay: 0.3, sustain: 0.6, release: 0.07, fixedPhase: true }), gain: 0.5 },
+  ),
+  /** A thick synth bass: two saws and a sub, the filter slamming shut. */
+  "bass-fat": layer(
+    {
+      voice: subtractive({
+        oscs: [{ wave: "saw", cents: -12, level: 0.5 }, { wave: "saw", cents: 12, level: 0.5 }, { wave: "square", level: 0.3, mult: 0.5 }],
+        cutoff: 110, keytrack: 1.1, envOct: 3, fdecay: 0.14, fsustain: 0.12, q: 3, drive: 1.8,
+        attack: 0.003, decay: 0.2, sustain: 0.6, release: 0.06, fixedPhase: true,
+      }),
+    },
+    { voice: subtractive({ oscs: [{ wave: "sine" }], cutoff: 300, attack: 0.004, decay: 0.5, sustain: 0.8, release: 0.06, fixedPhase: true }), gain: 0.55, mult: 0.5 },
+  ),
+  "gtr-nylon": guitar({ t60: 1.1, brightness: 0.5, hardness: 3200, position: 0.2, damp: 0.1, click: 0.15, body: [[110, 1.2, 4], [210, 1.4, 3], [2400, 1.5, 2]] }),
+  "gtr-steel": guitar({ t60: 1.4, brightness: 0.85, hardness: 7500, position: 0.14, damp: 0.12, click: 0.3, double: { cents: 4, level: 0.45 }, body: [[100, 1.2, 4], [190, 1.4, 3], [2200, 1.2, 3]] }),
+  "gtr-clean": guitar({ t60: 2, brightness: 0.8, hardness: 6500, position: 0.12, damp: 0.35, click: 0.2, body: [[140, 1, 2], [2800, 1.4, 3]] }),
+  /** A banjo: bright, short, with a drumhead's ring. */
+  "banjo-bright": guitar({ t60: 0.5, brightness: 0.95, hardness: 9500, position: 0.1, damp: 0.04, click: 0.35, body: [[420, 3, 6], [1500, 2, 4]] }),
+  "uke-bright": guitar({ t60: 0.6, brightness: 0.7, hardness: 6000, position: 0.14, damp: 0.05, click: 0.2, double: { cents: 5, level: 0.4 }, body: [[330, 2, 5], [900, 1.5, 3]] }),
+  /** A rhythm guitar for power chords: a sustaining string, saturated by the part's drive. */
+  "gtr-power": guitar({ t60: 1.2, brightness: 0.7, hardness: 4500, position: 0.1, damp: 0.05, click: 0.1, body: [[160, 1, 3]] }),
+  /** A lead guitar: held longer, singing, with vibrato from the playing. */
+  "gtr-lead": shaped(
+    subtractive({
+      oscs: [{ wave: "saw", cents: -4, level: 0.5 }, { wave: "saw", cents: 4, level: 0.5 }, { wave: "square", level: 0.15, mult: 2 }],
+      cutoff: 1500, keytrack: 1.6, envOct: 0.7, fdecay: 0.35, fsustain: 0.65, q: 1.4, attack: 0.006, decay: 0.5, sustain: 0.85, release: 0.14,
+      vibrato: { rate: 5.4, depth: 24, delay: 0.16 }, glide: { semitones: -0.5, time: 0.04 },
+    }),
+    (buf) => drive(buf, 3.2),
+  ),
+  rhodes: rhodes({ tau: 1.1, warm: 1.7, bark: 1.6, drive: 1.3 }),
+  "rhodes-bright": rhodes({ tau: 0.8, warm: 2.2, bark: 2.6, barkTau: 0.05, drive: 1.6 }),
+  "rhodes-soft": rhodes({ tau: 1.4, warm: 1.1, bark: 0.8, drive: 1 }),
+  accordion: buzz({ saws: 3, spread: 16, pulse: 0.3, base: 500, track: 3.5, open: 0.6, swell: 0.08, rest: 0.8, q: 1, attack: 0.05, release: 0.09, tremolo: { rate: 5, depth: 0.1 }, breath: 0.012, formant: [1800, 3] }),
+  musette: buzz({ saws: 4, spread: 26, pulse: 0.35, base: 600, track: 3.2, open: 0.5, swell: 0.06, rest: 0.85, q: 1, attack: 0.04, release: 0.08, tremolo: { rate: 6, depth: 0.08 }, formant: [2200, 3] }),
+  /** A brass section: five saws, a scoop into the pitch, the horns blooming then settling. */
+  "brass-section": buzz({ saws: 5, spread: 14, base: 300, track: 2.2, open: 2.1, swell: 0.07, rest: 0.55, q: 1.4, attack: 0.025, release: 0.1, scoop: -1.2, scoopTime: 0.06, vibrato: { rate: 5.6, depth: 14, delay: 0.3 }, formant: [1100, 4], drive: 1.6, velBright: 0.9 }),
+  "brass-stab": buzz({ saws: 5, spread: 12, base: 320, track: 2.4, open: 2.3, swell: 0.035, rest: 0.4, q: 1.5, attack: 0.01, release: 0.08, scoop: -1.6, scoopTime: 0.04, formant: [1200, 5], drive: 2, velBright: 1 }),
+  "trumpet-mute": buzz({ saws: 3, spread: 6, base: 500, track: 2, open: 1.6, swell: 0.05, rest: 0.7, q: 4, attack: 0.03, release: 0.1, scoop: -0.7, scoopTime: 0.05, vibrato: { rate: 5.4, depth: 18, delay: 0.22 }, breath: 0.02, formant: [1500, 6] }),
+  "horn-soft": buzz({ saws: 3, spread: 6, base: 220, track: 1.2, open: 1.2, swell: 0.1, rest: 0.7, q: 1, attack: 0.07, release: 0.18, vibrato: { rate: 5, depth: 10, delay: 0.3 }, formant: [500, 3], velBright: 0.5 }),
+  sax: buzz({ saws: 2, spread: 5, pulse: 0.35, base: 500, track: 2.2, open: 1, swell: 0.06, rest: 0.8, q: 2.5, attack: 0.03, release: 0.1, vibrato: { rate: 5.2, depth: 24, delay: 0.16 }, breath: 0.06, formant: [900, 5], drive: 1.4 }),
+  reed: buzz({ saws: 2, spread: 8, pulse: 0.28, base: 900, track: 2.5, open: 0.7, swell: 0.1, rest: 0.8, q: 2, attack: 0.05, release: 0.12, vibrato: { rate: 6, depth: 22, delay: 0.25 }, breath: 0.05, tremolo: { rate: 6, depth: 0.1 }, formant: [1400, 4] }),
+  supersaw: buzz({ saws: 7, spread: 24, base: 700, track: 3, open: 1.3, swell: 0.18, rest: 0.8, q: 1, attack: 0.01, release: 0.16, vibrato: { rate: 5.4, depth: 12, delay: 0.25 }, scoop: -0.4, scoopTime: 0.05, drive: 1.3 }),
+  /** A synthwave lead: a supersaw that slides into every note. */
+  "supersaw-lead": buzz({ saws: 5, spread: 18, base: 900, track: 3.2, open: 1.1, swell: 0.12, rest: 0.85, q: 1.3, attack: 0.008, release: 0.18, vibrato: { rate: 5.6, depth: 16, delay: 0.2 }, scoop: -2, scoopTime: 0.07, drive: 1.5 }),
+  "string-ens": buzz({ saws: 6, spread: 18, base: 500, track: 2, open: 0.5, swell: 0.4, rest: 0.8, q: 0.8, attack: 0.22, release: 0.5, vibrato: { rate: 5.5, depth: 8, delay: 0.3 }, velBright: 0.3 }),
+  "choir-ooh": buzz({ saws: 5, spread: 12, base: 1200, track: 1, open: 0.4, swell: 0.3, rest: 0.8, q: 0.8, attack: 0.18, release: 0.45, vibrato: { rate: 5.5, depth: 16, delay: 0.3 }, breath: 0.02, vowel: [[340, 1], [800, 0.45], [2400, 0.12]], vowelMix: 0.9 }),
+  "choir-aah": buzz({ saws: 5, spread: 14, base: 1500, track: 1, open: 0.4, swell: 0.3, rest: 0.8, q: 0.8, attack: 0.15, release: 0.4, vibrato: { rate: 5.6, depth: 18, delay: 0.25 }, breath: 0.02, vowel: [[700, 1], [1150, 0.55], [2600, 0.15]], vowelMix: 0.9 }),
+  "pad-warm": buzz({ saws: 5, spread: 30, base: 350, track: 1.2, open: 1.2, swell: 1.2, rest: 0.6, q: 0.9, attack: 0.5, release: 0.9 }),
+  /** Steel pan with a shimmer layer: the fundamental, its octave, and a detuned ring. */
+  "steel-pan": layer(
+    { voice: modal({ partials: [[1, 1, 1], [2, 0.75, 0.8], [3.01, 0.35, 0.55], [4.2, 0.12, 0.25]], tau: 0.5, chorus: { cents: 7, level: 0.65 }, hammer: { level: 0.22, tau: 0.003, low: 3500 }, damp: 0.2 }), gain: 1 },
+    { voice: fm({ ratio: 2, index: 1.2, indexTau: 0.08, tau: 0.35, release: 0.12, attack: 0.001 }), gain: 0.2, mult: 2 },
+  ),
+  /** Glittering ice: a glockenspiel with a high FM bell struck with it. */
+  "ice-bell": layer(
+    { voice: modal({ partials: [[1, 1, 1], [2.76, 0.5, 0.5], [5.4, 0.28, 0.3], [8.93, 0.15, 0.18]], tau: 0.7, free: true, hammer: { level: 0.14, tau: 0.002, low: 8000 } }), gain: 1 },
+    { voice: fm({ ratio: 3.5, index: 2.2, indexTau: 0.4, tau: 1, release: 0.3, attack: 0.001 }), gain: 0.3, mult: 2 },
+  ),
+  "music-box": modal({ partials: [[1, 1, 1], [3.01, 0.4, 0.4], [6.1, 0.18, 0.2]], tau: 0.5, free: true, hammer: { level: 0.2, tau: 0.001, low: 9000 } }),
+  /** A jazz organ: percussive upper partials on the attack, the drawbars set for a singing line. */
+  "organ-jazz": organ({ harmonics: [1, 0.9, 0.7, 0.35, 0.15, 0.1], shimmer: { rate: 6.1, depth: 0.15, cents: 5 }, chiff: 0.07, attack: 0.006 }),
+  /** A fairground calliope: steam-bright pipes, a breath at each note. */
+  calliope: organ({ harmonics: [1, 0.3, 0.8, 0.2, 0.6, 0.15, 0.45, 0.1, 0.3], shimmer: { rate: 4.2, depth: 0.1, cents: 12 }, chiff: 0.14, attack: 0.012 }),
+  /** A bright, hard synth arp pluck with a ping on top. */
+  "arp-synth": layer(
+    {
+      voice: subtractive({
+        oscs: [{ wave: "saw", cents: -8, level: 0.5 }, { wave: "saw", cents: 8, level: 0.5 }],
+        cutoff: 450, keytrack: 1.6, envOct: 3.2, fdecay: 0.1, fsustain: 0, q: 2.2,
+        attack: 0.002, decay: 0.16, sustain: 0.05, release: 0.07, fixedPhase: true, velBright: 0.8,
+      }),
+    },
+    { voice: fm({ ratio: 3, index: 1.5, indexTau: 0.05, tau: 0.12, release: 0.05, attack: 0.001 }), gain: 0.18, mult: 2 },
+  ),
 } satisfies Record<string, Voice>;
 
 export type InstrumentName = keyof typeof INSTRUMENTS;

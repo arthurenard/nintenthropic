@@ -32,6 +32,8 @@ import { midiToHz } from "./theory";
 export const MUSIC_RMS_DB = -18;
 /** No sample of a rendered piece is louder than this, dBFS. */
 export const MUSIC_PEAK_DB = -1;
+/** How far over its loudness a piece's peaks are held, dB. */
+export const CREST_DB = 12;
 /** A one-shot's loudest sample, dBFS. */
 export const ONESHOT_PEAK_DB = -3;
 /** The rate music is rendered at by default, and the lowest a race uses: a race renders at the device's own rate (44.1 or 48 kHz) so playing it needs no resampling. */
@@ -385,9 +387,9 @@ export class PieceRenderer {
       const first = scaleTo(oneShot ? -16 : MUSIC_RMS_DB);
       for (const k of Object.keys(this.partLevels)) this.partLevels[k] = this.partLevels[k]! * first * first;
       // Glue: the bus compressor takes the peaks of the loudest moments down together, and a breath of saturation rounds them.
-      compress(left, right, sr, { threshold: m.glue ?? -15, ratio: 2.2, attack: 0.02, release: 0.22, knee: 8 }, !oneShot);
-      saturate(left, 1.15);
-      saturate(right, 1.15);
+      compress(left, right, sr, { threshold: m.glue ?? -21, ratio: 2.8, attack: 0.006, release: 0.14, knee: 8 }, !oneShot);
+      saturate(left, 1.5);
+      saturate(right, 1.5);
       const ceilingDb = oneShot ? ONESHOT_PEAK_DB : MUSIC_PEAK_DB;
       const ceiling = Math.pow(10, ceilingDb / 20);
       if (oneShot) {
@@ -401,10 +403,14 @@ export class PieceRenderer {
         // Back to the music's loudness, the look-ahead limiter over the peaks, and once more since limiting lowers the loudness a little.
         for (let pass = 0; pass < 5; pass++) {
           scaleTo(MUSIC_RMS_DB);
-          this.limiterDb = Math.max(this.limiterDb, limit(left, right, sr, ceiling * 0.985));
+          // The limiter holds the peaks a set height over the loudness (a produced track's 12 dB, not an open recording's 17): loud, dense, with the transients kept.
+          this.limiterDb = Math.max(this.limiterDb, limit(left, right, sr, Math.pow(10, (MUSIC_RMS_DB + CREST_DB) / 20), 0.004, 0.09));
           const err = 20 * Math.log10(stereoRms(left, right)) - MUSIC_RMS_DB;
           if (Math.abs(err) < 0.12) break;
         }
+        // (The saturation leans the wave a hair to one side: the mean is taken out again.)
+        removeMean(left);
+        removeMean(right);
         // (The limiter's last smoothing leaves nothing over, but a floating-point rounding is cut.)
         for (let i = 0; i < length; i++) {
           if (left[i]! > ceiling) left[i] = ceiling;
