@@ -69,7 +69,7 @@ async function shareSaved(page: Page): Promise<{ name: string; size: [number, nu
       return make(blob);
     };
   });
-  const share = page.getByRole("button", { name: "Share" });
+  const share = page.getByRole("button", { name: "Share", exact: true });
   await expect(share).toBeVisible();
   const [download] = await Promise.all([page.waitForEvent("download"), share.click()]);
   await expect(page.locator("#toast")).toHaveText("Saved to your Downloads.");
@@ -223,7 +223,7 @@ test("in a room, a guest's photo comes to the host's big screen; a keyboard play
   const hanaCard = cards.filter({ hasText: "Hana" });
   await expect(hanaCard).not.toHaveClass(/has-photo/);
   await expect(hanaCard.locator(".shot-stand-in")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Share" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Share", exact: true })).toBeVisible();
   await shot(page, info, "photo-3-room-host", 1600);
   // Gus's own device has it too, the same picture.
   await onScreen(gus, "results", 30_000);
