@@ -57,19 +57,49 @@ export function crushTop(hazard: HazardDef): number {
   return hazard.top ?? hazard.radius * 3.2 + 2.5;
 }
 
+/**
+ * The road where a hazard stands (at its `at`), worked out once: every pose of the same hazard is arithmetic on it, so
+ * the sim, the bots (which ask for a dozen poses of every hazard near them a tick) and the picture do not walk the
+ * track's samples each time.
+ */
+interface Frame {
+  track: TrackGeometry;
+  x: number;
+  z: number;
+  tx: number;
+  tz: number;
+  width: number;
+  heading: number;
+}
+
+const frames = new WeakMap<HazardDef, Frame>();
+
+function frameOf(track: TrackGeometry, hazard: HazardDef): Frame {
+  let f = frames.get(hazard);
+  if (!f || f.track !== track) {
+    const c = track.at(hazard.at * track.length);
+    f = { track, x: c.x, z: c.z, tx: c.tx, tz: c.tz, width: c.width, heading: Math.atan2(c.tx, c.tz) };
+    frames.set(hazard, f);
+  }
+  return f;
+}
+
 /** `hazard` at race time `time` (seconds since the start; the countdown is time 0). */
 export function hazardAt(track: TrackGeometry, hazard: HazardDef, time: number): HazardPose {
   const cycle = (((time / hazard.period + (hazard.phase ?? 0)) % 1) + 1) % 1;
   const centre = hazard.at * track.length;
   const offset = hazard.offset ?? 0;
+  const f = frameOf(track, hazard);
+  /** The world x and z at `lateral` metres right of the road where the hazard stands. */
+  const px = (lateral: number) => f.x - f.tz * lateral;
+  const pz = (lateral: number) => f.z + f.tx * lateral;
   switch (hazard.motion) {
     case "cross": {
-      const half = hazard.span ?? track.at(centre).width / 2 + 1;
+      const half = hazard.span ?? f.width / 2 + 1;
       // A smooth there and back: eases at each side as a walker turns round.
       const side = -Math.cos(cycle * Math.PI * 2);
-      const p = track.point(centre, offset + side * half);
       const going = Math.sin(cycle * Math.PI * 2) >= 0 ? 1 : -1;
-      return { ...p, y: 0, heading: track.heading(centre) - (going * Math.PI) / 2, active: true, cycle, warn: 0 };
+      return { x: px(offset + side * half), y: 0, z: pz(offset + side * half), heading: f.heading - (going * Math.PI) / 2, active: true, cycle, warn: 0 };
     }
     case "roll": {
       const span = (hazard.span ?? 0.05) * track.length;
@@ -80,17 +110,15 @@ export function hazardAt(track: TrackGeometry, hazard: HazardDef, time: number):
     case "bob": {
       // Up for most of the first half of the cycle, down (and harmless) the rest.
       const height = Math.sin(cycle * Math.PI * 2);
-      const p = track.point(centre, offset);
-      return { ...p, y: height * hazard.radius * 1.5, heading: track.heading(centre), active: height > 0.2, cycle, warn: 0 };
+      return { x: px(offset), y: height * hazard.radius * 1.5, z: pz(offset), heading: f.heading, active: height > 0.2, cycle, warn: 0 };
     }
     case "orbit": {
       const radius = hazard.span ?? 8;
       const angle = cycle * Math.PI * 2 * (hazard.dir ?? 1);
-      const c = track.point(centre, offset);
       return {
-        x: c.x + Math.sin(angle) * radius,
+        x: px(offset) + Math.sin(angle) * radius,
         y: 0,
-        z: c.z + Math.cos(angle) * radius,
+        z: pz(offset) + Math.cos(angle) * radius,
         heading: angle + Math.PI / 2,
         active: true,
         cycle,
@@ -102,15 +130,13 @@ export function hazardAt(track: TrackGeometry, hazard: HazardDef, time: number):
       // its swing and lifts clear of a kart's roof at each end.
       const amp = hazard.span ?? 5; // signed: a negative span starts the swing the other way (mirror mode)
       const s = Math.sin(cycle * Math.PI * 2);
-      const p = track.point(centre, offset + s * amp);
       const lift = s * s * hazard.radius * 2.6;
       const going = Math.cos(cycle * Math.PI * 2) >= 0 ? 1 : -1;
-      return { ...p, y: lift, heading: track.heading(centre) - (going * Math.PI) / 2, active: lift < hazard.radius * 0.9, cycle, warn: 0 };
+      return { x: px(offset + s * amp), y: lift, z: pz(offset + s * amp), heading: f.heading - (going * Math.PI) / 2, active: lift < hazard.radius * 0.9, cycle, warn: 0 };
     }
     case "crush": {
       // Up, a shake and a lamp (the telegraph), a fast fall, down for a moment, up again.
       const top = crushTop(hazard);
-      const p = track.point(centre, offset);
       let y = top;
       let warn = 0;
       if (cycle >= CRUSH.warn && cycle < CRUSH.fall) {
@@ -126,23 +152,22 @@ export function hazardAt(track: TrackGeometry, hazard: HazardDef, time: number):
       } else if (cycle >= CRUSH.rise) {
         y = top * smooth01((cycle - CRUSH.rise) / (1 - CRUSH.rise));
       }
-      return { ...p, y, heading: track.heading(centre), active: y < 1.0, cycle, warn };
+      return { x: px(offset), y, z: pz(offset), heading: f.heading, active: y < 1.0, cycle, warn };
     }
     case "slide": {
       // Something that crosses the whole road once a cycle, from out of sight on one side to out of sight on the
       // other (a negative `span` goes right to left), then waits: a lamp and a whistle come first.
-      const half = Math.abs(hazard.span ?? track.at(centre).width / 2 + 3);
+      const half = Math.abs(hazard.span ?? f.width / 2 + 3);
       const d = (hazard.span ?? 1) < 0 ? -1 : 1;
       const run = 0.5;
       const lead = 0.22;
       if (cycle < run) {
         const u = cycle / run;
-        const p = track.point(centre, offset + d * (-1 + 2 * u) * half);
-        return { ...p, y: 0, heading: track.heading(centre) - (d * Math.PI) / 2, active: true, cycle, warn: 0 };
+        const lateral = offset + d * (-1 + 2 * u) * half;
+        return { x: px(lateral), y: 0, z: pz(lateral), heading: f.heading - (d * Math.PI) / 2, active: true, cycle, warn: 0 };
       }
       const warn = cycle > 1 - lead ? (cycle - (1 - lead)) / lead : 0;
-      const p = track.point(centre, offset - d * half);
-      return { ...p, y: -hazard.radius * 4, heading: track.heading(centre) - (d * Math.PI) / 2, active: false, cycle, warn };
+      return { x: px(offset - d * half), y: -hazard.radius * 4, z: pz(offset - d * half), heading: f.heading - (d * Math.PI) / 2, active: false, cycle, warn };
     }
   }
 }

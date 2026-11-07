@@ -391,8 +391,19 @@ function dodge(w: World, k: KartState, fwd: number, aimOffset: number, limitLeft
   });
   if (relevant.length === 0) return { offset: aimOffset, speed: 1 };
   const now = Math.max(0, (k.t - GO_TICK) / TICK_HZ);
-  const poses = relevant.map((index) => hazardPoses(w, now, index));
-  const clears = relevant.map((index) => hazards[index]!.radius + TUNING.kartRadius + B.hazardClear + (1 - k.skill) * 0.8);
+  // Of those, only the ones that can hit within the look-ahead (a stomper that is up and stays up, an icicle waiting,
+  // a cart not yet out: nothing to dodge, and so nothing to try places across the road for).
+  const live: number[] = [];
+  const poses: HazardPose[][] = [];
+  for (const index of relevant) {
+    const ahead = hazardPoses(w, now, index);
+    if (ahead.some((pose) => pose.active)) {
+      live.push(index);
+      poses.push(ahead);
+    }
+  }
+  if (live.length === 0) return { offset: aimOffset, speed: 1 };
+  const clears = live.map((index) => hazards[index]!.radius + TUNING.kartRadius + B.hazardClear + (1 - k.skill) * 0.8);
   const base = clamp(aimOffset, -limitLeft, limitRight);
   const road = ROAD;
   roadAhead(geo, k.s, speed, road);
