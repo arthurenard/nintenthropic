@@ -125,7 +125,9 @@ describe("physics cards", () => {
 describe("item cards", () => {
   /** A kart sitting on an item box for a second: the events it makes. */
   function sitOnBox(rule?: string): RaceEvent[] {
-    const r = raceWith(rule, FLAT, racers(1, 0));
+    // Meadow's item row lies on a strip of boost now: with no boost under it, a kart that sits on the box stays put.
+    const plain: TrackDef = { ...FLAT, boostPads: [], surfaces: (FLAT.surfaces ?? []).filter((surface) => surface.kind !== "boost") };
+    const r = raceWith(rule, plain, racers(1, 0));
     toGo(r);
     const box = r.view().things.find((t) => t.kind === "box")!;
     patch(r, 0, { x: box.x, z: box.z, vx: 0, vz: 0 });
