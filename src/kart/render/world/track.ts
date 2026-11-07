@@ -78,6 +78,43 @@ function surfaceStripes(kind: string): [Rgb, Rgb] | null {
 
 const spaces = new WeakMap<TrackGeometry, KartSpace>();
 
+/** Drops the triangles of `b` that stand on ground a kart can drive on of another road than `track` (compacting its arrays). */
+function cullOnOtherRoads(track: TrackGeometry, b: MeshBuilder): void {
+  const { position, normal, color, uv } = b;
+  const triangles = position.length / 9;
+  let kept = 0;
+  for (let t = 0; t < triangles; t++) {
+    const o = t * 9;
+    const x = (position[o]! + position[o + 3]! + position[o + 6]!) / 3;
+    const z = (position[o + 2]! + position[o + 5]! + position[o + 8]!) / 3;
+    if (anotherRoadHolds(track, x, z)) continue;
+    if (kept !== t) {
+      for (let k = 0; k < 9; k++) {
+        position[kept * 9 + k] = position[o + k]!;
+        normal[kept * 9 + k] = normal[o + k]!;
+        color[kept * 9 + k] = color[o + k]!;
+      }
+      if (uv.length > 0) for (let k = 0; k < 6; k++) uv[kept * 6 + k] = uv[t * 6 + k]!;
+    }
+    kept++;
+  }
+  position.length = kept * 9;
+  normal.length = kept * 9;
+  color.length = kept * 9;
+  if (uv.length > 0) uv.length = kept * 6;
+}
+
+/** Is (x, z) ground a kart can drive on, of a road other than `track` itself (the nearest by the sim's own rule)? */
+function anotherRoadHolds(track: TrackGeometry, x: number, z: number): boolean {
+  const main = track.open ? (track as unknown as { main: TrackGeometry }).main : track;
+  let space = spaces.get(main);
+  if (!space) {
+    space = new KartSpace(main.def, main);
+    spaces.set(main, space);
+  }
+  return space.insideAnother(x, z, track.route, 0.5, 70);
+}
+
 /** Can a kart be at (x, z) by the sim's own rule (on any road of the track, within its barrier)? Only asked of a track with branch roads. */
 function kartCanBeAt(track: TrackGeometry, x: number, z: number): boolean {
   const main = track.open ? (track as unknown as { main: TrackGeometry }).main : track;
@@ -141,6 +178,31 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     open: (i, side) => (side < 0 ? features.dropLeft : features.dropRight)[wrapI(i)]!,
     gap: (i) => features.gap[wrapI(i)] === 1,
   };
+  // With branch roads: the barrier is not drawn where it would stand on ground a kart can drive on (of another road than this one: a
+  // point just outside this road's own barrier is outside it, so only another road's drivable area can hold it).
+  const crossed = new Uint8Array(2 * n);
+  if (track.routes.length > 0 || open) {
+    for (let i = 0; i < n; i++) {
+      const a = samples[i]!;
+      for (const side of [-1, 1] as const) {
+        if (ctx.open(i, side) > 0.5) continue;
+        // Across the barrier's thickness (its face to its far side): on the ground of another road at either.
+        for (const out of [0.3, 1.6]) {
+          const o = side * (a.width / 2 + ctx.wall(i, side) + out);
+          if (anotherRoadHolds(track, a.x - a.tz * o, a.z + a.tx * o)) crossed[2 * i + (side < 0 ? 0 : 1)] = 1;
+        }
+        const far = side * (a.width / 2 + ctx.wall(i, side) + 1.3);
+        if (kartCanBeAt(track, a.x - a.tz * far, a.z + a.tx * far)) crossed[2 * i + (side < 0 ? 0 : 1)] = 1;
+      }
+    }
+  }
+  if (track.routes.length > 0 || open) {
+    ctx.hidden = (i, side) => {
+      const k = wrapI(i);
+      const next = wrapI(i + 1);
+      return (side < 0 ? features.hiddenLeft : features.hiddenRight)[k] === 1 || crossed[2 * k + (side < 0 ? 0 : 1)] === 1 || crossed[2 * next + (side < 0 ? 0 : 1)] === 1;
+    };
+  }
   const colour = {
     kerbA: rgb(style.kerb[0]),
     kerbB: rgb(style.kerb[1]),
@@ -590,6 +652,10 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
   buildFestoons(ctx);
   const pads = buildPads(ctx);
   const patches = buildPatches(ctx);
+
+  // With branch roads: nothing of this road's decoration stands on ground a kart can drive on of another road (a barrier across the way
+  // where the walls are open, a lamp or a post beside the junction).
+  if (track.routes.length > 0 || open) for (const b of deco) cullOnOtherRoads(track, b);
 
   return {
     road: road.filter((b) => !b.empty).map((b) => b.build()),

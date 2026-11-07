@@ -76,6 +76,19 @@ export class KartSpace {
     return best;
   }
 
+  /**
+   * Is (x, z) inside the barrier of some road other than `except` (by at least `inside` metres), whichever of them the point is
+   * nearest? Where two roads lie on one another it is on both: a kart that came by either can be there.
+   */
+  insideAnother(x: number, z: number, except: number, inside: number, look: number): boolean {
+    for (let r = 0; r < this.roads.length; r++) {
+      if (r === except) continue;
+      const found = this.placeOn(this.roads[r]!, x, z, look * look);
+      if (found && found.place.walled && found.place.past < -inside) return true;
+    }
+    return false;
+  }
+
   private placeOn(road: Road, x: number, z: number, limit: number): { d2: number; place: Place } | null {
     const { geo, sim, buckets } = road;
     const samples = geo.samples;
