@@ -1445,8 +1445,8 @@ triangles as exact) and took the work that grows with the views away a step at a
   program (no program links after the green light at any step, measured with `split.mjs`). Step 1: shared shadows within
   half the range, karts welded from 24 m (a kart's `LOD` distance is now live), 75% of the particles, 4 taps in the boost's
   blur. Step 2: shadows within the range, at most 3 passes, welded from 18 m, 55% of the particles, scenery beyond the fog's
-  far end left out (`reach` in `cull.ts`), 3 taps. Step 3: within 1.5 ranges, 2 passes, 15 m, 40%, scenery beyond 85% of the
-  fog, 2 taps. Step 4: one pass for the frame (a view far from the pack has no cast shadows, only the kart's blob), 12 m, 30%,
+  far end left out (`reach` in `cull.ts`), 3 taps. Step 3: within 1.2 ranges, 2 passes, 15 m, 40%, scenery beyond 85% of the
+  fog, 2 taps. Step 4: one pass for the frame, merging within 1.2 ranges and no more, so a kart at the edge of its group keeps most of its own surroundings in the map (the shared map is half a range wide each way; a view farther away than that has its own pass, or at the 1-pass limit loses cast shadows, only the kart's blob, which has not been seen in a real race, only in dev-page stills), 12 m, 30%,
   70% of the fog, no streaks. Step 0 is the picture as it was: `same.mjs --against` on the commit before this one is
   identical at frames 150, 500 and 900, Canyon Run, Fun Fair and Five Finger Circuit, 1 and 4 views, high.
 - *When it steps.* Down: two slow windows in a row (45 frames each, median over 1.25 times 16.7 ms; one window if over 1.8
@@ -1457,7 +1457,9 @@ triangles as exact) and took the work that grows with the views away a step at a
   undone and that step closed for 30 s, then 60 s, up to 4 min; three trials a race. It cannot flicker. Dynamic
   resolution waits for the governor's first two steps (they cost the picture less than blur) and acts at once after, or when
   steps were found futile. A race starts at the step the device ended the last one at, per number of views
-  (`handy.kart.load.v1`, 14 days). `?load=n` holds a step for the bench and the eye.
+  (`handy.kart.load.v1`, 14 days); a step is written down only after it has held for 20 s of racing, so a start-up hitch (hand
+  tracker, shaders) cannot leave a fast machine on a lower picture for later races. The target is 60 Hz: a screen or a browser
+  holding the page to 30 fps is met by the futile check (two steps down, then undone). `?load=n` holds a step for the bench and the eye.
 - *Measured* (`bench.mjs --extra "&load=n"`, dev page, high, four views, 1440x900 at 2x, pinned resolution, one run each:
   calls, k triangles, GPU ms views / post, CPU ms): Canyon Run step 0 771, 3209k, 21.2 / 7.2, 11.5; step 1 541, 1972k,
   6.9 / 4.0, 6.7; step 2 496, 1817k, 7.5 / 4.0, 6.6; step 4 436, 1547k, 8.9 / 4.6, 7.2. Fun Fair 593, 1660k at step 0 and 518,

@@ -42,7 +42,7 @@ import type { TrackTheme } from "../track/geometry";
 import { ChaseCamera, rampSeen, type CameraRoad } from "./cameras";
 import { shadowInView } from "./casters";
 import { shadowGroups } from "./shadowGroups";
-import { keepLevel, keptLevel, LoadGovernor, lookFor, type LoadLook } from "./loadGovernor";
+import { KEEP_AFTER, keepLevel, keptLevel, LoadGovernor, lookFor, type LoadLook } from "./loadGovernor";
 import { RescueDrone } from "./drone";
 import { outliving } from "./outliving";
 import { Effects } from "./effects";
@@ -271,67 +271,67 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     renderer.clear(true, true, false);
     target.scissorTest = true;
     try {
-    // Every view's frustum first: a shadow pass shared by several views needs the karts any of them can see.
-    for (let index = 0; index < frameViews.length; index++) {
-      const v = frameViews[index]!;
-      v.eye.updateMatrixWorld();
-      v.eye.matrixWorldInverse.copy(v.eye.matrixWorld).invert();
-      _projScreen.multiplyMatrices(v.eye.projectionMatrix, v.eye.matrixWorldInverse);
-      (frustums[index] ??= new Frustum()).setFromProjectionMatrix(_projScreen);
-    }
-    // Views whose karts are near each other share one shadow pass (the load governor's call: at the top step, one each).
-    const groups = settings.shadowMap > 0 ? shadowGroups(frameViews.map((v) => v.at), look.shadowSpread, look.shadowPasses) : frameViews.map((_, i) => ({ views: [i], centre: frameViews[i]!.at }));
-    let drawn = 0;
-    for (const group of groups) {
-      for (const index of group.views) {
-      const v = frameViews[index]!;
-      const lead = index === group.views[0];
-      const first = drawn++ === 0;
-      const x = Math.floor(v.rect.x * pr);
-      const w = Math.min(target.width - x, Math.ceil(v.rect.w * pr));
-      const h = Math.ceil(v.rect.h * pr);
-      const y = Math.max(0, target.height - Math.floor(v.rect.y * pr) - h);
-      target.viewport.set(x, y, w, h);
-      target.scissor.set(x, y, w, h);
-      renderer.setRenderTarget(target);
-      world.sky.group.position.copy(v.eye.position);
-      // The scene's matrices are worked out once a frame, by the first view's render (three does it on every render()); what the
-      // other views move on the way, the sky dome and the sun, is brought up to date by hand.
-      scene.matrixWorldAutoUpdate = first;
-      if (!first) world.sky.group.updateMatrixWorld(true);
-      const fovRad = (v.eye.fov * Math.PI) / 180;
-      pointScale.value = (h) / (2 * Math.tan(fovRad / 2));
-      // The sun's shadow map is aimed once for a group and drawn with the group's first view; the rest draw with it as it stands.
-      if (lead) {
-        world.focusSun(group.centre.x, group.centre.y, group.centre.z);
-        if (!first) world.sun.updateMatrixWorld();
+      // Every view's frustum first: a shadow pass shared by several views needs the karts any of them can see.
+      for (let index = 0; index < frameViews.length; index++) {
+        const v = frameViews[index]!;
+        v.eye.updateMatrixWorld();
+        v.eye.matrixWorldInverse.copy(v.eye.matrixWorld).invert();
+        _projScreen.multiplyMatrices(v.eye.projectionMatrix, v.eye.matrixWorldInverse);
+        (frustums[index] ??= new Frustum()).setFromProjectionMatrix(_projScreen);
       }
-      renderer.shadowMap.autoUpdate = lead;
-      // This view's frustum decides which trees, rocks and tufts are drawn for it.
-      if (culling) world.cull(index, frustums[index]!, v.eye.position, look.sceneryReach > 0 ? world.style.fog.far * look.sceneryReach : 0);
-      else world.uncull();
-      if (settings.shadowMap > 0 && lead) {
-        const reach = settings.shadowRange * 2;
-        for (const a of actors.values()) {
-          let casts = !casterCulling;
-          for (let m = 0; !casts && m < group.views.length; m++) casts = shadowInView(frustums[group.views[m]!]!, a.x, a.y, a.z, a.roadY, world.sky.sunDir, reach);
-          a.casters.set(a.root, casts);
+      // Views whose karts are near each other share one shadow pass (the load governor's call: at the top step, one each).
+      const groups = settings.shadowMap > 0 ? shadowGroups(frameViews.map((v) => v.at), look.shadowSpread, look.shadowPasses) : frameViews.map((_, i) => ({ views: [i], centre: frameViews[i]!.at }));
+      let drawn = 0;
+      for (const group of groups) {
+        for (const index of group.views) {
+          const v = frameViews[index]!;
+          const lead = index === group.views[0];
+          const first = drawn++ === 0;
+          const x = Math.floor(v.rect.x * pr);
+          const w = Math.min(target.width - x, Math.ceil(v.rect.w * pr));
+          const h = Math.ceil(v.rect.h * pr);
+          const y = Math.max(0, target.height - Math.floor(v.rect.y * pr) - h);
+          target.viewport.set(x, y, w, h);
+          target.scissor.set(x, y, w, h);
+          renderer.setRenderTarget(target);
+          world.sky.group.position.copy(v.eye.position);
+          // The scene's matrices are worked out once a frame, by the first view's render (three does it on every render()); what the
+          // other views move on the way, the sky dome and the sun, is brought up to date by hand.
+          scene.matrixWorldAutoUpdate = first;
+          if (!first) world.sky.group.updateMatrixWorld(true);
+          const fovRad = (v.eye.fov * Math.PI) / 180;
+          pointScale.value = (h) / (2 * Math.tan(fovRad / 2));
+          // The sun's shadow map is aimed once for a group and drawn with the group's first view; the rest draw with it as it stands.
+          if (lead) {
+            world.focusSun(group.centre.x, group.centre.y, group.centre.z);
+            if (!first) world.sun.updateMatrixWorld();
+          }
+          renderer.shadowMap.autoUpdate = lead;
+          // This view's frustum decides which trees, rocks and tufts are drawn for it.
+          if (culling) world.cull(index, frustums[index]!, v.eye.position, look.sceneryReach > 0 ? world.style.fog.far * look.sceneryReach : 0);
+          else world.uncull();
+          if (settings.shadowMap > 0 && lead) {
+            const reach = settings.shadowRange * 2;
+            for (const a of actors.values()) {
+              let casts = !casterCulling;
+              for (let m = 0; !casts && m < group.views.length; m++) casts = shadowInView(frustums[group.views[m]!]!, a.x, a.y, a.z, a.roadY, world.sky.sunDir, reach);
+              a.casters.set(a.root, casts);
+            }
+          }
+          // Another kart within a few metres of the lens (on this view's kart's tail) is left out of this view.
+          const eye = v.eye.position;
+          for (const a of actors.values()) {
+            if (a.id === v.kart || !a.root.visible) continue;
+            if ((a.x - eye.x) ** 2 + (a.y + 0.7 - eye.y) ** 2 + (a.z - eye.z) ** 2 < NEAR_LENS * NEAR_LENS) {
+              a.root.visible = false;
+              tooNear.push(a);
+            }
+          }
+          renderer.render(scene, v.eye);
+          for (const a of tooNear) a.root.visible = true;
+          tooNear.length = 0;
         }
       }
-      // Another kart within a few metres of the lens (on this view's kart's tail) is left out of this view.
-      const eye = v.eye.position;
-      for (const a of actors.values()) {
-        if (a.id === v.kart || !a.root.visible) continue;
-        if ((a.x - eye.x) ** 2 + (a.y + 0.7 - eye.y) ** 2 + (a.z - eye.z) ** 2 < NEAR_LENS * NEAR_LENS) {
-          a.root.visible = false;
-          tooNear.push(a);
-        }
-      }
-      renderer.render(scene, v.eye);
-      for (const a of tooNear) a.root.visible = true;
-      tooNear.length = 0;
-      }
-    }
     } finally {
       // Whatever a view throws, the scene goes back to updating its own matrices, and no kart stays hidden for being near a lens.
       scene.matrixWorldAutoUpdate = true;
@@ -376,6 +376,11 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   })();
   const governor = new LoadGovernor();
   let governorSet = false;
+  /** The views the governor's level is kept for: read and written under the same count, whatever happens to the views mid-race. */
+  let governorViews = 1;
+  /** Seconds of racing at the current level, and the level last kept. */
+  let levelHeld = 0;
+  let levelKept = -1;
   let lastBusy = 0;
   const storage = (() => {
     try {
@@ -607,12 +612,20 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       if (!governorSet && view.phase !== "countdown") {
         // Each race starts at the level this device ended the last one at, for this many views.
         governorSet = true;
-        governor.reset(forcedLevel ?? keptLevel(storage, viewKarts.length));
+        governorViews = viewKarts.length;
+        governor.reset(forcedLevel ?? keptLevel(storage, governorViews));
+        levelHeld = 0;
+        levelKept = governor.level;
         applyLevel(governor.level);
       }
       if (governorSet && forcedLevel === null && dtRaw > 0 && view.phase === "racing" && governor.sample(dtRaw * 1000, busyMs)) {
         applyLevel(governor.level);
-        keepLevel(storage, viewKarts.length, governor.level);
+        levelHeld = 0;
+      }
+      // A level is kept for the next race only once it has held for a while (see KEEP_AFTER).
+      if (governorSet && forcedLevel === null && view.phase === "racing" && levelKept !== governor.level && (levelHeld += dt) >= KEEP_AFTER) {
+        levelKept = governor.level;
+        keepLevel(storage, governorViews, governor.level);
       }
       if (dtRaw > 0 && options.resolutionScale === undefined) {
         // Pixels wait while the governor still has its cheap steps to take (they cost the picture less).

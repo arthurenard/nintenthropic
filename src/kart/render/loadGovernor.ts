@@ -19,7 +19,10 @@ export const MAX_LEVEL = 4;
 
 /** What a level changes. Level 0 is the picture as it has always been. */
 export interface LoadLook {
-  /** Views whose karts are within this many metres share one shadow pass (0: a pass for each view). */
+  /**
+   * Views whose karts are within this many metres share one shadow pass (0: a pass for each view). Never above 1.2 times
+   * the map's half width, so a kart at the edge of its group still has most of its own surroundings in the map.
+   */
   shadowSpread: number;
   /** The most shadow passes a frame may make. */
   shadowPasses: number;
@@ -43,9 +46,9 @@ export function lookFor(level: number, range: number): LoadLook {
     case 2:
       return { shadowSpread: range, shadowPasses: 3, kartDetail: 18, particles: 0.55, sceneryReach: 1, rushTaps: 3 };
     case 3:
-      return { shadowSpread: range * 1.5, shadowPasses: 2, kartDetail: 15, particles: 0.4, sceneryReach: 0.85, rushTaps: 2 };
+      return { shadowSpread: range * 1.2, shadowPasses: 2, kartDetail: 15, particles: 0.4, sceneryReach: 0.85, rushTaps: 2 };
     default:
-      return { shadowSpread: range * 2, shadowPasses: 1, kartDetail: 12, particles: 0.3, sceneryReach: 0.7, rushTaps: 0 };
+      return { shadowSpread: range * 1.2, shadowPasses: 1, kartDetail: 12, particles: 0.3, sceneryReach: 0.7, rushTaps: 0 };
   }
 }
 
@@ -101,6 +104,7 @@ export class LoadGovernor {
   private lastInterval = 0;
 
   constructor(
+    /** 60 Hz is assumed: a screen that draws 30 times a second is found out by the futile check (two steps down, then undone). */
     readonly target = 1000 / 60,
     start = 0,
     private readonly max = MAX_LEVEL,
@@ -249,6 +253,8 @@ export class LoadGovernor {
 
 /** Where the level a race ended at is kept, per number of views (four views need more taken away than one). */
 export const LOAD_KEY = "handy.kart.load.v1";
+/** A level is remembered only once a race has held it this long, in seconds: start-up hitches (hand tracker, shaders) do not count. */
+export const KEEP_AFTER = 20;
 /** A remembered level is good for 14 days. */
 const KEPT_MS = 14 * 24 * 3600 * 1000;
 

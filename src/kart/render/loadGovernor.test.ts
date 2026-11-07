@@ -104,6 +104,12 @@ describe("lookFor", () => {
   });
 });
 
+describe("shadow sharing", () => {
+  it("never merges views farther apart than 1.2 times the map's half width", () => {
+    for (let i = 0; i <= MAX_LEVEL; i++) expect(lookFor(i, 30).shadowSpread).toBeLessThanOrEqual(36);
+  });
+});
+
 describe("what a device remembers", () => {
   const memory = () => {
     const data = new Map<string, string>();
