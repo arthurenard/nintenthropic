@@ -170,7 +170,7 @@ export function itemGet(item: keyof typeof CHIMES): Recipe {
     const out = t.canvas(0.8);
     CHIMES[item]!(out, t);
     breath(out, t, 0.015);
-    return out;
+    return lowpass(out, t.sr, 9500, 1);
   };
 }
 
@@ -306,17 +306,17 @@ export function seekerBeeps(t: Take): Mono {
   return out;
 }
 
-/** A lock: three beeps rising, close together, and a glint, the sound of "got you" at the moment it lands. */
+/** A lock: three beeps rising, close together, and a glint, the sound of "got you" at the moment it lands (kept low enough to be firm, not shrill). */
 export function seekerLock(t: Take): Mono {
   const out = t.canvas(0.4);
-  [91, 95, 100].forEach((m, k) => {
+  [79, 83, 88].forEach((m, k) => {
     const beep = tone(t.n(0.06), t.sr, new Float32Array(t.n(0.06)).fill(midiHz(m) * t.rng.range(0.996, 1.004)), 0.15, 0);
     shapeBy(beep, (u) => smooth(u / 0.08) * Math.pow(Math.max(0, 1 - u), 1.2));
     t.put(out, beep, k * 0.05, 0.6);
   });
-  note(out, t, BELL, 0.15, 103, 0.2, 0.9, 0.55);
+  note(out, t, BELL, 0.15, 96, 0.2, 0.9, 0.5);
   breath(out, t, 0.015);
-  return out;
+  return lowpass(out, t.sr, 9000, 1);
 }
 
 /**
