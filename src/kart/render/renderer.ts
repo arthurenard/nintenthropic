@@ -41,6 +41,8 @@ import type { ControlKind, KartView, RaceEvent, RaceRenderer, RaceView, RacerSet
 import type { TrackTheme } from "../track/geometry";
 import { ChaseCamera, rampSeen, type CameraRoad } from "./cameras";
 import { shadowInView } from "./casters";
+import { shadowGroups } from "./shadowGroups";
+import { keepLevel, keptLevel, LoadGovernor, lookFor, type LoadLook } from "./loadGovernor";
 import { RescueDrone } from "./drone";
 import { outliving } from "./outliving";
 import { Effects } from "./effects";
@@ -74,7 +76,6 @@ export const KEPT_UP_SECONDS = 30;
 const NEAR_LENS = 3.4;
 
 const _projScreen = new Matrix4();
-const _frustum = new Frustum();
 
 export interface RaceRendererOptions {
   /** "auto" (the default) guesses from the GPU. */
@@ -121,6 +122,8 @@ export interface RenderStats {
   views: number;
   /** Shader programs compiled so far. */
   programs: number;
+  /** The load governor's step: 0 is the full picture, each step takes more work away (loadGovernor.ts). */
+  loadLevel: number;
   /** Where the CPU's frame went, ms (running averages; zero until `profile(true)`). */
   timings: FrameTimings;
 }
@@ -252,6 +255,10 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   const smooth = (key: "update" | "submit" | "draw" | "hud", ms: number) => {
     timings[key] += (ms - timings[key]) * 0.1;
   };
+  /** Each view's frustum this frame. */
+  const frustums: Frustum[] = [];
+  /** What the load governor has taken away so far (loadGovernor.ts): none at level 0. */
+  let look: LoadLook = lookFor(0, settings.shadowRange);
   /** Draws every view, scissored, into the post chain's HDR target. */
   const drawViews: DrawViews = (target: WebGLRenderTarget) => {
     if (!world) return;
@@ -264,8 +271,22 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     renderer.clear(true, true, false);
     target.scissorTest = true;
     try {
+    // Every view's frustum first: a shadow pass shared by several views needs the karts any of them can see.
     for (let index = 0; index < frameViews.length; index++) {
       const v = frameViews[index]!;
+      v.eye.updateMatrixWorld();
+      v.eye.matrixWorldInverse.copy(v.eye.matrixWorld).invert();
+      _projScreen.multiplyMatrices(v.eye.projectionMatrix, v.eye.matrixWorldInverse);
+      (frustums[index] ??= new Frustum()).setFromProjectionMatrix(_projScreen);
+    }
+    // Views whose karts are near each other share one shadow pass (the load governor's call: at the top step, one each).
+    const groups = settings.shadowMap > 0 ? shadowGroups(frameViews.map((v) => v.at), look.shadowSpread, look.shadowPasses) : frameViews.map((_, i) => ({ views: [i], centre: frameViews[i]!.at }));
+    let drawn = 0;
+    for (const group of groups) {
+      for (const index of group.views) {
+      const v = frameViews[index]!;
+      const lead = index === group.views[0];
+      const first = drawn++ === 0;
       const x = Math.floor(v.rect.x * pr);
       const w = Math.min(target.width - x, Math.ceil(v.rect.w * pr));
       const h = Math.ceil(v.rect.h * pr);
@@ -276,22 +297,26 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       world.sky.group.position.copy(v.eye.position);
       // The scene's matrices are worked out once a frame, by the first view's render (three does it on every render()); what the
       // other views move on the way, the sky dome and the sun, is brought up to date by hand.
-      scene.matrixWorldAutoUpdate = index === 0;
-      if (index > 0) world.sky.group.updateMatrixWorld(true);
+      scene.matrixWorldAutoUpdate = first;
+      if (!first) world.sky.group.updateMatrixWorld(true);
       const fovRad = (v.eye.fov * Math.PI) / 180;
       pointScale.value = (h) / (2 * Math.tan(fovRad / 2));
-      world.focusSun(v.at.x, v.at.y, v.at.z);
-      if (index > 0) world.sun.updateMatrixWorld();
+      // The sun's shadow map is aimed once for a group and drawn with the group's first view; the rest draw with it as it stands.
+      if (lead) {
+        world.focusSun(group.centre.x, group.centre.y, group.centre.z);
+        if (!first) world.sun.updateMatrixWorld();
+      }
+      renderer.shadowMap.autoUpdate = lead;
       // This view's frustum decides which trees, rocks and tufts are drawn for it.
-      v.eye.updateMatrixWorld();
-      v.eye.matrixWorldInverse.copy(v.eye.matrixWorld).invert();
-      _projScreen.multiplyMatrices(v.eye.projectionMatrix, v.eye.matrixWorldInverse);
-      _frustum.setFromProjectionMatrix(_projScreen);
-      if (culling) world.cull(index, _frustum);
+      if (culling) world.cull(index, frustums[index]!, v.eye.position, look.sceneryReach > 0 ? world.style.fog.far * look.sceneryReach : 0);
       else world.uncull();
-      if (settings.shadowMap > 0) {
+      if (settings.shadowMap > 0 && lead) {
         const reach = settings.shadowRange * 2;
-        for (const a of actors.values()) a.casters.set(a.root, !casterCulling || shadowInView(_frustum, a.x, a.y, a.z, a.roadY, world.sky.sunDir, reach));
+        for (const a of actors.values()) {
+          let casts = !casterCulling;
+          for (let m = 0; !casts && m < group.views.length; m++) casts = shadowInView(frustums[group.views[m]!]!, a.x, a.y, a.z, a.roadY, world.sky.sunDir, reach);
+          a.casters.set(a.root, casts);
+        }
       }
       // Another kart within a few metres of the lens (on this view's kart's tail) is left out of this view.
       const eye = v.eye.position;
@@ -305,10 +330,12 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       renderer.render(scene, v.eye);
       for (const a of tooNear) a.root.visible = true;
       tooNear.length = 0;
+      }
     }
     } finally {
       // Whatever a view throws, the scene goes back to updating its own matrices, and no kart stays hidden for being near a lens.
       scene.matrixWorldAutoUpdate = true;
+      renderer.shadowMap.autoUpdate = true;
       for (const a of tooNear) a.root.visible = true;
       tooNear.length = 0;
       target.scissorTest = false;
@@ -342,6 +369,21 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     ctxLost = false;
   });
 
+  // The load governor (loadGovernor.ts). ?load=n holds a level for the bench and the eye; otherwise the race finds its own.
+  const forcedLevel = (() => {
+    const q = typeof location !== "undefined" ? new URLSearchParams(location.search).get("load") : null;
+    return q !== null && /^\d$/.test(q) ? Number(q) : null;
+  })();
+  const governor = new LoadGovernor();
+  let governorSet = false;
+  const storage = (() => {
+    try {
+      return typeof localStorage !== "undefined" ? localStorage : null;
+    } catch {
+      return null;
+    }
+  })();
+
   /** The most of its resolution the picture may use (limitResolution): below 1 while the hand tracker is short of the GPU. */
   let ceiling = 1;
   const pixelRatio = () => pixelRatioFor(dpr, settings, Math.min(resolution.scale, ceiling), width, height);
@@ -363,17 +405,32 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     eggs.setViews(viewKarts.length);
   };
 
+  /** The distance (m) from which a kart is drawn welded: the tier's, or nearer once the governor has stepped. */
+  const kartFar = () => Math.min(settings.kartDetail < FAR_DISTANCE ? settings.kartDetail : FAR_DISTANCE, look.kartDetail);
+  /** Every kart's level-of-detail node. */
+  const lods: LOD[] = [];
+
+  /** Puts a level of the load governor in force (loadGovernor.ts). Everything it changes is a number or a flag: no program is built. */
+  const applyLevel = (level: number) => {
+    look = lookFor(level, settings.shadowRange);
+    const far = kartFar();
+    for (const lod of lods) lod.levels[1]!.distance = far;
+    if (effects) effects.density = look.particles;
+    post.setRushTaps(look.rushTaps);
+  };
+
   const makeActor = (r: Pick<RacerSetup, "id" | "colour" | "character" | "golden">): KartActor => {
     const ctx = actorContext();
     const a = new KartActor(r.id, factory, r, ctx);
     a.calm = calm;
-    // The lesser tiers weld a kart into one mesh sooner (each kart is a dozen draw calls, and again in the shadow pass).
-    if (settings.kartDetail < FAR_DISTANCE) {
-      a.root.traverse((o) => {
-        const lod = o as LOD;
-        if (lod.isLOD && lod.levels[1]) lod.levels[1].distance = settings.kartDetail;
-      });
-    }
+    // The lesser tiers (and the load governor, when frames run long) weld a kart into one mesh sooner (each kart is a dozen draw calls, and again in the shadow pass).
+    a.root.traverse((o) => {
+      const lod = o as LOD;
+      if (lod.isLOD && lod.levels[1]) {
+        lods.push(lod);
+        lod.levels[1].distance = kartFar();
+      }
+    });
     kartGroup.add(a.root);
     actors.set(r.id, a);
     return a;
@@ -437,6 +494,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   };
 
   const disposeWorld = () => {
+    lods.length = 0;
     for (const a of actors.values()) a.dispose();
     actors = new Map();
     effects?.dispose();
@@ -512,6 +570,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       for (const c of cameras) c.reset();
       relayout();
       applySize();
+      governorSet = false;
+      applyLevel(forcedLevel ?? 0);
       await warmUp();
       onProgress?.(1);
     },
@@ -540,6 +600,16 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       const tStart = profiling ? performance.now() : 0;
       const dt = Math.min(0.1, Math.max(0, dtRaw));
       time += dt;
+      if (!governorSet && view.phase !== "countdown") {
+        // Each race starts at the level this device ended the last one at, for this many views.
+        governorSet = true;
+        governor.reset(forcedLevel ?? keptLevel(storage, viewKarts.length));
+        applyLevel(governor.level);
+      }
+      if (governorSet && forcedLevel === null && dtRaw > 0 && view.phase === "racing" && governor.sample(dtRaw * 1000)) {
+        applyLevel(governor.level);
+        keepLevel(storage, viewKarts.length, governor.level);
+      }
       if (dtRaw > 0 && options.resolutionScale === undefined) {
         if (resolution.sample(dtRaw * 1000)) applySize();
         // Pixels were the cheap way to save time; if they have done all they can and the frames are still slow, the next race tries a tier lower.
@@ -741,6 +811,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
         textures: renderer.info.memory.textures,
         views: viewKarts.length,
         programs: renderer.info.programs?.length ?? 0,
+        loadLevel: governor.level,
         timings: { ...timings },
       };
     },
@@ -779,6 +850,10 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
     },
   };
   renderer.info.autoReset = false;
+  // The bench and the eye read the renderer's own account of itself (tools/perf/split.mjs, ?perf=1).
+  if (typeof window !== "undefined" && typeof location !== "undefined" && new URLSearchParams(location.search).has("perf")) {
+    (window as unknown as { __gripStats?: () => unknown }).__gripStats = () => ({ ...api.stats(), pixelRatio: api.stats().pixelRatio });
+  }
   applySize();
   relayout();
   return api;

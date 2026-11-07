@@ -98,7 +98,7 @@ export interface World {
    * Call before drawing view `view` from the camera whose frustum this is: the scattered scenery and foliage draw
    * only the instances that frustum can reach (cull.ts). `uncull` puts them all back, for a draw that is not a view.
    */
-  cull(view: number, frustum: Frustum): void;
+  cull(view: number, frustum: Frustum, eye?: { x: number; y: number; z: number }, reach?: number): void;
   uncull(): void;
   /**
    * How far above the sim's flat road the surface is at a point: the road's
@@ -433,9 +433,9 @@ export async function createWorld(
           : {}),
       });
     },
-    cull(view, frustum) {
-      scenery.cull(view, frustum);
-      foliage?.cull(view, frustum);
+    cull(view, frustum, eye, reach) {
+      scenery.cull(view, frustum, eye, reach);
+      foliage?.cull(view, frustum, eye, reach);
     },
     uncull() {
       scenery.uncull();

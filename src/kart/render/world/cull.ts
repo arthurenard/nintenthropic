@@ -137,8 +137,8 @@ export class CulledInstances {
     return mesh;
   }
 
-  /** Draws only what `frustum` can see, from view `view`'s mesh; every other view's mesh is hidden meanwhile. Returns the instances drawn. */
-  select(view: number, frustum: Frustum): number {
+  /** Draws only what `frustum` can see (and, given an `eye` and a `reach` above 0, only cells whose nearest edge is within `reach` metres of it), from view `view`'s mesh; every other view's mesh is hidden meanwhile. Returns the instances drawn. */
+  select(view: number, frustum: Frustum, eye?: { x: number; y: number; z: number }, reach = 0): number {
     if (!this.checked) {
       this.checked = true;
       const first = this.meshes[0]!;
@@ -155,6 +155,11 @@ export class CulledInstances {
     for (let i = 0; i < this.cells.length; i++) {
       const cell = this.cells[i]!;
       if (!frustum.intersectsSphere(cell.sphere)) continue;
+      // Beyond `reach` metres from the eye (the fog's far end, or most of it, when the machine is struggling) a cell is left out.
+      if (reach > 0 && eye) {
+        const c = cell.sphere.center;
+        if (Math.hypot(c.x - eye.x, c.y - eye.y, c.z - eye.z) - cell.sphere.radius > reach) continue;
+      }
       hash = (Math.imul(hash, 31) + i + 1) | 0;
       n += cell.count;
       const last = runs.length - 2;
