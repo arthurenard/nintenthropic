@@ -41,6 +41,9 @@ const reduced = () => document.documentElement.hasAttribute("data-reduce-motion"
 
 export class FxPlayer {
   private readonly entries = new Set<Entry>();
+  private readonly byCanvas = new Map<HTMLCanvasElement, Entry>();
+  private readonly onVisible = () => this.wake();
+  private readonly motion: MutationObserver | null;
   private frame = 0;
   private last = 0;
   private origin = 0;
@@ -52,12 +55,32 @@ export class FxPlayer {
         ? null
         : new IntersectionObserver((changes) => {
             for (const change of changes) {
-              const entry = [...this.entries].find((candidate) => candidate.canvas === change.target);
+              const entry = this.byCanvas.get(change.target as HTMLCanvasElement);
               if (entry) entry.seen = change.isIntersecting;
             }
             this.wake();
           });
-    document.addEventListener("visibilitychange", () => this.wake());
+    document.addEventListener("visibilitychange", this.onVisible);
+    // Reduce Motion switched on or off while the cards show: redraw (a still frame, or the loop again).
+    this.motion = typeof MutationObserver === "undefined" ? null : new MutationObserver(() => this.motionChanged());
+    this.motion?.observe(document.documentElement, { attributes: true, attributeFilter: ["data-reduce-motion"] });
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").addEventListener?.("change", () => this.motionChanged());
+  }
+
+  private motionChanged(): void {
+    for (const entry of this.entries) entry.dirty = true;
+    this.wake();
+  }
+
+  /** Removes the listeners and stops the loop. */
+  destroy(): void {
+    document.removeEventListener("visibilitychange", this.onVisible);
+    this.motion?.disconnect();
+    this.seen?.disconnect();
+    if (this.frame) cancelAnimationFrame(this.frame);
+    this.frame = 0;
+    this.entries.clear();
+    this.byCanvas.clear();
   }
 
   /** Adds the wash, frame, stamp and effects canvas to a card (`figure`). */
@@ -86,6 +109,7 @@ export class FxPlayer {
     const entry: Entry | null = context ? { canvas, context, card, width: 0, height: 0, scale: 1, seen: this.seen === null, dirty: true } : null;
     if (entry) {
       this.entries.add(entry);
+      this.byCanvas.set(canvas, entry);
       this.seen?.observe(canvas);
     }
     return {
@@ -103,6 +127,7 @@ export class FxPlayer {
       dispose: () => {
         if (entry) {
           this.entries.delete(entry);
+          this.byCanvas.delete(canvas);
           this.seen?.unobserve(canvas);
         }
         tint.remove();
@@ -115,7 +140,8 @@ export class FxPlayer {
 
   /** Starts or stops the loop by whether anything could be seen. */
   private wake(): void {
-    const show = !document.hidden && [...this.entries].some((entry) => entry.seen && entry.width > 0);
+    let show = false;
+    if (!document.hidden) for (const entry of this.entries) if (entry.seen && entry.width > 0) show = true;
     if (show && !this.frame) {
       this.origin = performance.now();
       this.frame = requestAnimationFrame((now) => this.tick(now));

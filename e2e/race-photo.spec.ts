@@ -299,3 +299,40 @@ test("with Reduce Motion the effects show one frame, still, and a clip is offere
   if (can) await expect(clip).toBeVisible();
   else await expect(clip).toBeHidden();
 });
+
+test("Share makes the picture, Share Clip a playable clip, each as a download named for Nintenthropic", async ({ page }, info) => {
+  // No share sheet in the test browser: the files are saved.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "share", { value: undefined, configurable: true });
+    Object.defineProperty(navigator, "canShare", { value: undefined, configurable: true });
+  });
+  await host(page, "Hana");
+  for (const track of ["harbour-lights", "meadow-loop"]) {
+    await previewResults(page, track);
+    await expect(page.locator("#finish-photos .shot.has-photo")).toHaveCount(4);
+    const picture = page.waitForEvent("download", { timeout: 30_000 });
+    await page.getByRole("button", { name: "Share", exact: true }).click();
+    const png = await picture;
+    expect(png.suggestedFilename()).toMatch(/^nintenthropic-grip-prix-.*\.png$/);
+    const path = info.outputPath(`shared-${track}.png`);
+    await png.saveAs(path);
+    expect((await fileSize(path))).toBeGreaterThan(20_000);
+    await shot(page, info, `photo-shared-${track}`, 300).catch(() => undefined);
+  }
+  const can = await page.evaluate(() => typeof MediaRecorder !== "undefined" && typeof HTMLCanvasElement.prototype.captureStream === "function");
+  if (!can) return;
+  const clipButton = page.getByRole("button", { name: "Share Clip" });
+  await expect(clipButton).toBeEnabled({ timeout: 10_000 });
+  const clip = page.waitForEvent("download", { timeout: 40_000 });
+  await clipButton.click();
+  const video = await clip;
+  expect(video.suggestedFilename()).toMatch(/^nintenthropic-grip-prix-.*\.(mp4|webm)$/);
+  const path = info.outputPath("shared-clip");
+  await video.saveAs(path);
+  expect((await fileSize(path))).toBeGreaterThan(5_000);
+});
+
+async function fileSize(path: string): Promise<number> {
+  const fs = (await import("node:fs" as string)) as { statSync(path: string): { size: number } };
+  return fs.statSync(path).size;
+}

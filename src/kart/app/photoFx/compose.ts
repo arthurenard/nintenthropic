@@ -18,15 +18,100 @@ function canFilter(c: Ctx): boolean {
   return "filter" in c;
 }
 
+/** One filter function: its name and number (degrees for hue-rotate). */
+export function parseFilter(filter: string): { name: string; value: number }[] {
+  const out: { name: string; value: number }[] = [];
+  for (const m of filter.matchAll(/([a-z-]+)\(([-\d.]+)(deg)?\)/g)) out.push({ name: m[1]!, value: Number(m[2]) });
+  return out;
+}
+
+/** Grades RGBA pixels in place as the CSS filter would (saturate, brightness, contrast, sepia, hue-rotate): for browsers whose canvas has no filter. */
+export function gradePixels(data: Uint8ClampedArray, filter: string): void {
+  const steps = parseFilter(filter);
+  for (let i = 0; i < data.length; i += 4) {
+    let r = data[i]! / 255;
+    let g = data[i + 1]! / 255;
+    let b = data[i + 2]! / 255;
+    for (const { name, value } of steps) {
+      if (name === "saturate") {
+        const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        r = l + (r - l) * value;
+        g = l + (g - l) * value;
+        b = l + (b - l) * value;
+      } else if (name === "brightness") {
+        r *= value;
+        g *= value;
+        b *= value;
+      } else if (name === "contrast") {
+        r = (r - 0.5) * value + 0.5;
+        g = (g - 0.5) * value + 0.5;
+        b = (b - 0.5) * value + 0.5;
+      } else if (name === "sepia") {
+        const k = Math.min(1, value);
+        const sr = 0.393 * r + 0.769 * g + 0.189 * b;
+        const sg = 0.349 * r + 0.686 * g + 0.168 * b;
+        const sb = 0.272 * r + 0.534 * g + 0.131 * b;
+        r += (sr - r) * k;
+        g += (sg - g) * k;
+        b += (sb - b) * k;
+      } else if (name === "hue-rotate") {
+        const a = (value * Math.PI) / 180;
+        const cos = Math.cos(a);
+        const sin = Math.sin(a);
+        const nr = r * (0.213 + cos * 0.787 - sin * 0.213) + g * (0.715 - cos * 0.715 - sin * 0.715) + b * (0.072 - cos * 0.072 + sin * 0.928);
+        const ng = r * (0.213 - cos * 0.213 + sin * 0.143) + g * (0.715 + cos * 0.285 + sin * 0.14) + b * (0.072 - cos * 0.072 - sin * 0.283);
+        const nb = r * (0.213 - cos * 0.213 - sin * 0.787) + g * (0.715 - cos * 0.715 + sin * 0.715) + b * (0.072 + cos * 0.928 + sin * 0.072);
+        r = nr;
+        g = ng;
+        b = nb;
+      }
+      r = Math.min(1, Math.max(0, r));
+      g = Math.min(1, Math.max(0, g));
+      b = Math.min(1, Math.max(0, b));
+    }
+    data[i] = r * 255;
+    data[i + 1] = g * 255;
+    data[i + 2] = b * 255;
+  }
+}
+
+const gradedCache = new WeakMap<object, { key: string; canvas: HTMLCanvasElement }>();
+
+/** The picture graded by pixels at about its drawn size, kept for the next frame (a clip draws the same card 120 times). */
+function gradedCopy(image: CanvasImageSource, w: number, h: number, filter: string): CanvasImageSource {
+  const key = `${Math.round(w)}x${Math.round(h)}|${filter}`;
+  const hit = gradedCache.get(image);
+  if (hit && hit.key === key) return hit.canvas;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(w));
+  canvas.height = Math.max(1, Math.round(h));
+  const g = canvas.getContext("2d");
+  if (!g) return image;
+  g.drawImage(image, 0, 0, canvas.width, canvas.height);
+  try {
+    const pixels = g.getImageData(0, 0, canvas.width, canvas.height);
+    gradePixels(pixels.data, filter);
+    g.putImageData(pixels, 0, 0);
+  } catch {
+    // a tainted picture: shared ungraded
+  }
+  gradedCache.set(image, { key, canvas });
+  return canvas;
+}
+
 /** The photo (or any picture) filling x, y, w, h with the track's colour filter, soft-light wash and vignette. */
 export function paintGraded(c: Ctx, image: CanvasImageSource, x: number, y: number, w: number, h: number, look: Look): void {
   c.save();
   c.beginPath();
   c.rect(x, y, w, h);
   c.clip();
-  if (canFilter(c)) c.filter = look.filter;
-  c.drawImage(image, x, y, w, h);
-  c.filter = "none";
+  if (canFilter(c)) {
+    c.filter = look.filter;
+    c.drawImage(image, x, y, w, h);
+    c.filter = "none";
+  } else {
+    c.drawImage(gradedCopy(image, w, h, look.filter), x, y, w, h);
+  }
   const [top, foot, strength] = look.tint;
   const wash = c.createLinearGradient(0, y, 0, y + h);
   wash.addColorStop(0, top);

@@ -272,28 +272,49 @@ export async function recordClip(scene: ShareScene, type: string): Promise<Blob 
   }
   const chunks: Blob[] = [];
   recorder.addEventListener("dataavailable", (event) => event.data.size > 0 && chunks.push(event.data));
-  const done = new Promise<void>((resolve) => recorder.addEventListener("stop", () => resolve(), { once: true }));
-  scene.draw(scene.peak);
+  const done = new Promise<void>((resolve) => {
+    recorder.addEventListener("stop", () => resolve(), { once: true });
+    recorder.addEventListener("error", () => resolve(), { once: true });
+  });
+  const from = scene.peak - 0.6;
+  const frameAt = (seconds: number) => scene.draw((from + seconds + LOOP) % LOOP);
+  frameAt(0);
   try {
-    recorder.start();
+    recorder.start(250);
   } catch {
     return null;
   }
   const start = performance.now();
+  // Timed by a timer, not by animation frames: a hidden tab stops those, and the recording must still end.
+  let hidden = false;
   await new Promise<void>((resolve) => {
-    const step = (now: number) => {
-      const t = (now - start) / 1000;
-      if (t >= LOOP) return resolve();
-      scene.draw((scene.peak - 0.6 + t + LOOP) % LOOP);
-      requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
+    const timer = setInterval(() => {
+      if (document.hidden) hidden = true;
+      const t = (performance.now() - start) / 1000;
+      if (hidden || t >= LOOP) {
+        clearInterval(timer);
+        resolve();
+      } else {
+        frameAt(t);
+      }
+    }, 1000 / FPS);
   });
-  recorder.stop();
-  await done;
-  for (const track of stream.getTracks()) track.stop();
+  const stopped = () => {
+    for (const track of stream.getTracks()) track.stop();
+  };
+  if (recorder.state !== "inactive") {
+    try {
+      recorder.stop();
+    } catch {
+      stopped();
+      return null;
+    }
+  }
+  // A recorder that never says it stopped must not hold the share buttons for ever.
+  await Promise.race([done, new Promise<void>((resolve) => setTimeout(resolve, 3000))]);
+  stopped();
   // Without the codecs in its type, so the share sheet takes it as a plain mp4 or webm.
-  return chunks.length ? new Blob(chunks, { type: type.split(";")[0] }) : null;
+  return !hidden && chunks.length ? new Blob(chunks, { type: type.split(";")[0] }) : null;
 }
 
 /** Records the short looping clip and shares or saves it; false where this browser cannot (the picture is still offered). */

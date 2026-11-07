@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TRACKS } from "../../track/tracks";
 import { clipExtension, shareName } from "../finishShare";
-import { stampText } from "./compose";
+import { gradePixels, parseFilter, stampText } from "./compose";
 import { drawFx } from "./effects";
 import { flourishFor, LOOKS, LOOP, lookFor } from "./looks";
 
@@ -112,5 +112,26 @@ describe("the shared files", () => {
 
   it("stamp a card with its track and place", () => {
     expect(stampText(lookFor("canyon-run"), "2nd")).toBe("Canyon Run · 2nd");
+  });
+});
+
+describe("the grade without a canvas filter", () => {
+  it("reads the filter's steps", () => {
+    expect(parseFilter("saturate(1.2) brightness(0.98) hue-rotate(-6deg)")).toEqual([
+      { name: "saturate", value: 1.2 },
+      { name: "brightness", value: 0.98 },
+      { name: "hue-rotate", value: -6 },
+    ]);
+  });
+  it("grades pixels as the filter would: more colour, more light, kept within range", () => {
+    const px = new Uint8ClampedArray([200, 100, 50, 255, 250, 250, 250, 255]);
+    gradePixels(px, "saturate(1.5) brightness(1.1)");
+    expect(px[0]).toBeGreaterThan(200);
+    expect(px[2]).toBeLessThan(50 * 1.1 + 1);
+    expect(px[3]).toBe(255);
+    expect(px[4]).toBe(255);
+    const grey = new Uint8ClampedArray([128, 128, 128, 255]);
+    gradePixels(grey, "saturate(1.4) hue-rotate(30deg)");
+    expect(Math.abs(grey[0]! - grey[2]!)).toBeLessThan(3);
   });
 });
