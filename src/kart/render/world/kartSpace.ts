@@ -22,6 +22,8 @@ export interface Place {
   walled: boolean;
   /** The road's height at the nearest point of the centre line. */
   roadY: number;
+  /** The road it is nearest: 0 the loop, 1.. a branch. */
+  route: number;
 }
 
 interface Road {
@@ -120,6 +122,6 @@ export class KartSpace {
     const side = offset > 0 ? 1 : -1;
     const open = isOpen(sim, c.s, side);
     const limitOut = open ? TUNING.fall.edge + 0.5 : barrierDistance(sim, c.s, side);
-    return { d2: best, place: { s: c.s, offset, past: Math.abs(offset) - c.width / 2 - limitOut, walled: !open, roadY: c.y } };
+    return { d2: best, place: { s: c.s, offset, past: Math.abs(offset) - c.width / 2 - limitOut, walled: !open, roadY: c.y, route: geo.route } };
   }
 }

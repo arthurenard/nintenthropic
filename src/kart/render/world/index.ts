@@ -416,7 +416,7 @@ export async function createWorld(
     boxes,
     bank,
     features: meshes.features,
-    cameraSpace: createCameraSpace(geometry, terrain, meshes.features, [...landmarks.roofs, ...routeLayers.flatMap((r) => r.layer.roofs)], bank),
+    cameraSpace: createCameraSpace(geometry, terrain, meshes.features, landmarks.roofs, bank, routeLayers.map((r) => r.layer.roofs)),
     look,
     sun,
     bake,
