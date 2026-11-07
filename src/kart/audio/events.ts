@@ -9,6 +9,7 @@
  * (lap chimes, fanfares). A bot's final lap is its own business.
  */
 import type { RaceEvent } from "../contract";
+import { WEIGHT_RATE, engineFamily } from "./engines";
 import { type Scene, type Listener, falloff, hearKart, listenerAt, localOf } from "./scene";
 
 /** One sound to play. */
@@ -53,6 +54,12 @@ function order(cue: string, who: Listener, own: boolean, o: Partial<Order> & { r
     priority: own ? 2 : 1,
     ...rest,
   };
+}
+
+/** The pitch a kart's weight gives its landings and bumps: a light driver's come out higher and snappier, a heavy one's deeper. */
+function weightRate(scene: Scene, kart: number): number {
+  const character = scene.racers?.find((r) => r.id === kart)?.character;
+  return WEIGHT_RATE[engineFamily(character, kart)];
 }
 
 /** A hash of a hazard's name to a small pitch change, so each kind is a little different. */
@@ -183,7 +190,13 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
       else who = null;
       if (!who) return [];
       const s = Math.min(1, Math.max(0, event.strength));
-      return keep(order("kart_bump", who, !!own, { radius: RADIUS.medium, volume: 0.35 + 0.65 * s, rate: 1.12 - 0.25 * s }));
+      const mine = own?.kart ?? event.a;
+      const w = weightRate(scene, mine);
+      return keep(
+        order("kart_bump", who, !!own, { radius: RADIUS.medium, volume: 0.35 + 0.65 * s, rate: (1.12 - 0.25 * s) * w }),
+        // The chassis groans at a hard knock (the player's own kart only).
+        own && s >= 0.35 ? order("kart_creak", who, true, { volume: 0.3 + 0.6 * s, rate: w, delay: 0.04, priority: 1 }) : null,
+      );
     }
 
     case "wall": {
@@ -193,7 +206,8 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
       const s = Math.min(1, Math.max(0, event.strength));
       return keep(
         s >= 0.3 ? order("kart_wall_thud", who, own, { radius: RADIUS.small, volume: 0.3 + 0.7 * s, rate: 1.15 - 0.3 * s }) : null,
-        s < 0.7 ? order("kart_wall_scrape", who, own, { radius: RADIUS.small, volume: 0.5 + 0.4 * (1 - s), priority: own ? 1 : 0 }) : null,
+        // The player's own scrape is a loop that lasts as long as the contact does (RaceAudio); another kart's is heard as a scrape.
+        s < 0.7 && !own ? order("kart_wall_scrape", who, own, { radius: RADIUS.small, volume: 0.5 + 0.4 * (1 - s), priority: 0 }) : null,
       );
     }
 
@@ -243,9 +257,11 @@ export function ordersFor(event: RaceEvent, scene: Scene): Order[] {
       if (!who) return [];
       const own = !!localOf(scene, event.kart);
       const hard = event.strength ?? 0;
+      const w = weightRate(scene, event.kart);
       return keep(
-        order("kart_land", who, own, { radius: RADIUS.small }),
-        hard >= THUD_FROM ? order("kart_thud", who, own, { radius: RADIUS.small, volume: 0.4 + 0.6 * hard, rate: 1.06 - 0.12 * hard }) : null,
+        order("kart_land", who, own, { radius: RADIUS.small, rate: w }),
+        hard >= THUD_FROM ? order("kart_thud", who, own, { radius: RADIUS.small, volume: 0.4 + 0.6 * hard, rate: (1.06 - 0.12 * hard) * w }) : null,
+        own && hard >= 0.3 ? order("kart_creak", who, true, { volume: 0.35 + 0.55 * hard, rate: w, delay: 0.06, priority: 1 }) : null,
         event.boost ? order("kart_boost_whoosh", who, own, { radius: RADIUS.small, volume: 0.55, delay: 0.04 }) : null,
       );
     }

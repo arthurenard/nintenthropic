@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { AudioBus, CueOptions } from "../../engine/types";
 import type { LoopControl, LoopParams, SteerableAudio } from "../../audio/types";
 import type { KartView, RaceEvent, RaceView, ThingView, TrackDef } from "../contract";
-import { REV_HI, REV_LO, engineTarget, gearFactor, gridFlare } from "./engines";
+import { REV_HI, REV_LO, REV_MID, engineTarget, gearFactor, gridFlare } from "./engines";
 import { createRaceAudio, type LocalKart, type RaceAudio } from "./race-audio";
 import { localKarts } from "./scene";
 import { FINAL_LAP, type MusicRenderer } from "./music/loader";
@@ -15,6 +15,11 @@ import type { MusicTrack } from "./music/player";
 import type { RenderedMusic } from "./music/render";
 
 // --- fixtures ----------------------------------------------------------------------------------------
+
+/** The revs a layer's cue was made at. */
+const layerRevs = (cue: string): number => (cue.endsWith("_lo") ? REV_LO : cue.endsWith("_mid") ? REV_MID : REV_HI);
+/** The engine a layer's cue belongs to. */
+const familyOf = (cue: string): string => cue.split("_")[2]!;
 
 function kart(id: number, over: Partial<KartView> = {}): KartView {
   return {
@@ -78,7 +83,7 @@ class Recorder implements AudioBus, SteerableAudio {
   /** The engine layers running now. */
   layers(): { cue: string; params: LoopParams }[] {
     return this.loops
-      .filter((l) => /^kart_engine_(light|middle|heavy|electric)_(lo|hi)$/.test(l.cue) && !l.stopped)
+      .filter((l) => /^kart_engine_(light|middle|heavy|electric)_(lo|mid|hi)$/.test(l.cue) && !l.stopped)
       .map((l) => ({ cue: l.cue, params: l.sets.at(-1) ?? l.options }));
   }
   /** An engine's revs as its layers play them (a layer's rate times the revs it was made at), from the louder layer. */
@@ -87,9 +92,9 @@ class Recorder implements AudioBus, SteerableAudio {
       .filter((l) => l.cue.includes(`_${family}_`))
       .sort((a, b) => b.params.volume! - a.params.volume!)[0];
     if (!heard) return 0;
-    return heard.params.rate! * (heard.cue.endsWith("_lo") ? REV_LO : REV_HI);
+    return heard.params.rate! * layerRevs(heard.cue);
   }
-  /** An engine's two layers' level together (equal power). */
+  /** An engine's layers' level together (equal power). */
   engineLevel(family = "light"): number {
     return Math.hypot(...this.layers().filter((l) => l.cue.includes(`_${family}_`)).map((l) => l.params.volume!));
   }
@@ -235,11 +240,13 @@ describe("events become sounds", () => {
     ["the hottest sparks", ev("drift-level", { kart: 0, level: 3 }), ["kart_spark_orange"]],
     ["a slipstream's fling", ev("boost", { kart: 0, source: "draft", level: 1 }), ["kart_slingshot"]],
     ["the hottest drift let go", ev("boost", { kart: 0, source: "drift", level: 3 }), ["kart_mini_turbo", "kart_flame_long", "kart_super_turbo"]],
-    ["a hard landing", ev("land", { kart: 0, boost: false, strength: 0.8 }), ["kart_land", "kart_thud"]],
+    ["a hard landing", ev("land", { kart: 0, boost: false, strength: 0.8 }), ["kart_land", "kart_thud", "kart_creak"]],
     ["a kick at the lip", ev("trick", { kart: 0, kick: true }), ["kart_trick", "kart_boost_whoosh"]],
-    ["a bump", ev("bump", { a: 0, b: 1, strength: 0.5 }), ["kart_bump"]],
+    ["a bump", ev("bump", { a: 0, b: 1, strength: 0.5 }), ["kart_bump", "kart_creak"]],
+    ["a soft bump", ev("bump", { a: 0, b: 1, strength: 0.2 }), ["kart_bump"]],
     ["a hard wall", ev("wall", { kart: 0, strength: 0.9 }), ["kart_wall_thud"]],
-    ["a scrape", ev("wall", { kart: 0, strength: 0.1 }), ["kart_wall_scrape"]],
+    // (The player's own scrape is a loop for as long as the contact lasts: see "scrapes along a barrier".)
+    ["a scrape", ev("wall", { kart: 0, strength: 0.1 }), []],
     ["a lap", ev("lap", { kart: 0, lap: 2 }), ["kart_lap"]],
     ["the final lap", ev("final-lap", { kart: 0 }), ["kart_final_lap"]],
     ["a win", ev("finish", { kart: 0, place: 1, time: 90 }), ["kart_finish_win", "kart_cheer"]],
@@ -343,6 +350,116 @@ describe("events become sounds", () => {
   });
 });
 
+
+describe("the ground, the air and the contact", () => {
+  it("hears another kart's scrape as a scrape, and the player's own as a loop that lasts while the contact does", () => {
+    const other = setup([{ kart: 0, pan: 0 }]);
+    other.frame([kart(0), kart(1, { x: 4 })], {}, [ev("wall", { kart: 1, strength: 0.1 })]);
+    expect(other.bus.cues).toEqual(["kart_wall_scrape"]);
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    for (let i = 0; i < 20; i++) frame([kart(0, { speed: 16 })]);
+    expect(bus.running("kart_scrape")).toBe(0);
+    frame([kart(0, { speed: 16 })], {}, [ev("wall", { kart: 0, strength: 0.1 })]);
+    expect(bus.running("kart_scrape")).toBe(1);
+    expect(bus.cues).not.toContain("kart_wall_scrape");
+    // It is still there a quarter of a second on (the sim reports a rub every so often), and gone half a second after it stops.
+    for (let i = 0; i < 15; i++) frame([kart(0, { speed: 16 })]);
+    expect(bus.running("kart_scrape")).toBe(1);
+    for (let i = 0; i < 30; i++) frame([kart(0, { speed: 16 })]);
+    expect(bus.running("kart_scrape")).toBe(0);
+  });
+
+  it("scrapes louder the faster the kart rubs along", () => {
+    const level = (speed: number): number => {
+      const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+      frame([kart(0, { speed })], {}, [ev("wall", { kart: 0, strength: 0.1 })]);
+      for (let i = 0; i < 6; i++) frame([kart(0, { speed })]);
+      return bus.lastSet("kart_scrape")!.volume!;
+    };
+    expect(level(20)).toBeGreaterThan(level(6) * 1.4);
+  });
+
+  it("tears the air in a slipstream, more as the draft charges, and not out of one", () => {
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    for (let i = 0; i < 30; i++) frame([kart(0, { speed: 20 })]);
+    expect(bus.running("kart_draft")).toBe(0);
+    for (let i = 0; i < 40; i++) frame([kart(0, { speed: 20, draft: 0.3 })]);
+    const low = bus.lastSet("kart_draft")!.volume!;
+    for (let i = 0; i < 40; i++) frame([kart(0, { speed: 20, draft: 0.95 })]);
+    const high = bus.lastSet("kart_draft")!.volume!;
+    expect(bus.running("kart_draft")).toBe(1);
+    expect(high).toBeGreaterThan(low * 1.2);
+    for (let i = 0; i < 60; i++) frame([kart(0, { speed: 20 })]);
+    expect(bus.running("kart_draft")).toBe(0);
+  });
+
+  it("barks on a gear change under power, not coasting, not for the robot, and not more than once for a change", () => {
+    const climb = (character: string): number => {
+      const { bus, audio, local } = setup([{ kart: 0, pan: 0 }]);
+      const racers = [{ id: 0, name: "x", colour: "#fff", player: 0, character }];
+      let speed = 2;
+      for (let i = 0; i < 400; i++) {
+        speed = Math.min(23, speed + 0.1);
+        audio.frame(view([kart(0, { speed })], { racers }), local, 1 / 60);
+      }
+      return bus.cues.filter((c) => c === "kart_shift").length;
+    };
+    const shifts = climb("bramble");
+    expect(shifts).toBeGreaterThanOrEqual(2);
+    expect(shifts).toBeLessThanOrEqual(3);
+    expect(climb("rivet")).toBe(0);
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    let speed = 23;
+    for (let i = 0; i < 400; i++) frame([kart(0, { speed: (speed = Math.max(2, speed - 0.05)) })]);
+    expect(bus.cues).not.toContain("kart_shift");
+  });
+
+  it("chirps the squeal up as a spark tier is reached, and lets it settle", () => {
+    const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+    for (let i = 0; i < 40; i++) frame([kart(0, { speed: 20, drift: 1, driftLevel: 1, steer: 0.5 })]);
+    const steady = bus.lastSet("kart_drift")!.rate!;
+    for (let i = 0; i < 5; i++) frame([kart(0, { speed: 20, drift: 1, driftLevel: 2, steer: 0.5 })]);
+    const rising = bus.lastSet("kart_drift")!.rate!;
+    for (let i = 0; i < 90; i++) frame([kart(0, { speed: 20, drift: 1, driftLevel: 2, steer: 0.5 })]);
+    const settled = bus.lastSet("kart_drift")!.rate!;
+    // A tier is a tone and a half (9 %); the chirp overshoots it and settles back.
+    expect(rising).toBeGreaterThan(steady * 1.09);
+    expect(rising).toBeGreaterThan(settled * 1.03);
+    expect(settled).toBeGreaterThan(steady * 1.07);
+  });
+
+  it("pitches the squeal with the slip: higher at speed and with the wheel turned harder", () => {
+    const rate = (speed: number, steer: number): number => {
+      const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+      for (let i = 0; i < 40; i++) frame([kart(0, { speed, drift: 1, steer })]);
+      return bus.lastSet("kart_drift")!.rate!;
+    };
+    expect(rate(22, 0.5)).toBeGreaterThan(rate(10, 0.5) * 1.05);
+    expect(rate(16, 1)).toBeGreaterThan(rate(16, 0.1) * 1.03);
+  });
+
+  it("hears a rival behind through the kart's own body: further, so duller, than the same rival ahead", () => {
+    const distanceOf = (z: number): number => {
+      const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
+      for (let i = 0; i < 20; i++) frame([kart(0, { x: 0, z: 0, speed: 19 }), kart(1, { x: 2, z, speed: 19 })]);
+      return bus.layers().filter((l) => l.params.distance! > 0)[0]!.params.distance!;
+    };
+    const ahead = distanceOf(20);
+    const behind = distanceOf(-20);
+    expect(behind).toBeGreaterThan(ahead * 1.3);
+  });
+
+  it("lands a light driver's kart higher and snappier than a heavy one's", () => {
+    const rate = (character: string): number => {
+      const { bus, audio, local } = setup([{ kart: 0, pan: 0 }]);
+      const racers = [{ id: 0, name: "x", colour: "#fff", player: 0, character }];
+      audio.frame(view([kart(0, { speed: 20 })], { racers, events: [ev("land", { kart: 0, boost: false, strength: 0.6 })] }), local, 1 / 60);
+      return bus.played.find((p) => p.cue === "kart_land")!.options.rate!;
+    };
+    expect(rate("pepper")).toBeGreaterThan(rate("bramble") * 1.2);
+  });
+});
+
 describe("engines", () => {
   it("idles on the grid and drives off in four different engines for four players", () => {
     const { bus, frame } = setup([{ kart: 0, pan: -0.6 }, { kart: 1, pan: -0.2 }, { kart: 2, pan: 0.2 }, { kart: 3, pan: 0.6 }]);
@@ -352,7 +469,7 @@ describe("engines", () => {
     expect(bus.layers().map((l) => l.cue)).toEqual(["kart_engine_electric_lo"]);
     for (let i = 0; i < 30; i++) frame([kart(0, { speed: 8 }), kart(1, { speed: 8 }), kart(2, { speed: 8 }), kart(3, { speed: 8 })]);
     const layers = bus.layers();
-    expect(new Set(layers.map((l) => l.cue))).toEqual(new Set(["kart_engine_light_lo", "kart_engine_middle_lo", "kart_engine_heavy_lo", "kart_engine_electric_lo"]));
+    expect(new Set(layers.map((l) => familyOf(l.cue)))).toEqual(new Set(["light", "middle", "heavy", "electric"]));
     expect(new Set(layers.map((l) => l.params.pan)).size).toBe(4);
   });
 
@@ -360,8 +477,8 @@ describe("engines", () => {
     const { bus, audio, local } = setup([{ kart: 0, pan: -0.6 }, { kart: 1, pan: -0.2 }, { kart: 2, pan: 0.2 }, { kart: 3, pan: 0.6 }]);
     const racers = (["bramble", "rivet", "pepper", "juniper"] as const).map((character, id) => ({ id, name: character, colour: "#fff", player: id, character }));
     for (let i = 0; i < 30; i++) audio.frame(view([kart(0, { speed: 8 }), kart(1, { speed: 8 }), kart(2, { speed: 8 }), kart(3, { speed: 8 })], { racers }), local, 1 / 60);
-    const byPan = new Map(bus.layers().map((l) => [l.params.pan, l.cue]));
-    expect([byPan.get(-0.6), byPan.get(-0.2), byPan.get(0.2), byPan.get(0.6)]).toEqual(["kart_engine_heavy_lo", "kart_engine_electric_lo", "kart_engine_light_lo", "kart_engine_middle_lo"]);
+    const byPan = new Map(bus.layers().map((l) => [l.params.pan, familyOf(l.cue)]));
+    expect([byPan.get(-0.6), byPan.get(-0.2), byPan.get(0.2), byPan.get(0.6)]).toEqual(["heavy", "electric", "light", "middle"]);
   });
 
   it("revs with speed, smoothly", () => {
@@ -385,23 +502,32 @@ describe("engines", () => {
     expect(b2.revs()).toBeLessThan(before * 1.4);
   });
 
-  it("crosses over from the low layer to the high one as the revs climb, the two in tune", () => {
+  it("crosses over from the low layer to the middle one and on to the high one as the revs climb, never more than two at once and always in tune", () => {
     const { bus, frame } = setup([{ kart: 0, pan: 0 }]);
     for (let i = 0; i < 60; i++) frame([kart(0, { speed: 5 })]);
     expect(bus.layers().map((l) => l.cue)).toEqual(["kart_engine_light_lo"]);
     for (let i = 0; i < 120; i++) frame([kart(0, { speed: 24 })]);
     const top = bus.layers();
     expect(top.map((l) => l.cue)).toEqual(["kart_engine_light_hi"]);
-    // Each layer plays near the revs it was made at.
-    expect(top[0]!.params.rate!).toBeGreaterThan(0.95);
-    expect(top[0]!.params.rate!).toBeLessThan(1.25);
-    // Half way, both play at once, in tune with each other.
-    for (let i = 0; i < 60; i++) frame([kart(0, { speed: 11 })]);
-    const both = bus.layers();
-    expect(both).toHaveLength(2);
-    const lo = both.find((l) => l.cue.endsWith("_lo"))!;
-    const hi = both.find((l) => l.cue.endsWith("_hi"))!;
-    expect(lo.params.rate! * REV_LO).toBeCloseTo(hi.params.rate! * REV_HI, 6);
+    // Each layer plays near the revs it was made at (within a quarter).
+    expect(top[0]!.params.rate!).toBeGreaterThan(0.85);
+    expect(top[0]!.params.rate!).toBeLessThan(1.3);
+    // Climbing through the speeds: the loudest layer goes lo, mid, hi; at most two sound at once, in tune with each other.
+    const loudest: string[] = [];
+    for (let speed = 3; speed <= 24; speed += 1) {
+      for (let i = 0; i < 40; i++) frame([kart(0, { speed })]);
+      const layers = bus.layers().filter((l) => l.params.volume! > 0.003);
+      expect(layers.length).toBeGreaterThanOrEqual(1);
+      expect(layers.length).toBeLessThanOrEqual(2);
+      const heard = layers.map((l) => l.params.rate! * layerRevs(l.cue));
+      expect(Math.max(...heard) - Math.min(...heard)).toBeLessThan(1e-3 * Math.max(...heard) + 0.02);
+      loudest.push(layers.sort((a, b) => b.params.volume! - a.params.volume!)[0]!.cue.split("_").at(-1)!);
+      // No layer is ever played further than about a third from the revs it was made at.
+      for (const l of layers) expect(l.params.rate!).toBeGreaterThan(0.7);
+      for (const l of layers) expect(l.params.rate!).toBeLessThan(1.4);
+    }
+    const order = loudest.filter((x, i) => i === 0 || x !== loudest[i - 1]);
+    expect(order.slice(0, 3)).toEqual(["lo", "mid", "hi"]);
   });
 
   it("hands the idle to the engine as the kart moves off", () => {
@@ -462,7 +588,15 @@ describe("engines", () => {
       frame([kart(0, { x: 0, z: 19 * t, speed: 19 }), kart(1, { x: 3.5, z: -60 + 27 * t, speed: 27 })]);
       const heard = bus.layers().filter((l) => l.params.distance! > 0);
       const truth = Math.hypot(3.5, -60 + 8 * t);
-      for (const l of heard) expect(Math.abs(l.params.distance! - truth)).toBeLessThan(0.3);
+      // Heard through the kart's own body while it is behind (up to 40 % further), exactly where it is once it is alongside or ahead.
+      const ahead = -60 + 8 * t >= 0.5;
+      for (const l of heard) {
+        if (ahead) expect(Math.abs(l.params.distance! - truth)).toBeLessThan(0.3);
+        else {
+          expect(l.params.distance!).toBeGreaterThan(truth - 0.3);
+          expect(l.params.distance!).toBeLessThan(1.4 * truth + 0.3);
+        }
+      }
       pans.push(heard[0]!.params.pan!);
     }
     // From the left (+x is the kart's left), most so alongside.
@@ -477,7 +611,7 @@ describe("engines", () => {
         .layers()
         .filter((l) => l.params.distance! > 0)
         .sort((a, b) => b.params.volume! - a.params.volume!)[0]!;
-      return heard.params.rate! * (heard.cue.endsWith("_lo") ? REV_LO : REV_HI);
+      return heard.params.rate! * layerRevs(heard.cue);
     };
     const coming = revsAt(-25);
     const going = revsAt(25);
@@ -799,7 +933,7 @@ describe("pause, mute and dispose", () => {
   it("falls silent while paused and comes back on resume", () => {
     const { bus, player, audio, frame } = setup([{ kart: 0, pan: 0 }]);
     for (let i = 0; i < 10; i++) frame([kart(0, { speed: 10 })]);
-    expect(bus.running("kart_engine_light_lo")).toBe(1);
+    expect(bus.layers().length).toBeGreaterThan(0);
     expect(bus.running("kart_amb_breeze")).toBe(2);
     audio.pause();
     expect(bus.loops.every((l) => l.stopped)).toBe(true);
@@ -809,7 +943,7 @@ describe("pause, mute and dispose", () => {
     audio.resume();
     expect(player.paused).toBe(false);
     frame([kart(0, { speed: 10 })]);
-    expect(bus.running("kart_engine_light_lo")).toBe(1);
+    expect(bus.layers().length).toBeGreaterThan(0);
   });
 
   it("lets go of the loops when muted", () => {
@@ -820,7 +954,7 @@ describe("pause, mute and dispose", () => {
     expect(bus.loops.every((l) => l.stopped)).toBe(true);
     bus.muted = false;
     frame([kart(0, { speed: 10 })]);
-    expect(bus.running("kart_engine_light_lo")).toBe(1);
+    expect(bus.layers().length).toBeGreaterThan(0);
   });
 
   it("stops every loop and the music on dispose, and ignores frames after", () => {

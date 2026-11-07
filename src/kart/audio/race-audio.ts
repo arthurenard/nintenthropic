@@ -39,19 +39,24 @@ import {
   PLAYER_PITCH,
   REV_HI,
   REV_LO,
+  REV_MID,
   SURFACE_CUES,
   crowdTrim,
   doppler,
+  draftTarget,
   driftTarget,
   ease,
+  earDistance,
   engineFamily,
   engineTarget,
   gridFlare,
   engineWork,
+  gearIndex,
   gritShare,
   layerMix,
   rivalLevel,
   surfaceTarget,
+  TOP_SPEED,
   windTarget,
 } from "./engines";
 import { type Order, ordersFor } from "./events";
@@ -119,6 +124,9 @@ export interface RaceAudioStats {
   drones: number;
   /** The wind round the player's own karts. */
   winds: number;
+  /** The slipstream's air round the player's own karts, and a barrier scraped along. */
+  drafts: number;
+  scrapes: number;
   /** Engine loops running (two layers crossing over, the rasp, the idle, the growl), over every kart heard. */
   engineLoops: number;
   /** The place's beds running. */
@@ -215,6 +223,7 @@ interface EngineVoice {
   /** The kart's own pitch offset (two players with one engine are still two karts). */
   pitch: number;
   lo: Layer;
+  mid: Layer;
   hi: Layer;
   grit: Layer;
   idle: Layer;
@@ -236,6 +245,9 @@ interface EngineVoice {
   /** Lifting off after pulling: the exhaust may pop (the player's own karts). */
   armed: boolean;
   poppedAt: number;
+  /** The gear it was in a frame ago (a step up under power barks), and when it last shifted. */
+  gear: number;
+  shiftedAt: number;
   /** Another kart: which side of its listener it was on, ahead (1) or behind (-1), and when it last swished by. */
   side: number;
   passedAt: number;
@@ -322,6 +334,13 @@ class RaceAudioImpl implements RaceAudio {
   private readonly seekers = new Map<number, Looper & { lastDistance: number }>();
   private readonly drones = new Map<number, Looper>();
   private readonly winds = new Map<number, Looper>();
+  /** The slipstream's torn air round the player's own karts in a wake. */
+  private readonly drafts = new Map<number, Looper>();
+  /** A barrier scraped along: the loop, and until when the contact holds (a wall event feeds it). */
+  private readonly scrapes = new Map<number, Looper>();
+  private readonly scrapeUntil = new Map<number, { until: number; strength: number }>();
+  /** A squeal's chirp: the spark level it last had, and the bend still to settle (1 at a step up, falling away). */
+  private readonly chirps = new Map<number, { level: number; bend: number }>();
   /** The place each of the player's own karts was last heard at. */
   private readonly places = new Map<number, { place: number; at: number }>();
   private readonly rolls = new Map<number, { next: number; count: number }>();
@@ -573,7 +592,9 @@ class RaceAudioImpl implements RaceAudio {
       seekers: this.seekers.size,
       drones: this.drones.size,
       winds: this.winds.size,
-      engineLoops: [...this.engines.values()].reduce((a, v) => a + [v.lo, v.hi, v.grit, v.idle, v.growl].filter((l) => l.running).length, 0),
+      drafts: this.drafts.size,
+      scrapes: this.scrapes.size,
+      engineLoops: [...this.engines.values()].reduce((a, v) => a + [v.lo, v.mid, v.hi, v.grit, v.idle, v.growl].filter((l) => l.running).length, 0),
       ambience: this.beds.filter((b) => b.layer.running).length,
       fired: this.fired,
       music: this.playingKey,
@@ -652,6 +673,7 @@ class RaceAudioImpl implements RaceAudio {
       this.seen.push(e.id);
       if (this.seen.length > 256) this.seenSet.delete(this.seen.shift()!);
       orders.push(...ordersFor(e, scene));
+      if (e.type === "wall" && localOf(scene, e.kart)) this.scrapeUntil.set(e.kart, { until: this.clock + 0.35, strength: Math.min(1, Math.max(0, e.strength)) });
       if (e.type === "final-lap" && localOf(scene, e.kart) && !this.finalSwitched) this.switchToFinal();
     }
     // The most important first; no more than a handful at once, and no cue more than twice.
@@ -691,14 +713,19 @@ class RaceAudioImpl implements RaceAudio {
 
   private engineLoops(scene: Scene, dt: number): void {
     // Who gets an engine: every local kart, then the nearest others in earshot.
-    const wanted: { id: number; local: LocalKart | null; distance: number; pan: number; index: number; listener: number }[] = scene.locals.map((l, index) => ({
-      id: l.kart, local: l, distance: 0, pan: l.pan, index, listener: l.kart,
+    const wanted: { id: number; local: LocalKart | null; distance: number; pan: number; index: number; listener: number; ahead: number }[] = scene.locals.map((l, index) => ({
+      id: l.kart, local: l, distance: 0, pan: l.pan, index, listener: l.kart, ahead: 1,
     }));
     const others: typeof wanted = [];
     for (const k of scene.karts.values()) {
       if (localOf(scene, k.id)) continue;
       const who = listenerAt(scene, k.x, k.z);
-      if (who && who.distance <= ENGINE_RADIUS) others.push({ id: k.id, local: null, distance: who.distance, pan: who.pan, index: -1, listener: who.local.kart });
+      if (who && who.distance <= ENGINE_RADIUS) {
+        // Which way it lies from the listener's nose: a rival behind is heard through the kart's own body, a little duller.
+        const me = scene.karts.get(who.local.kart);
+        const ahead = me && who.distance > 0.5 ? ((k.x - me.x) * Math.sin(me.heading) + (k.z - me.z) * Math.cos(me.heading)) / who.distance : 1;
+        others.push({ id: k.id, local: null, distance: who.distance, pan: who.pan, index: -1, listener: who.local.kart, ahead });
+      }
     }
     others.sort((a, b) => a.distance - b.distance);
     wanted.push(...others.slice(0, Math.max(0, Math.min(MAX_RIVALS, MAX_ENGINES - wanted.length))));
@@ -724,6 +751,7 @@ class RaceAudioImpl implements RaceAudio {
           family,
           pitch: own ? PLAYER_PITCH[w.index % PLAYER_PITCH.length]! : 0.96 + 0.011 * (w.id % 8),
           lo: new Layer(open, ENGINE_LAYERS[family].lo),
+          mid: new Layer(open, ENGINE_LAYERS[family].mid),
           hi: new Layer(open, ENGINE_LAYERS[family].hi),
           grit: new Layer(open, "kart_engine_grit"),
           idle: new Layer(open, "kart_idle", 1),
@@ -740,6 +768,8 @@ class RaceAudioImpl implements RaceAudio {
           phase: (w.id * 2.399963) % (2 * Math.PI),
           armed: false,
           poppedAt: -9,
+          gear: gearIndex(Math.abs(k.speed) / TOP_SPEED),
+          shiftedAt: -9,
           side: 0,
           passedAt: -9,
         };
@@ -776,15 +806,21 @@ class RaceAudioImpl implements RaceAudio {
       const mix = layerMix(v.revs);
       // A motor does not idle: standing still, it hums low on its own low layer instead.
       const standby = IDLE_RATE[v.family] > 0 ? 0 : 0.4 * v.idling;
-      v.lo.drive(level * (v.engine * mix.lo + standby), pitch / REV_LO, w.pan, w.distance, dt);
-      v.hi.drive(level * v.engine * mix.hi, pitch / REV_HI, w.pan, w.distance, dt);
+      // The air a rival's sound crosses: further when it is behind the listener.
+      const heard = own ? 0 : earDistance(w.distance, w.ahead);
+      v.lo.drive(level * (v.engine * mix.lo + standby), pitch / REV_LO, w.pan, heard, dt);
+      v.mid.drive(level * v.engine * mix.mid, pitch / REV_MID, w.pan, heard, dt);
+      v.hi.drive(level * v.engine * mix.hi, pitch / REV_HI, w.pan, heard, dt);
       // The rasp, the idle and the growl: the player's own karts in full, others only their idle on the grid and their boost.
       const firing = GRIT_RATE[v.family];
-      v.grit.drive(own ? level * v.rasp * gritShare(v.family) * Math.min(1, 0.4 + v.engine) : 0, Math.min(2.4, pitch * firing), w.pan, w.distance, dt);
+      v.grit.drive(own ? level * v.rasp * gritShare(v.family) * Math.min(1, 0.4 + v.engine) : 0, Math.min(2.4, pitch * firing), w.pan, heard, dt);
       const idleRate = IDLE_RATE[v.family];
-      v.idle.drive(idleRate > 0 ? level * v.idling : 0, idleRate * v.pitch * (1 + 0.25 * (v.revs - 0.64)), w.pan, w.distance, dt);
-      v.growl.drive(level * v.growling * (own ? 1 : 0.6), pitch * 0.85 * (firing / 0.84), w.pan, w.distance, dt);
-      if (own) this.backfire(v, k, w.pan, trim);
+      v.idle.drive(idleRate > 0 ? level * v.idling : 0, idleRate * v.pitch * (1 + 0.25 * (v.revs - 0.64)), w.pan, heard, dt);
+      v.growl.drive(level * v.growling * (own ? 1 : 0.6), pitch * 0.85 * (firing / 0.84), w.pan, heard, dt);
+      if (own) {
+        this.backfire(v, k, w.pan, trim);
+        this.shift(v, k, v.work, w.pan, trim);
+      }
     }
   }
 
@@ -799,6 +835,20 @@ class RaceAudioImpl implements RaceAudio {
       const rate = { light: 1.15, middle: 1, heavy: 0.82, electric: 1 }[v.family];
       this.start({ cue: "kart_backfire", volume: 0.7 * trim, pan, distance: 0, rate, delay: 0, priority: 1 });
     }
+  }
+
+  /**
+   * A gear change under power (the player's own karts): the clutch's clunk, the revs cut and a bark as the next gear takes
+   * the load. The change itself is `gearIndex`, a pure function of the speed; a shift down, or off the throttle, is silent.
+   */
+  private shift(v: EngineVoice, k: KartView, work: number, pan: number, trim: number): void {
+    const gear = gearIndex(Math.abs(k.speed) / TOP_SPEED);
+    const up = gear > v.gear;
+    v.gear = gear;
+    if (!up || v.family === "electric" || k.hop > 0.1 || k.spin > 0 || k.rescue > 0 || v.work < 0.12 || this.clock - v.shiftedAt < 0.4) return;
+    v.shiftedAt = this.clock;
+    const rate = { light: 1.12, middle: 1, heavy: 0.86, electric: 1 }[v.family];
+    this.start({ cue: "kart_shift", volume: (0.45 + 0.4 * Math.min(1, work)) * trim, pan, distance: 0, rate, delay: 0, priority: 0 });
   }
 
   /** A kart going by close and fast swishes past: when it crosses from behind its listener to ahead (or back) within a few metres. */
@@ -817,7 +867,7 @@ class RaceAudioImpl implements RaceAudio {
   }
 
   private silence(v: EngineVoice): void {
-    for (const layer of [v.lo, v.hi, v.grit, v.idle, v.growl]) layer.stop();
+    for (const layer of [v.lo, v.mid, v.hi, v.grit, v.idle, v.growl]) layer.stop();
   }
 
   // --- loops that follow state ------------------------------------------------------------------------------------------------------
@@ -839,8 +889,16 @@ class RaceAudioImpl implements RaceAudio {
       // The drift's squeal (heard below, for the nearest few), and under the player's own its sparks' fizz.
       const d = driftTarget(k);
       if (d.on && near > 0.05) {
+        // A spark tier reached bends the squeal up in a chirp that settles over a fifth of a second.
+        let chirp = this.chirps.get(k.id);
+        if (!chirp) this.chirps.set(k.id, (chirp = { level: k.driftLevel, bend: 0 }));
+        if (k.driftLevel > chirp.level) chirp.bend = 1;
+        chirp.level = k.driftLevel;
+        chirp.bend = ease(chirp.bend, 0, dt, 0.18);
         const volume = d.volume * near * (own ? 1 : 0.7) * fx;
-        squeals.push({ id: k.id, own: !!own, distance: who.distance, params: { rate: d.rate, volume, pan: who.pan, distance: who.distance } });
+        squeals.push({ id: k.id, own: !!own, distance: who.distance, params: { rate: d.rate * (1 + 0.085 * chirp.bend), volume: volume * (1 + 0.15 * chirp.bend), pan: who.pan, distance: who.distance } });
+      } else if (this.chirps.has(k.id)) {
+        this.chirps.delete(k.id);
       }
       if (own) {
         let fizz = this.sparks.get(k.id);
@@ -894,6 +952,28 @@ class RaceAudioImpl implements RaceAudio {
       }
     }
     this.release(this.winds, winds);
+
+    // The torn air of another kart's wake, and a barrier scraped along (both the player's own karts only).
+    const drafts = new Set<number>();
+    const scrapes = new Set<number>();
+    for (const l of scene.locals) {
+      const k = scene.karts.get(l.kart)!;
+      const dr = draftTarget(k);
+      if (dr.volume > (this.drafts.has(l.kart) ? 0.01 : 0.04)) {
+        drafts.add(l.kart);
+        this.drive(this.drafts, l.kart, "kart_draft", { rate: dr.rate, volume: dr.volume * fx * crowdTrim(scene.locals.length), pan: l.pan, distance: 0 }, dt);
+      }
+      const rub = this.scrapeUntil.get(l.kart);
+      if (rub && this.clock < rub.until && k.hop < 0.3 && k.rescue <= 0) {
+        // The harder the hit, the shorter the rub and the less of it left: the volume follows the speed along the wall.
+        const speed = Math.abs(k.speed);
+        const volume = Math.min(1, 0.25 + speed / TOP_SPEED) * (1 - 0.5 * rub.strength) * Math.min(1, (rub.until - this.clock) / 0.12);
+        scrapes.add(l.kart);
+        this.drive(this.scrapes, l.kart, "kart_scrape", { rate: 0.8 + 0.5 * Math.min(1, speed / TOP_SPEED), volume: volume * fx * crowdTrim(scene.locals.length), pan: l.pan, distance: 0 }, dt);
+      }
+    }
+    this.release(this.drafts, drafts);
+    this.release(this.scrapes, scrapes);
 
     // Homing pucks whistle on their way; any puck's bounce off a wall is heard.
     const seekers: { id: number; distance: number; pan: number }[] = [];
@@ -970,12 +1050,14 @@ class RaceAudioImpl implements RaceAudio {
   private stopLoops(): void {
     for (const v of this.engines.values()) this.silence(v);
     this.engines.clear();
-    for (const map of [this.drifts, this.surfaces, this.seekers, this.drones, this.winds] as Map<number, Looper>[]) {
+    for (const map of [this.drifts, this.surfaces, this.seekers, this.drones, this.winds, this.drafts, this.scrapes] as Map<number, Looper>[]) {
       for (const l of map.values()) l.loop.stop();
       map.clear();
     }
     for (const fizz of this.sparks.values()) fizz.stop();
     this.sparks.clear();
+    this.chirps.clear();
+    this.scrapeUntil.clear();
     for (const bed of this.beds) bed.layer.stop();
     this.beds = [];
     this.ambienceTheme = null;
