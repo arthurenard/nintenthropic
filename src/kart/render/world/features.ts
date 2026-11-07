@@ -11,7 +11,7 @@
  * picture shows.
  */
 import { inStretch, type Surface, type TrackGeometry, type TrackTheme } from "../../track/geometry";
-import { GATE_DISTANCE, junctionGates } from "../../sim/terrain";
+import { junctionGates } from "../../sim/terrain";
 
 /** A barrier's inner face stands this far beyond the road's edge unless a verge moves it: the sim's wall. */
 export const WALL_DISTANCE = 6;
@@ -168,13 +168,14 @@ export function analyseFeatures(track: TrackGeometry): Features {
   // Where a branch leaves or joins the road there is no barrier between the two: a kart goes from one to the other.
   const gates = junctionGates(track);
   for (let i = 0; i < n; i++) {
+    // The wall eases out as the other road comes near, and is not drawn once it has more than a share of the way (see junctionGates).
     if (gates.left[i]) {
-      wallLeft[i] = Math.max(wallLeft[i]!, GATE_DISTANCE);
-      hiddenLeft[i] = 1;
+      wallLeft[i] = Math.max(wallLeft[i]!, gates.left[i]!);
+      if (gates.left[i]! > WALL_DISTANCE + 0.2) hiddenLeft[i] = 1;
     }
     if (gates.right[i]) {
-      wallRight[i] = Math.max(wallRight[i]!, GATE_DISTANCE);
-      hiddenRight[i] = 1;
+      wallRight[i] = Math.max(wallRight[i]!, gates.right[i]!);
+      if (gates.right[i]! > WALL_DISTANCE + 0.2) hiddenRight[i] = 1;
     }
   }
   for (let i = 0; i < n && !track.open; i++) {

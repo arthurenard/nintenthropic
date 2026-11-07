@@ -74,38 +74,67 @@ function spanOf(stretch: Stretch, length: number): Span {
   return { from: stretch.from * length, to: stretch.to * length };
 }
 
-/** How far beyond the road's edge a kart can go where a branch leaves it: the barrier is out of the way (a wide verge). */
-export const GATE_DISTANCE = 40;
 /** Two roads whose edges are closer than this have no barrier between them: a kart goes from one to the other. */
 export const GATE_GAP = 14;
 
+const gateCache = new WeakMap<TrackGeometry, { left: Float32Array; right: Float32Array }>();
+
 /**
  * Where a road is open to another: for each sample of `geo`, whether the other road's edge is within `GATE_GAP` on each
- * side. The main road is open to its branches and a branch to the main road, so a branch leaves it and rejoins it with no
- * barrier across the way (a flare where the two roads run together, a wedge of grass between them as they part).
+ * side (by the nearest point of the other road, not the same lap metre: a branch is mapped onto the stretch it replaces, so
+ * the same metre can be far across the infield). The main road is open to its branches and a branch to the main road, so a
+ * branch leaves it and rejoins it with no barrier across the way (a flare where the two roads run together, a wedge of grass
+ * between them as they part). Right at a junction, where the two lie on one another, the side is the way the branch goes.
  */
-export function junctionGates(geo: TrackGeometry): { left: Uint8Array; right: Uint8Array } {
+export function junctionGates(geo: TrackGeometry): { left: Float32Array; right: Float32Array } {
+  const known = gateCache.get(geo);
+  if (known) return known;
   const n = geo.samples.length;
-  const left = new Uint8Array(n);
-  const right = new Uint8Array(n);
-  const others: TrackGeometry[] = geo.open ? [(geo as unknown as { main: TrackGeometry }).main] : geo.routes;
+  const left = new Float32Array(n);
+  const right = new Float32Array(n);
+  const asRoute = (road: TrackGeometry) => road as unknown as { main: TrackGeometry; from: number; to: number };
+  const others: TrackGeometry[] = geo.open ? [asRoute(geo).main] : geo.routes;
   for (const other of others) {
-    const covers = other.open ? (other as unknown as { covers(s: number): boolean }).covers.bind(other) : () => true;
     for (let i = 0; i < n; i++) {
       const a = geo.samples[i]!;
-      if (!covers(a.s)) continue;
-      const b = other.at(a.s);
+      // A branch is only there between its junctions.
+      if (other.open) {
+        const r = asRoute(other);
+        const into = geo.delta(r.from, a.s);
+        if (into < -2 || into > r.to - r.from + 2) continue;
+      }
+      const near = other.open ? other.projectOpen(a.x, a.z) : other.projectLoop(a.x, a.z);
+      const b = near.sample;
       const dx = b.x - a.x;
       const dz = b.z - a.z;
       const d = Math.hypot(dx, dz);
-      if (d - a.width / 2 - b.width / 2 >= GATE_GAP) continue;
-      // Which side of this road the other is on: its right is (-tz, tx).
-      const lateral = dx * -a.tz + dz * a.tx;
-      if (d < 0.5 || lateral > 0) right[i] = 1;
-      if (d < 0.5 || lateral < 0) left[i] = 1;
+      const gap = d - a.width / 2 - b.width / 2;
+      if (gap >= GATE_GAP) continue;
+      // Which side of this road the other lies on, judged by where the other goes on into the stretch the branch replaces (a
+      // branch leaves at an angle, so its nearest point can lie straight behind or ahead: the side is the way it goes).
+      let toward: { x: number; z: number };
+      if (geo.open) {
+        const r = asRoute(geo);
+        const dir = near.s - r.from < r.to - near.s ? 1 : -1;
+        toward = r.main.at(near.s + dir * 36);
+      } else {
+        const r = asRoute(other);
+        const dir = near.s - r.from < r.to - near.s ? 1 : -1;
+        toward = other.at(near.s + dir * 36);
+      }
+      const lateral = (toward.x - a.x) * -a.tz + (toward.z - a.z) * a.tx;
+      // The barrier is out of the way as far as the other road's own, six metres beyond its far edge: where the two lie on one
+      // another it is the usual six, and as they part it stands farther out, and the wall each road has is the other's.
+      // It eases from the usual six (where the roads are a GATE_GAP apart) to that as they close, so the wall never jumps.
+      const needed = d + b.width / 2 + TUNING.barrierGap - a.width / 2;
+      const out = TUNING.barrierGap + Math.max(0, Math.min(1, (GATE_GAP - gap) / GATE_GAP)) * Math.max(0, needed - TUNING.barrierGap);
+      if (lateral >= 0) right[i] = Math.max(right[i]!, out);
+      if (lateral <= 0) left[i] = Math.max(left[i]!, out);
     }
   }
-  return { left, right };
+  const gates = { left, right };
+  gateCache.set(geo, gates);
+  return gates;
 }
 
 export function buildTerrain(def: TrackDef, geo: TrackGeometry): Terrain {
@@ -143,8 +172,8 @@ export function buildTerrain(def: TrackDef, geo: TrackGeometry): Terrain {
   }
   const gates = junctionGates(geo);
   for (let i = 0; i < n; i++) {
-    if (gates.left[i]) barrierLeft[i] = Math.max(barrierLeft[i]!, GATE_DISTANCE);
-    if (gates.right[i]) barrierRight[i] = Math.max(barrierRight[i]!, GATE_DISTANCE);
+    if (gates.left[i]) barrierLeft[i] = Math.max(barrierLeft[i]!, gates.left[i]!);
+    if (gates.right[i]) barrierRight[i] = Math.max(barrierRight[i]!, gates.right[i]!);
   }
   const patches: Patch[] = (def.surfaces ?? []).map((surface) => {
     const middle = surface.offset ?? 0;

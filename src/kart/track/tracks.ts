@@ -87,8 +87,8 @@ export const MEADOW_LOOP: TrackDef = {
       boostPads: [{ at: 0.8, offset: 0 }],
       landmarks: [
         { kind: "pond", at: 0.49, offset: 30, scale: 0.8 },
-        { kind: "hay-bales", at: 0.2, offset: -16 },
-        { kind: "flower-field", at: 0.7, offset: 34 },
+        { kind: "hay-bales", at: 0.2, offset: -26 },
+        { kind: "flower-field", at: 0.7, offset: -36 },
       ],
     },
     {
@@ -112,8 +112,7 @@ export const MEADOW_LOOP: TrackDef = {
       surfaces: [{ from: 0.8, to: 0.9, kind: "boost" }],
       landmarks: [
         { kind: "barn-run", at: 0.66, offset: 0, span: 30 },
-        { kind: "hay-bales", at: 0.3, offset: 16 },
-        { kind: "hay-bales", at: 0.9, offset: -16 },
+        { kind: "hay-bales", at: 0.3, offset: -20 },
       ],
     },
   ],
@@ -188,17 +187,18 @@ export const KITCHEN_RALLY: TrackDef = {
     { x: -332.1, z: -95.1 },
     { x: -327.7, z: -97.8 },
     { x: -300.7, z: -112.2 },
-    { x: -273.6, z: -126.7 },
-    { x: -255.1, z: -131.1, bank: 0.16 },
-    { x: -236.8, z: -126.1 },
-    { x: -215.4, z: -113.8 },
-    { x: -194.1, z: -101.6 },
-    { x: -181.7, z: -97.1, bank: -0.14 },
-    { x: -168.4, z: -97.1, bank: -0.14 },
-    { x: -156, z: -101.7 },
-    { x: -136.4, z: -113.2 },
-    { x: -116.9, z: -124.6 },
-    { x: -99.7, z: -129.8, bank: 0.16 },
+    { x: -273.6, z: -126.7, y: 0.1 },
+    // Up onto the cooker top and down off it, round a banked turn at its highest.
+    { x: -255.1, z: -131.1, y: 0.5, bank: 0.16 },
+    { x: -236.8, z: -126.1, y: 1.5 },
+    { x: -215.4, z: -113.8, y: 2.7 },
+    { x: -194.1, z: -101.6, y: 3.5 },
+    { x: -181.7, z: -97.1, y: 3.7, bank: -0.14 },
+    { x: -168.4, z: -97.1, y: 3.7, bank: -0.14 },
+    { x: -156, z: -101.7, y: 3.3 },
+    { x: -136.4, z: -113.2, y: 2.2 },
+    { x: -116.9, z: -124.6, y: 1.0 },
+    { x: -99.7, z: -129.8, y: 0.3, bank: 0.16 },
     { x: -82.1, z: -126.5 },
     { x: -52.3, z: -113.1 },
     { x: -22.4, z: -99.7 },
@@ -222,6 +222,35 @@ export const KITCHEN_RALLY: TrackDef = {
   ],
   surfaces: [
     { from: 0.5531, to: 0.5784, kind: "ice" },
+    // The cooker's hob rings, a line of boost across its top for whoever keeps to the inside of the turn.
+    { from: 0.7125, to: 0.7425, kind: "boost", offset: 4, width: 3 },
+  ],
+  routes: [
+    {
+      // The cutlery drawer: out of the straight early, across the inside of the big sweeping curve, down a ramp into a drawer pulled
+      // right out of the counter (walnut walls, felt underfoot, spoons and forks laid across overhead), a pea rolling across its
+      // middle and a line of boost to be had, and up out of it onto the road again. Narrow, and a third shorter than the curve.
+      id: "cutlery-drawer",
+      kind: "shortcut",
+      from: 0.364,
+      to: 0.618,
+      width: 9,
+      flare: 28,
+      appeal: 0.85,
+      points: [
+        { x: -362, z: 98, y: -0.5 },
+        { x: -362, z: 66, y: -2.2 },
+        { x: -356, z: 28, y: -2.4 },
+        { x: -350, z: -14, y: -2.4 },
+        { x: -346, z: -52, y: -1.2 },
+      ],
+      surfaces: [{ from: 0.4, to: 0.62, kind: "boost", offset: 0, width: 3 }],
+      hazards: [{ kind: "pea", at: 0.36, motion: "cross", period: 4.4, radius: 1.5, span: 3.2 }],
+      landmarks: [
+        { kind: "drawer", at: 0.5, offset: 0, span: 78 },
+        { kind: "salt-shaker", at: 0.16, offset: 20, scale: 0.8 },
+      ],
+    },
   ],
   hazards: [
     { kind: "orange", motion: "roll", period: 4.6, radius: 2.4, offset: 0, at: 0.518, span: 0.0592 },
@@ -239,9 +268,9 @@ export const KITCHEN_RALLY: TrackDef = {
     { kind: "cookbook", at: 0.3583, offset: 34, scale: 1.2, turn: -0.4 },
     { kind: "sink", at: 0.3414, offset: 0, span: 16 },
     { kind: "window", at: 0.4216, offset: -100, scale: 2 },
-    { kind: "cereal-box", at: 0.4839, offset: 41, scale: 1.2 },
+    { kind: "cereal-box", at: 0.236, offset: 48, scale: 1.2 },
     { kind: "fork-arch", at: 0.4924, offset: 0, span: 10 },
-    { kind: "mug", at: 0.5314, offset: 45 },
+    { kind: "mug", at: 0.285, offset: -48 },
     { kind: "toaster", at: 0.7255, offset: -40, turn: 1.57 },
     { kind: "grater", at: 0.879, offset: 0, span: 40 },
     { kind: "cereal-box", at: 0.8396, offset: -34, turn: 0.4 },
@@ -342,6 +371,30 @@ export const HARBOUR_LIGHTS: TrackDef = {
     { at: 0.5, offset: -3 },
     { at: 0.74, offset: 3 },
   ],
+  routes: [
+    {
+      // The ship's deck: the quay is the quick, plain way; the other goes up a gangway onto the deck of a cargo ship moored beside
+      // the dock (four metres over the water, no barrier either side, stacks of containers and a gantry crane over it) and down a
+      // gangway at the other end. A line of boost down the deck pays for the longer way round, if nobody goes over the side.
+      id: "ship-deck",
+      kind: "split",
+      from: 0.03,
+      to: 0.157,
+      width: 10,
+      flare: 30,
+      appeal: 0.55,
+      points: [
+        { x: -14, z: 64, y: 1.3 },
+        { x: -30, z: 90, y: 3.4 },
+        { x: -30, z: 125, y: 3.6 },
+        { x: -30, z: 152, y: 3.5 },
+        { x: -18, z: 172, y: 1.5 },
+      ],
+      drops: [{ from: 0.26, to: 0.78, side: "both" }],
+      surfaces: [{ from: 0.4, to: 0.64, kind: "boost", offset: 0, width: 3 }],
+      landmarks: [{ kind: "ship-deck", at: 0.5, offset: 0, span: 84 }],
+    },
+  ],
   hazards: [
     { kind: "crab", at: 0.8509, motion: "cross", period: 5.2, radius: 1.3 },
     { kind: "crab", at: 0.8773, motion: "cross", period: 5.2, phase: 0.5, radius: 1.3 },
@@ -349,7 +402,7 @@ export const HARBOUR_LIGHTS: TrackDef = {
   ],
   landmarks: [
     { kind: "containers", at: 0.033, offset: -30 },
-    { kind: "buoy", at: 0.0826, offset: 30 },
+    { kind: "buoy", at: 0.0826, offset: 75 },
     { kind: "crane", at: 0.0991, offset: -29, scale: 1.2 },
     { kind: "ship", at: 0.0661, offset: 115, scale: 2.2 },
     { kind: "warehouse", at: 0.1322, offset: -45, scale: 1.4 },

@@ -690,13 +690,24 @@ export class RouteRoad extends TrackGeometry {
       const open = smooth01(at / flare);
       const close = smooth01((realLength - at) / flare);
       const width = (a.width + (own - a.width) * open) * (1 - close) + (b.width + (own - b.width) * close) * close;
+      const px = p.x + (q.x - p.x) * f;
+      const pz = p.z + (q.z - p.z) * f;
+      let py = p.y + (q.y - p.y) * f;
+      let pb = p.bank + (q.bank - p.bank) * f;
+      // Where it lies on the main road (the flares) it is at the main road's height and lean, and its own between them: no step.
+      if (open < 1 || close < 1) {
+        const mp = main.projectLoop(px, pz).sample;
+        const own = Math.min(open, close);
+        py = mp.y + (py - mp.y) * own;
+        pb = mp.bank + (pb - mp.bank) * own;
+      }
       samples.push({
         s: from + i * spacing,
-        x: p.x + (q.x - p.x) * f,
-        y: p.y + (q.y - p.y) * f,
-        z: p.z + (q.z - p.z) * f,
+        x: px,
+        y: py,
+        z: pz,
         width,
-        bank: (p.bank + (q.bank - p.bank) * f) * Math.min(open, close),
+        bank: pb,
         tx: 0,
         tz: 1,
         curvature: 0,

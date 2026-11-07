@@ -1,0 +1,19 @@
+import { it } from "vitest";
+import { junctionGates } from "../../sim/terrain";
+import { MEADOW_LOOP } from "../../track/tracks";
+import { makeProbe } from "./corridorProbe";
+
+it("probe", { timeout: 120000 }, () => {
+  const probe = makeProbe(MEADOW_LOOP, { along: 2, across: 1 });
+  const { geo } = probe;
+  const road = geo.routes[1]!;
+  const gm = junctionGates(geo);
+  const gr = junctionGates(road);
+  for (let s = 510; s <= 620; s += 10) {
+    const i = Math.round(s / geo.spacing);
+    const c = geo.samples[i]!;
+    const j = Math.round((s - road.origin) / road.spacing);
+    const r = road.samples[Math.max(0, Math.min(road.samples.length - 1, j))]!;
+    console.log("s", s, "main", `(${c.x.toFixed(0)},${c.z.toFixed(0)})`, "gateL/R", gm.left[i]!.toFixed(1), gm.right[i]!.toFixed(1), "route", `(${r.x.toFixed(0)},${r.z.toFixed(0)})`, "gateL/R", gr.left[j]!.toFixed(1), gr.right[j]!.toFixed(1), "sep", Math.hypot(c.x - r.x, c.z - r.z).toFixed(1));
+  }
+});

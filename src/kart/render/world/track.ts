@@ -15,7 +15,8 @@ import type { TrackGeometry, TrackSample } from "../../track/geometry";
 import { clamp } from "../math";
 import type { QualitySettings } from "../quality";
 import { Bank } from "./bank";
-import { buildBarriers, SOFT_PUSH } from "./barriers";
+import { KartSpace } from "./kartSpace";
+import { buildBarriers, onAnotherRoad, onKartGround, SOFT_PUSH } from "./barriers";
 import { MeshBuilder, rgb, scaleRgb, type Rgb, type V3 } from "./builder";
 import { SOLID_MARGIN, WALL_DISTANCE as WALL, type Features } from "./features";
 import { GROUND_SINK, type Terrain } from "./terrain";
@@ -73,6 +74,20 @@ function surfaceStripes(kind: string): [Rgb, Rgb] | null {
     default:
       return null;
   }
+}
+
+const spaces = new WeakMap<TrackGeometry, KartSpace>();
+
+/** Can a kart be at (x, z) by the sim's own rule (on any road of the track, within its barrier)? Only asked of a track with branch roads. */
+function kartCanBeAt(track: TrackGeometry, x: number, z: number): boolean {
+  const main = track.open ? (track as unknown as { main: TrackGeometry }).main : track;
+  let space = spaces.get(main);
+  if (!space) {
+    space = new KartSpace(main.def, main);
+    spaces.set(main, space);
+  }
+  const p = space.place(x, z, 70);
+  return p !== null && p.past < 0.6;
 }
 
 export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrain: Terrain, quality: QualitySettings, groundMetres = 64, own?: Features): TrackMeshes {
@@ -259,8 +274,8 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     const b = S(i + 1);
     // Bends right (+): the outside is the left (negative offset).
     const side = a.curvature > 0 ? -1 : 1;
-    // On an open edge the kerb would be the shelf's: leave it.
-    if (ctx.open(i, side) > 0.3) continue;
+    // On an open edge the kerb would be the shelf's: leave it (and where a branch road leaves, there is no edge).
+    if (ctx.open(i, side) > 0.3 || (ctx.hidden(i, side) && ctx.wall(i, side) > 6.5)) continue;
     const stripe = Math.floor(i / 2) % 2 === 0 ? colour.kerbA : colour.kerbB;
     // A kerb has a profile: it rises from the road in a short bevel, runs flat along its top, and bevels down to the verge.
     // The bevels take the light differently from the top, which is what makes the stripe read as a solid thing.
@@ -277,6 +292,10 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     ];
     const rx = -a.tz * side;
     const rz = a.tx * side;
+    // Not across another road (where a branch leaves or joins this one).
+    if (track.routes.length > 0 || open) {
+      if ([a.width / 2 - 0.1, a.width / 2 + 0.6, a.width / 2 + 1.3].some((o) => onAnotherRoad(ctx, a.x + rx * o, a.z + rz * o, 0.6))) continue;
+    }
     const slope: V3 = [rx * 0.62, 0.78, rz * 0.62];
     const slopeIn: V3 = [-rx * 0.62, 0.78, -rz * 0.62];
     const bevel = scaleRgb(stripe, 0.8);
@@ -312,10 +331,13 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       if (!tight[i] || i - last < 7) continue;
       const a = S(i);
       const side = a.curvature > 0 ? -1 : 1;
-      if (ctx.open(i, side) > 0.1 || ctx.gap(i)) continue;
+      if (ctx.open(i, side) > 0.1 || ctx.gap(i) || ctx.hidden(i, side)) continue;
       const o = side * (a.width / 2 + ctx.wall(i, side) + 1.45 + (style.barrier === "tyres" ? 0.5 : 0.2) + ((SOFT_PUSH as Record<string, number | undefined>)[style.barrier] ?? 0));
       const cx = a.x - a.tz * o;
       const cz = a.z + a.tx * o;
+      // Not on another stretch of road (a branch's bends can lie close to one another).
+      if (onKartGround(ctx, cx, cz) || onKartGround(ctx, cx + (-a.tz * side) * 1.7, cz + (a.tx * side) * 1.7)) continue;
+      if ((track.routes.length > 0 || open) && (kartCanBeAt(track, cx, cz) || kartCanBeAt(track, cx + (-a.tz * side) * 1.7, cz + (a.tx * side) * 1.7))) continue;
       const y0 = a.y + bank.liftAt(i, side * (a.width / 2)) + 0.3;
       // The viewer is on the road looking outward: f = outward direction.
       const fx = side > 0 ? -a.tz : a.tz;
@@ -506,7 +528,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       const i = Math.round(s / spacing);
       const a = S(i);
       const side = k % 2 === 0 ? 1 : -1;
-      if (ctx.open(i, side) > 0.1) continue;
+      if (ctx.open(i, side) > 0.1 || ctx.hidden(i, side)) continue;
       const o = side * (a.width / 2 + ctx.wall(i, side) + 2.4);
       const px = a.x - a.tz * o;
       const pz = a.z + a.tx * o;
