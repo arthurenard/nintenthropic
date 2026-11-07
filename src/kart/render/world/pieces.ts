@@ -325,7 +325,7 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
               yaw += rattle * 0.05;
               // The piston or the rock above it, up to the ceiling or sky.
               const up = roadY + crushTop(def) + def.radius * 6 + 14;
-              if (def.kind === "icicle") rod(x, y + 4.5 * kind.scale, z, x, up, z, 2.2 * kind.scale, ICE);
+              if (def.kind === "icicle") rod(x, y + 4.5 * kind.scale, z, x, y + 7 * kind.scale, z, 2.2 * kind.scale, ICE);
               else rod(x, y + (def.kind === "mallet" ? 5.6 : 3.4) * kind.scale, z, x, up, z, 0.9 * kind.scale, IRON);
               blobShadow(x, roadY, z, def.radius * (1.8 + 1.2 * Math.min(1, pose.warn)) * (pose.y > 0.5 ? 1 : 1.05), shade.setRGB(0.03 + 0.7 * pose.warn * pose.warn, 0.04, 0.09 * (1 - pose.warn)));
               break;

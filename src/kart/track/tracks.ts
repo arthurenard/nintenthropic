@@ -11,6 +11,7 @@
  * each of them.
  */
 import type { TrackDef } from "./geometry";
+import { crosser, pendulum, stomperRow, sweeper } from "./pieces";
 
 /**
  * The gentle opener: a long start straight over a gentle rise, up the hill
@@ -359,8 +360,9 @@ export const CANYON_RUN: TrackDef = {
     { x: -113, z: 80, y: 16 },
     { x: -122, z: 40, y: 15.6, bank: -0.16 },
     // The tumble: a lip to fly off, then down through the S-bends, each leaning its own way.
-    { x: -154.6, z: 20, y: 15.3 },
-    { x: -170.2, z: 13.3, y: 14.9 },
+    // The rope bridge: ten metres of planks over the gorge, nothing on either side.
+    { x: -154.6, z: 20, y: 15.3, width: 10 },
+    { x: -170.2, z: 13.3, y: 14.9, width: 10 },
     { x: -181.1, z: 8.3, y: 12.6 },
     { x: -200, z: -5, y: 10.4, bank: 0.18 },
     { x: -209, z: -40, y: 8.6, bank: -0.18 },
@@ -371,10 +373,10 @@ export const CANYON_RUN: TrackDef = {
     { x: -148, z: -148, y: 1.6, width: 12, bank: -0.14 },
     { x: -129, z: -172, y: 2.4 },
     { x: -90, z: -198, y: 3.4, bank: 0.15 },
-    { x: -52, z: -177, y: 2.8, bank: 0.15 },
-    // A dip on the way out of the gorge.
-    { x: -48, z: -131, y: 0.6 },
-    { x: -43, z: -95, y: 1.4, bank: -0.12 },
+    { x: -52, z: -177, y: 2.8, width: 18, bank: 0.15 },
+    // The wash: the gorge opens into a wide sandy bed, twenty-two metres across, under the rock crushers.
+    { x: -48, z: -131, y: 0.6, width: 22 },
+    { x: -43, z: -95, y: 1.4, width: 18, bank: -0.12 },
     { x: -14, z: -70, y: 0.5, bank: 0.12 },
     { x: -4, z: -35, y: 0.1 },
   ],
@@ -382,12 +384,16 @@ export const CANYON_RUN: TrackDef = {
   boostPads: [
     { at: 0.27, offset: -2 },
     { at: 0.8, offset: 2 },
+    // The brave line through the crushers' middle lane.
+    { at: 0.8755, offset: 0 },
   ],
   ramps: [
     { at: 0.3715 },
   ],
   drops: [
     { from: 0.3729, to: 0.3854, side: "both", gap: true },
+    // The rope bridge has no rails.
+    { from: 0.452, to: 0.492, side: "both" },
   ],
   verges: [
     { from: 0.1885, to: 0.3046, side: "right", distance: 24, surface: "sand" },
@@ -396,6 +402,17 @@ export const CANYON_RUN: TrackDef = {
     { kind: "tumbleweed", at: 0.0464, motion: "cross", period: 6, radius: 1.5 },
     { kind: "boulder", at: 0.6427, motion: "roll", period: 5, radius: 2.4, offset: -2.5, span: 0.0557 },
     { kind: "boulder", at: 0.6427, motion: "roll", period: 5, phase: 0.55, radius: 2.4, offset: -2.5, span: 0.0557 },
+    // The mine rails cross the ridge road: two ore carts, one each way, a lamp lit on the post before each runs.
+    crosser({ at: 0.29, reach: 10, period: 6.4 }),
+    crosser({ at: 0.299, reach: -10, period: 6.4, phase: 0.5 }),
+    // The quarry on the way down: two wrecking balls swing across the road a beat apart.
+    pendulum({ at: 0.527, reach: 4.5, period: 3.2 }),
+    pendulum({ at: 0.549, reach: 4.5, period: 3.2, phase: 0.5 }),
+    // The rails cross again out of the neck.
+    crosser({ at: 0.738, reach: 10, period: 5.8, phase: 0.2 }),
+    crosser({ at: 0.748, reach: -10, period: 5.8, phase: 0.7 }),
+    // The wash: three rock crushers in a wave (the middle lane has the boost).
+    ...stomperRow({ at: 0.862, lanes: [-6, 0, 6], period: 4.4, stagger: 0.22, radius: 2.2 }),
   ],
   landmarks: [
     { kind: "mesa", at: 0.065, offset: -88, scale: 1.6 },

@@ -99,6 +99,8 @@ export interface HazardDef {
   span?: number;
   /** "orbit": which way it turns, seen from above: 1 (default) or -1. */
   dir?: 1 | -1;
+  /** "crush": how high its underside hangs when it is up, metres (default 3.2 x radius + 2.5): a cave's icicle hangs lower than a quarry's block. */
+  top?: number;
 }
 
 /** A set piece the picture builds beside the road (a giant teapot, a ferris wheel); the sim ignores it. */

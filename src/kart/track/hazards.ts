@@ -54,7 +54,7 @@ export const CRUSH = { warn: 0.5, fall: 0.72, down: 0.8, rise: 0.9 } as const;
 
 /** How high a "crush" hazard's underside is when it is up: well clear of any kart. */
 export function crushTop(hazard: HazardDef): number {
-  return hazard.radius * 3.2 + 2.5;
+  return hazard.top ?? hazard.radius * 3.2 + 2.5;
 }
 
 /** `hazard` at race time `time` (seconds since the start; the countdown is time 0). */
