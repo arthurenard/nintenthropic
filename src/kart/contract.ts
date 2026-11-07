@@ -223,6 +223,8 @@ export interface KartView {
   surface: Surface | "road";
   /** Seconds since a trick began in the air (for its animation), 0 when none. */
   trick: number;
+  /** 1 while gliding under a parasol (a glide section, sim/air.ts), else 0. Optional: none is 0. */
+  glide?: number;
   /**
    * Seconds left of a rescue (0 when none): it fell, the drone lifts it
    * back to the road and lets it go. The picture draws it falling for the

@@ -22,6 +22,7 @@ import { GROUND_SINK, type Terrain } from "./terrain";
 import type { ThemeStyle } from "./themes";
 import { ROAD_TILE } from "./textures";
 import type { Glow, TrackBuild } from "./trackContext";
+import { buildAirPads } from "./airPads";
 import { buildFestoons, buildGapEnds, buildOpenEdges, buildPads, buildPatches, buildRamps, buildSpaceEdges, type PatchGeometry } from "./trackFeatures";
 
 /** Samples per chunk (about metres: the geometry samples every metre). */
@@ -559,6 +560,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
 
   // ── What the track adds ──────────────────────────────────────────────────
   buildRamps(ctx);
+  buildAirPads(ctx);
   buildSpaceEdges(ctx);
   buildFestoons(ctx);
   const pads = buildPads(ctx);

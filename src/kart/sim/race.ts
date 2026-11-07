@@ -200,6 +200,7 @@ class Sim implements SimRace {
         id: k.id,
         surface: k.ground,
         trick: k.trick / TICK_HZ,
+        glide: k.flight === 4 ? 1 : 0,
         rescue: k.rescue / TICK_HZ,
         comet: k.comet / TICK_HZ,
         zapped: k.zap / TICK_HZ,

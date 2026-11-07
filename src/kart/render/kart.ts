@@ -17,6 +17,7 @@
  * Built facing +z; its left is +x (so its right is -x), which is what
  * `rotation.y = heading` expects (contract.ts).
  */
+import { Parasol } from "./parasol";
 import { AdditiveBlending, Color, Group, Mesh, MeshBasicMaterial, PlaneGeometry, Quaternion, Vector3, type Object3D, type Texture } from "three";
 import type { Emote, KartView, RacerSetup } from "../contract";
 import type { TrackGeometry } from "../track/geometry";
@@ -146,6 +147,8 @@ export class KartActor {
   private readonly shadowMat: MeshBasicMaterial;
   private readonly lightMat: MeshBasicMaterial | null = null;
   private readonly resources: { dispose(): void }[] = [];
+  /** The parasol of a glide (parasol.ts). */
+  private readonly parasol = new Parasol();
 
   private wheelSpin = 0;
   private roll = 0;
@@ -212,6 +215,7 @@ export class KartActor {
     this.buzzRate = IDLE_RATE + ((id * 5) % 15);
     this.model = factory(racer);
     this.root.add(this.model.root);
+    this.root.add(this.parasol.group);
     this.root.add(this.shadowGroup);
     const geo = new PlaneGeometry(1, 1);
     geo.rotateX(-Math.PI / 2);
@@ -236,6 +240,7 @@ export class KartActor {
 
   /** Poses the kart from `view`; `time` is the clock, for the little shakes. */
   update(view: KartView, dt: number, ctx: ActorContext, time: number): void {
+    this.parasol.update(view.rescue > 0 ? 0 : view.glide ?? 0, view.steer, dt);
     const speed = view.speed;
     const sr = clamp(Math.abs(speed) / 24, 0, 1.4);
 
