@@ -58,13 +58,27 @@ function shape(left, right, sr) {
   return { attackMs: +(((b - a) / sr) * 1000).toFixed(1), audible: +(end / sr).toFixed(2), crest: +(20 * Math.log10(peak / (rms + 1e-12))).toFixed(1) };
 }
 
+/** The loudest 50 ms of the cue as it reaches the master, dBFS RMS: how the ear judges a short sound. */
+function loud50(left, right, sr) {
+  const w = Math.max(1, Math.round(0.05 * sr));
+  let acc = 0, best = 0;
+  for (let i = 0; i < left.length; i++) {
+    acc += (left[i] * left[i] + right[i] * right[i]) / 2;
+    if (i >= w) acc -= (left[i - w] * left[i - w] + right[i - w] * right[i - w]) / 2;
+    if (acc > best) best = acc;
+  }
+  return +(10 * Math.log10(best / w + 1e-20)).toFixed(1);
+}
+
 const cues = (only ?? kartCues()).filter((c) => !c.startsWith("kart_engine") && !c.startsWith("kart_amb_") && !c.startsWith("kart_surf_"));
 const summary = {};
 for (const cue of cues) {
+  const started = performance.now();
   const r = renderCue(cue, 0);
+  const renderMs = Math.round(performance.now() - started);
   const a = analyse(r.left, r.right, r.sr);
   const s = shape(r.left, r.right, r.sr);
-  summary[cue] = { level: r.level, bus: r.bus, loop: r.loop, seconds: a.seconds, audible: s.audible, attackMs: s.attackMs, crest: s.crest, centroid: a.centroid, momentaryMax: a.momentaryMax, shortMax: a.shortMax, truePeak: a.truePeak, clipped: a.clipped, width: a.width, bands: a.bands };
+  summary[cue] = { level: r.level, bus: r.bus, loop: r.loop, seconds: a.seconds, audible: s.audible, attackMs: s.attackMs, crest: s.crest, centroid: a.centroid, loud50: loud50(r.left, r.right, r.sr), renderMs, momentaryMax: a.momentaryMax, shortMax: a.shortMax, truePeak: a.truePeak, clipped: a.clipped, width: a.width, bands: a.bands };
   writeFileSync(resolve(OUT, `${cue}.wav`), wav16(r.left, r.right, r.sr));
   if (specDir) {
     mkdirSync(specDir, { recursive: true });
@@ -72,5 +86,5 @@ for (const cue of cues) {
   }
 }
 writeFileSync(resolve(OUT, "summary.json"), JSON.stringify(summary, null, 1));
-console.log(["cue", "level", "sec", "audible", "attack ms", "crest dB", "centroid", "mom LUFS", "tpeak"].join("\t"));
-for (const [cue, m] of Object.entries(summary)) console.log([cue, m.level, m.seconds, m.audible, m.attackMs, m.crest, m.centroid, m.momentaryMax, m.truePeak].join("\t"));
+console.log(["cue", "level", "sec", "audible", "attack ms", "crest dB", "centroid", "loud50", "ms", "tpeak"].join("\t"));
+for (const [cue, m] of Object.entries(summary)) console.log([cue, m.level, m.seconds, m.audible, m.attackMs, m.crest, m.centroid, m.loud50, m.renderMs, m.truePeak].join("\t"));
