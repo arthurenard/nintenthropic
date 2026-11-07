@@ -438,3 +438,15 @@
     animation: fade-in 250ms var(--ease) backwards;
   }
 }
+
+/* The Nintenthropic wordmark in the back link: its white pill, kept whole, with a soft shadow, never a box. */
+.back-brand {
+  display: block;
+  width: auto;
+  height: 26px;
+  margin-left: 4px;
+  filter: drop-shadow(0 2px 6px rgba(5, 22, 66, 0.35));
+}
+.back-link:has(.back-brand) {
+  padding-right: 10px;
+}

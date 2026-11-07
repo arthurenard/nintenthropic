@@ -371,7 +371,7 @@ test("Reset Everything asks first, then forgets everything and starts afresh on 
   // Afresh, as on a first visit: the landing, though the reset was done in the arcade.
   await expect(page.locator("#landing")).toBeVisible();
   await expect(page.locator("#settings")).toBeHidden();
-  await expect(page.locator("#tile-arcade").getByRole("link", { name: "Play" })).toBeFocused();
+  await expect(page.locator("#tile-grip").getByRole("link", { name: "Race" })).toBeFocused();
   expect(new URL(page.url()).hash).toBe("");
   expect(await storedKeys(page)).toEqual([]);
   expect(await page.evaluate(() => localStorage.getItem("someone-else"))).toBe('"theirs"');

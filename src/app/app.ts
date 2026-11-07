@@ -579,12 +579,12 @@ export class App {
     this.applyPreferences();
     // Last, so nothing written on the way survives it.
     forgetEverything();
-    // As on the first visit: the landing, standing on Finger Guns.
+    // As on the first visit: the landing, standing on Grip Prix.
     this.route = { space: "landing", focus: null };
     history.replaceState(history.state, "", this.addressFor(this.route));
     this.renderArcade();
     this.arrive(this.route);
-    this.landing.focus("arcade");
+    this.landing.focus("grip-prix");
   }
 
   // --- for the tests and the performance report ------------------------------------------------

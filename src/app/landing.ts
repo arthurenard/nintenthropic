@@ -1,7 +1,8 @@
 /**
- * The landing: the two families of Nintenthropic as two equal, cinematic tiles - the
- * Finger Guns (the finger-pistol shooters, their posters crossfading in the dark)
- * and Grip Prix (its sunny poster) - each with the one thing to do and a quiet
+ * The landing: the two families of Nintenthropic as two cinematic tiles - Grip Prix
+ * (its sunny poster) first and large, about 80%, and Finger Guns (the finger-pistol
+ * shooters, their posters crossfading in the dark) a slim one beside it, about 20% -
+ * each with the one thing to do and a quiet
  * "How It Plays". This module fills the tiles from the games' own entries (so
  * a poster is named once, in games/index.ts), moves their art gently under a
  * mouse, and lists each gesture's steps for How It Plays.
