@@ -45,7 +45,7 @@ export interface DriveInput {
   steer: number;
   /** 0..1. With the wheel, 1 while the hands are fists: karts accelerate on their own. */
   throttle: number;
-  /** 0..1. Held at a standstill it reverses (the sim decides when). */
+  /** 0..1. Held, it slows the kart and then backs it up. */
   brake: number;
   /** Held to drift: true while the drift button is held (keys and pads; the wheel drifts with `slide`). */
   drift: boolean;

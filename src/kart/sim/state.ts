@@ -20,12 +20,13 @@ export const ITEM_USES: Readonly<Partial<Record<ItemKind, number>>> = { nitro3: 
 
 /** Millimetres (or milliseconds, or milli-anything). */
 export function q3(v: number): number {
-  return Math.round(v * 1000) / 1000;
+  // + 0: a tiny negative rounds to -0, which JSON turns into 0 (a snapshot must survive the trip unchanged).
+  return Math.round(v * 1000) / 1000 + 0;
 }
 
 /** A tenth of a milliradian. */
 export function q4(v: number): number {
-  return Math.round(v * 10000) / 10000;
+  return Math.round(v * 10000) / 10000 + 0;
 }
 
 /** An angle brought into -pi..pi. */
@@ -97,6 +98,7 @@ export interface KartState {
   boost: number;
   spin: number;
   flood: number;
+  /** The brake pedal's build-up, in ticks (it grows while the brake is held, fades when let go). Named `stand` on the wire. */
   stand: number;
   /** Ticks in a row the throttle has been on while counting down. */
   held: number;

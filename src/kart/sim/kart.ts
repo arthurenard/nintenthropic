@@ -36,7 +36,7 @@ export type Emit = (event: EventBody) => void;
 export const NO_EMIT: Emit = () => {};
 
 const HOP_TICKS = ticks(H.time);
-const REVERSE_TICKS = ticks(D.reverseDelay);
+const BRAKE_FULL = ticks(D.brakeRamp * 6);
 const LEVEL_1 = ticks(DR.level1);
 const LEVEL_2 = ticks(DR.level2);
 const LEVEL_3 = ticks(DR.level3);
@@ -655,18 +655,21 @@ function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brak
     along = Math.sqrt(Math.max(0, speedAfter * speedAfter - across * across)) * (along >= 0 ? 1 : -1);
   }
 
-  // Speeding up, braking, coasting.
+  // Speeding up, braking, coasting. The brake pulls the speed toward a target below zero (the throttle's share of the top
+  // speed, less the reverse), harder the longer it is held: no stop at zero, the kart just carries on backwards.
   if (braking) {
-    if (along > 0) along = Math.max(0, along - D.brakeDecel * ground.brake * brakeIn * TICK);
-    if (along <= 0) {
-      if (along > -D.standstill) k.stand++;
-      else k.stand = REVERSE_TICKS;
-      if (k.stand >= REVERSE_TICKS) along += ((-D.reverseTop - along) / D.reverseTau) * TICK;
-    } else {
-      k.stand = 0;
+    // Slow or backing up, the pedal is already down: backing up from rest should not wait on the build-up.
+    if (along < D.brakeRampBelow) k.stand = BRAKE_FULL;
+    else if (k.stand < BRAKE_FULL) k.stand++;
+    const press = D.brakeFloor + (1 - D.brakeFloor) * (1 - Math.exp((-k.stand * TICK) / D.brakeRamp));
+    const target = (boosted ? 1 : throttle) * top - D.reverseTop * brakeIn;
+    if (along > target) {
+      along += (target - along) * (1 - Math.exp(-D.brakeRate * ground.brake * brakeIn * press * TICK));
+    } else if (throttle > 0 && along < target) {
+      along = Math.min(target, along + ((target - along) / (D.accelTau / (ground.accel * k.mods.acceleration))) * throttle * TICK);
     }
   } else {
-    k.stand = 0;
+    k.stand = Math.max(0, k.stand - D.brakeFade);
     const drive = boosted ? 1 : throttle;
     if (drive > 0) {
       const tau = boosted ? D.boostTau : D.accelTau / (ground.accel * k.mods.acceleration);
