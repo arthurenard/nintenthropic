@@ -229,7 +229,7 @@ describe("events become sounds", () => {
     ["orange sparks", ev("drift-level", { kart: 0, level: 2 }), ["kart_spark_orange"]],
     ["the hottest sparks", ev("drift-level", { kart: 0, level: 3 }), ["kart_spark_orange"]],
     ["a slipstream's fling", ev("boost", { kart: 0, source: "draft", level: 1 }), ["kart_slingshot"]],
-    ["the hottest drift let go", ev("boost", { kart: 0, source: "drift", level: 3 }), ["kart_mini_turbo", "kart_super_turbo"]],
+    ["the hottest drift let go", ev("boost", { kart: 0, source: "drift", level: 3 }), ["kart_mini_turbo", "kart_boost_whoosh", "kart_super_turbo"]],
     ["a hard landing", ev("land", { kart: 0, boost: false, strength: 0.8 }), ["kart_land", "kart_thud"]],
     ["a kick at the lip", ev("trick", { kart: 0, kick: true }), ["kart_trick", "kart_boost_whoosh"]],
     ["a bump", ev("bump", { a: 0, b: 1, strength: 0.5 }), ["kart_bump"]],
