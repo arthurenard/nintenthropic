@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { RaceEvent, RacerSetup, TrackDef } from "../contract";
 import { TrackGeometry } from "../track/geometry";
-import { HARBOUR_LIGHTS, MEADOW_LOOP, TRACKS } from "../track/tracks";
+import { MEADOW_LOOP, TRACKS } from "../track/tracks";
+import { QUAY as HARBOUR_LIGHTS } from "./quayFixture";
 import { LOOK_STEPS, roadAhead } from "./bots";
 import { planFor, tableAt, type Corner } from "./plan";
 import { roomField } from "./packStats";

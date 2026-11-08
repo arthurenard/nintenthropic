@@ -251,10 +251,17 @@ export async function createWorld(
     const layer = buildLandmarks(routeEnv, [...(road.def.landmarks ?? [])], mats);
     own(layer);
     group.add(layer.group);
-    const moving = buildHazards(routeEnv, road.def.hazards ?? [], mats, shadowTex);
+    const routeHazards = road.def.hazards ?? [];
+    const moving = buildHazards(routeEnv, routeHazards.filter((h) => !isPiece(h)), mats, shadowTex);
     own(moving);
     group.add(moving.group);
-    return { layer, moving };
+    // A branch road's timed set pieces (a tap's drips, acorns dropping) are the instanced ones, drawn along it.
+    const routePieces: HazardLayer | null = routeHazards.some(isPiece) ? buildPieces(routeEnv, routeHazards, mats, shadowTex) : null;
+    if (routePieces) {
+      own(routePieces);
+      group.add(routePieces.group);
+    }
+    return { layer, moving, pieces: routePieces };
   });
 
   // Glows: lamps (static) and the three start lights (changing).
@@ -435,12 +442,13 @@ export async function createWorld(
       lavaAnim?.update(time);
       sky.update(time);
       backdrop?.update(time);
-      landmarks.update(time);
+      landmarks.update(time, raceTime);
       hazards.update(raceTime, dt);
       pieces.update(raceTime, dt);
       for (const r of routeLayers) {
-        r.layer.update(time);
+        r.layer.update(time, raceTime);
         r.moving.update(raceTime, dt);
+        r.pieces?.update(raceTime, dt);
       }
     },
     install(scene) {

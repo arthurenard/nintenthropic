@@ -23,6 +23,11 @@ export const PIECE_KINDS: readonly string[] = [
   "funhouse-panel",
   "mallet",
   "swing-boat",
+  // Meadow's falling acorns, Kitchen's whisk and dripping tap, Harbour's swinging container.
+  "acorn",
+  "whisk",
+  "drip",
+  "cargo-box",
 ];
 
 export function isPieceKind(kind: string): boolean {

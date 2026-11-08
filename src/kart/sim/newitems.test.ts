@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { DriveInput, RaceEvent } from "../contract";
 import { TrackGeometry } from "../track/geometry";
-import { HARBOUR_LIGHTS as HARBOUR_AS_BUILT, TRACKS } from "../track/tracks";
+import { TRACKS } from "../track/tracks";
+import { QUAY as HARBOUR_AS_BUILT } from "./quayFixture";
 import { itemOdds } from "./items";
 import { count, give, input, level, patch, race, racers, run, toGo, view } from "./testing";
 import { ITEM_KINDS } from "./state";

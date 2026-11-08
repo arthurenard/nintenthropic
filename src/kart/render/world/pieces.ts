@@ -28,13 +28,23 @@ import { crushTop, hazardAt, type HazardPose } from "../../track/hazards";
 import { isPieceKind } from "../../track/pieces";
 import { MeshBuilder, rgb, shapes, xf, type Rgb } from "./builder";
 import type { HazardLayer, LandmarkMaterials, PlaceEnv } from "./landmarks/place";
+import { SET_MODELS } from "./pieceSet";
 
 // ─── The models ──────────────────────────────────────────────────────────────
 
 /** Each model stands on y = 0 (a crusher's underside, a ball's bottom), facing +z, `radius` metres across at its widest. */
-interface PieceModel {
+export interface PieceModel {
   build(b: MeshBuilder): void;
   radius: number;
+  /** Where the piston (a crusher) or the chain (a pendulum) takes hold, metres above its foot (default: the kind's own). */
+  hang?: number;
+  /** The colours of its gantry beams and posts, and of the rod or pole from it. */
+  gantry?: Rgb;
+  rod?: Rgb;
+  /** How much of the telegraph's red it takes (default 1; a drop of water takes a little). */
+  flush?: number;
+  /** A pendulum's load lies along the road rather than along its swing. */
+  alongRoad?: boolean;
 }
 
 const stone = (k: number): Rgb => [0.55 * k, 0.36 * k, 0.24 * k];
@@ -121,6 +131,7 @@ const MODELS: Record<string, PieceModel> = {
       b.box(0.4, 3.4, 0, 0.1, 0.8, 1.2, rgb("#e63950"));
     },
   },
+  ...SET_MODELS,
 };
 
 const shapesDown = () => shapes.cone(6);
@@ -143,6 +154,14 @@ const _fwd = new Vector3(0, 0, 1);
 const _c = new Color();
 const WHITE = new Color(1, 1, 1);
 const LANES: readonly number[] = [-0.8, 0.8];
+const dressed = new Map<Rgb, Color>();
+/** A model's dress colour as a Color, made once. */
+const dress = (c: Rgb | undefined, fallback: Color): Color => {
+  if (!c) return fallback;
+  let k = dressed.get(c);
+  if (!k) dressed.set(c, (k = new Color(c[0], c[1], c[2])));
+  return k;
+};
 
 /** Reduce Motion (the page's attribute, set by app.ts): no rattle and no flicker, a steady colour change instead. */
 const isCalm = (): boolean => typeof document !== "undefined" && document.documentElement.hasAttribute("data-reduce-motion");
@@ -375,7 +394,7 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
                 // A piston up to a gantry across the road (one for each row of them), on posts beyond the barrier.
                 const centre = def.at * track.length;
                 const beamY = roadY + crushTop(def) + 4.4 * kind.scale + 2.5;
-                if (!building) rod(x, y + (def.kind === "mallet" ? 5.6 : 3.4) * kind.scale, z, x, beamY, z, 0.9 * kind.scale, IRON);
+                if (!building) rod(x, y + (model.hang ?? (def.kind === "mallet" ? 5.6 : 3.4)) * kind.scale, z, x, beamY, z, 0.9 * kind.scale, dress(model.rod, IRON));
                 if (building && !seen.has(centre)) {
                   seen.add(centre);
                   const h = track.heading(centre);
@@ -383,7 +402,7 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
                   const gx = Math.cos(h);
                   const gz = -Math.sin(h);
                   const c = track.point(centre, 0);
-                  const wood = def.kind === "mallet" ? CANDY : TIMBER;
+                  const wood = dress(model.gantry, def.kind === "mallet" ? CANDY : TIMBER);
                   rod(c.x - gx * half, beamY + 0.5, c.z - gz * half, c.x + gx * half, beamY + 0.5, c.z + gz * half, 1.1, wood);
                   rod(c.x - gx * half, beamY + 0.5, c.z - gz * half, c.x - gx * half, roadY - 2, c.z - gz * half, 1.2, wood);
                   rod(c.x + gx * half, beamY + 0.5, c.z + gz * half, c.x + gx * half, roadY - 2, c.z + gz * half, 1.2, wood);
@@ -396,8 +415,8 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
               // Chain from a trolley on a beam above the road to the ball's eye.
               const c = track.point(def.at * track.length, def.offset ?? 0);
               const hubY = roadY + 12;
-              const eyeY = y + 3.45 * kind.scale;
-              if (!building) rod(c.x, hubY, c.z, x, eyeY, z, 0.28, IRON);
+              const eyeY = y + (model.hang ?? 3.45) * kind.scale;
+              if (!building) rod(c.x, hubY, c.z, x, eyeY, z, 0.28, dress(model.rod, IRON));
               const half = track.at(def.at * track.length).width / 2 + 9;
               const h = track.heading(def.at * track.length);
               // The beam across the road, on a post at each end beyond the barrier.
@@ -410,7 +429,7 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
               }
               blobShadow(x, roadY, z, def.radius * 2.2 * Math.max(0.5, 1 - pose.y / 6), shade.setRGB(0.03, 0.04, 0.09));
               tilt = 0;
-              yaw = 0;
+              yaw = model.alongRoad ? h : 0;
               break;
             }
             case "slide": {
@@ -442,10 +461,10 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
               // The pole from the hub to the ball, and (once for the whole sweeper) a post at the hub.
               const c = track.point(def.at * track.length, def.offset ?? 0);
               const hubKey = def.at * 1e4 + (def.offset ?? 0);
-              if (!building) rod(c.x, roadY + 1.2, c.z, x, roadY + 1.3 * kind.scale, z, 0.5, def.kind === "arm-ball" ? CANDY : IRON);
+              if (!building) rod(c.x, roadY + 1.2, c.z, x, roadY + 1.3 * kind.scale, z, 0.5, dress(model.rod, def.kind === "arm-ball" ? CANDY : IRON));
               if (building && !seen.has(hubKey)) {
                 seen.add(hubKey);
-                rod(c.x, roadY, c.z, c.x, roadY + 5.5, c.z, 1.1, def.kind === "arm-ball" ? CANDY : IRON);
+                rod(c.x, roadY, c.z, c.x, roadY + 5.5, c.z, 1.1, dress(model.rod, def.kind === "arm-ball" ? CANDY : IRON));
                 rod(c.x, roadY + 5.5, c.z, c.x, roadY + 6.3, c.z, 1.6, GOLD);
               }
               blobShadow(x, roadY, z, def.radius * 2.2, shade.setRGB(0.03, 0.04, 0.09));
@@ -464,7 +483,7 @@ export function buildPieces(env: PlaceEnv, defs: readonly HazardDef[], mats: Lan
           } else {
             mesh.setMatrixAt(i, _m.compose(_p.set(x, y, z), _q, _s.set(sx, sx, sx)));
           }
-          mesh.setColorAt(i, flush(pose.warn, time, tint));
+          mesh.setColorAt(i, flush(pose.warn * (model.flush ?? 1), time, tint));
         }
         mesh.instanceMatrix.needsUpdate = true;
         if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;

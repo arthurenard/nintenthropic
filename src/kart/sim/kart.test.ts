@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TrackGeometry } from "../track/geometry";
-import { HARBOUR_LIGHTS as HARBOUR_AS_BUILT } from "../track/tracks";
+import { QUAY as HARBOUR_AS_BUILT } from "./quayFixture";
 import { GO_TICK } from "./kart";
 import { ARENA, count, input, level, patch, race, racer, racers, run, toGo, view } from "./testing";
 

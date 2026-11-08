@@ -1638,6 +1638,9 @@ models at all); a cap on the pixels of a huge window (a 5K display at 2x draws 1
 merging the track's road, kerb and verge meshes beyond 150 m; the race giving up shadows or bloom before pixels when the
 tracker is short of the GPU (`handsFirst.ts` only knows the resolution).
 
+
+**The second-pass Meadow, Kitchen and Harbour tracks, four views, high tier** (2026-11-08, `tools/perf/bench.mjs --rounds 3` alternating the first-pass checkout and this one; draw calls vary by 25% from one frame to the next as the pack moves, so the single-frame `calls.mjs` figures were averaged over frames at 6, 12, 20 and 32 s). Frame time: Meadow 8.42 to 8.43 ms, Kitchen 7.51 to 7.34, Harbour 6.57 to 7.13 (+9%, CPU +11%: one more moving landmark, three lamps, the leaves, counterweights, and the extra swinging containers). Draw calls by the bench frame: Meadow 658 to 624, Kitchen 758 to 936 (+23%: the whisk, toast, orange and drip pieces and the mixer's and cooker's burners, all drawn per view; frame time did not move), Harbour 600 to 639; by the average of four frames: Meadow +12%, Kitchen +4%, Harbour +15%. Over the 10% budget on Harbour's frame time and calls and on Kitchen's calls: each new set piece is one more instanced draw per view, and cutting them would cut the set pieces. Time to first frame is +6% (Meadow, Kitchen) and +40% on Harbour (more landmark geometry to bake), and Kitchen's worst start-up frame is 72 ms against 15 (a one-off shader hitch before the lights); both are before the green light.
+
 ## App (`race.html`, `src/kart/app/`, `src/kart/main.ts`)
 
 Screens, in DESIGN.md's voice and style (frosted glass over one sky, big
@@ -2057,6 +2060,15 @@ front of them (or a laptop), and the TV is the host's screen.
   above them: they are met when it comes down). The picture is `render/world/airPads.ts` (flat light, and posts
   beyond the barrier and the camera's margin, like the start gantry's legs) and `render/parasol.ts`; the map draws
   the flight as a band. Mirror mode flips the pad's offset.
+  A section may be **timed**: `timed: { period, from, to, phase? }` makes its pad live only while the race clock's
+  cycle (seconds over `period`, plus `phase`) is in [from, to). It is a pure function of the clock, like a hazard,
+  so every device agrees and nothing is sent; outside the window the pad is plain road and a kart drives over it
+  (`arcLive` in sim/air.ts, asked by the sim's launch and the bots' plan). Harbour Lights' drawbridge is one
+  (`DRAWBRIDGE` in track/tracks.ts: ten seconds, live from 70% to 95%); the picture's two steel leaves either side of the road (tilting up, flat while it is down; they snap between the two with Reduce Motion), signals, bell and counterweights
+  keep the same clock (landmarks/harbourSet.ts), which is why a landmark's moving part now gets the race clock as a
+  third argument (`update(t, part, race)`, 0 before the start). The sim's racecraft, item and driving tests ran on the old Harbour Lights; its first-pass
+  layout (a long flat start, a flat bend) is kept as `sim/quayFixture.ts` for them, and `level()` in sim/testing.ts takes a
+  track's heights and air sections out.
   A planned flight never slows below a floor speed (`AIR.flightFloor` 12 m/s, a lip 8): a storm, a hit or a wall in
   mid-air cannot leave a kart hanging over the track, it carries on and lands. `sim/airTracks.test.ts` checks each air
   track (and its mirror): landing run straight, no hazard, item row or boost pad under a flight, bots fly every
@@ -2098,14 +2110,18 @@ front of them (or a laptop), and the TV is the host's screen.
   `HazardPose.warn` (0..1) is the telegraph the picture shows; `top` is how
   high a crusher hangs. Helpers `sweeper`, `stomperRow` (a wave across the
   lanes, with gaps), `pendulum` and `crosser` spread a piece over its
-  hazards. The picture draws one instanced mesh per kind, one for the parts
+  hazards. A branch road's pieces are drawn along it, like the main road's. The picture draws one instanced mesh per kind, one for the parts
   that move, one for the parts that never do (gantries, beams, rails, lamp
   posts: written once, on the first frame) and one for the shadows. Reduce
   Motion turns the rattle and the lamp's flicker into a steady colour.
   Mirror mode negates the `span` of a swing or slide (or flips `dir` when a
   slide has no span) so they stay in step with the flipped road.
   The bots read the same poses a couple of seconds ahead, as for any hazard,
-  and wait (slow to 55%) or gamble (a tighter line) by skill. Not built yet:
+  and wait (slow to 55%) or gamble (a tighter line) by skill. Round two added the acorn (crush, from an oak's bough:
+  Meadow's creek road), the drip (crush, from a tap: Kitchen's drainer), the whisk (an orbit sweeper of balloon-whisk heads
+  under the stand mixer's arm) and the cargo-box (swing: a container on a crane's spreader, Harbour's dock road). Each
+  model carries its own dress (`PieceModel` in render/world/pieces.ts: where the piston takes hold, the gantry's colour,
+  how much of the red flush it takes), so a new kind is a model in `pieceSet.ts` and a name in `PIECE_KINDS`. Not built yet:
   turntable platforms that carry a kart, floors and gates that rise. Also
   not built, from the round's wish list: the Canyon mine tunnel through the
   mesa and a swaying rope bridge, a Fun Fair funhouse of mirrors and a Ferris
@@ -2196,10 +2212,10 @@ front of them (or a laptop), and the TV is the host's screen.
 
 | Theme | Landmarks | Hazards |
 | --- | --- | --- |
-| meadow | windmill, barn, barn-run (span: a shortcut through a barn), pond, hay-bales, hot-air-balloon, sheep, flower-field | — |
+| meadow | windmill, barn, barn-run (span: a shortcut through a barn), pond, hay-bales, hot-air-balloon, sheep, flower-field, farm-gate (its lantern blinks in the last fifth of the flock's cycle), oak (the acorns' tree) | hay-roll (roll: a round bale down the hill), sheep-flock (slide: four sheep trotting across), acorn (crush) |
 | canyon | mesa, rock-arch (span), cactus-grove, water-tower, mine-cart | boulder, tumbleweed, ore-cart (slide), wrecking-ball (swing), rock-crusher (crush) |
-| harbour | crane, lighthouse, ship, ship-deck (span: a cargo ship's deck with a gantry crane), containers, warehouse, buoy | crab, forklift, swing-box (orbit: a crane's container) |
-| kitchen | teapot, fruit-bowl, toaster, grater (span: a tunnel), salt-shaker, pepper-mill, drawer (span: a drawer pulled out of the counter, cutlery across it), cookbook, cereal-box, mug, fork-arch (span), spoon-arch (span), sink, window, wall-clock | orange (roll), pea (cross), teacup (orbit), toast (bob: pops from the toaster) |
+| harbour | crane, lighthouse, ship, ship-deck (span: a cargo ship's deck with a gantry crane), containers, warehouse, buoy, drawbridge (two gate towers, signal lamps, a bell and counterweights on the race clock) | crab, forklift, swing-box (orbit: a crane's container), cargo-box (swing: a container hung from a crane) |
+| kitchen | teapot, fruit-bowl, toaster, grater (span: a tunnel), salt-shaker, pepper-mill, drawer (span: a drawer pulled out of the counter, cutlery across it), cookbook, cereal-box, mug, fork-arch (span), spoon-arch (span), sink, window, wall-clock, mixer (span: a stand mixer reaching over the road), cooker (span: the road is its hob, burner rings glowing), spatula, drainer (span: a tap over the draining board) | orange (roll), pea (cross), teacup (orbit), toast (bob: pops from the toaster), whisk (orbit: balloon-whisk heads on the mixer's arm), drip (crush: from the tap) |
 | snow | igloo, cabin, snowman, ice-arch (span), ice-cave (span: a tunnel), pine-snow, gondola, ski-jump | penguin (cross), snowball (roll), yeti (bob), icicle (crush) |
 | volcano | volcano, lava-fall, basalt-columns, stone-bridge (span), obsidian-arch (span), hot-spring | fireball (bob), boulder (roll), geyser (bob) |
 | funfair | ferris-wheel, carousel, big-top (span: a tunnel), rollercoaster (span: over the road), entrance-arch (span), food-stall, balloon-stand, hook-a-duck, helter-skelter, fireworks | teacup-ride (orbit), bumper-car (cross), arm-ball (orbit: a carousel's bar), funhouse-panel (slide), mallet (crush), swing-boat (swing) |
@@ -2213,20 +2229,25 @@ Two cups of four, as a Grand Prix is raced, and one secret.
 **Acorn Cup**
 
 1. **Meadow Loop** (meadow): the gentle opener. Up the windmill's hill
-   (eight metres, leaning into the long left-hander), down an S that leans
+   (eleven metres, leaning into the long left-hander), down an S that leans
    one way then the other, through a hollow and over a low hill to the pond
    by the banked hairpin (the duck); hay bales, a hot-air balloon drifting
    over.
-   *Design note (the redesign).* The windmill's hill is taller (ten metres) with
-   a boost line on the inside of its left-hander for whoever hugs it. Two
-   alternate routes: the **creek road**, a split off the start straight that
-   winds low through the hollow south of the windmill and fords the creek (wet
-   stones as slippery as ice) to the S-bend, against the high hill road; and
-   the **barn cut**, a shortcut across the inside of the big U-turn: up a
-   hay-bale ramp, a creek to fly over (a gap, no wall), in one door of the red
-   barn through a muddy floor and out of the other onto a strip of boost.
-   Narrow, and a fall costs more than it saves. The wow of the lap is the
-   barn.
+   *Design note (second pass; 1.19 km, a bot lap of 46 to 49 s).* **Start:** the
+   straight past the farm, a kink at the farm gate, then the road forks. **Signature
+   piece:** the windmill's hill, eleven metres of left-hander with a strip of boost on
+   its inside, and round hay bales rolling down it at you, one a lane, half a beat
+   apart. **Risk and reward:** two roads to the crest. The hill road is the fast one
+   and the bales are its price; the **creek road** winds low through the hollow, fords
+   the creek (wet stones, as slippery as ice) and climbs out under two oaks whose
+   acorns drop on a beat (a shake and a red flush, a shadow growing on the road), a
+   little slower unless you thread them. **Wow:** the glide off the crest, 76 m down
+   the hill over the pond under a parasol, ringed target on the meadow below. **Run
+   home:** the S over the meadow, the big U-turn where a flock of sheep trots across
+   every seven seconds (the farm gate's lantern starts blinking just before), the
+   **barn cut** across the inside of the U (a hay-bale ramp, a creek to fly, in one
+   door and out the other onto boost: a fall costs more than it saves), a low hill, and
+   the wide banked hairpin round the pond, the duck on its far bank.
 2. **Kitchen Rally** (kitchen): toy-sized karts on a giant kitchen counter
    in late-afternoon sun through the window. A chopping-board start
    straight; round the fruit bowl; a chicane between salt and pepper; under
@@ -2234,33 +2255,46 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    and the drone fishes you out — the duck floats in the sink); spilt milk
    (ice) on a bend; the counter's edge is a long open drop on the outside of a
    sweeping curve (the bends lean into their turns, that one highest on its
-   open outside); oranges roll down the counter; a teacup spins. Everything is
+   open outside); oranges roll down the counter; a whisk sweeps the road. Everything is
    enormous: the teapot is thirty metres tall.
-   *Design note (the redesign).* The road now climbs onto the cooker (four
-   metres up, banked at its highest, a line of boost across the hob rings on the
-   inside of the turn) and down off it. The **cutlery drawer** is a shortcut
-   across the inside of the big sweeping curve: down a ramp into a drawer pulled
-   right out of the counter (walnut walls, felt underfoot, spoons and forks laid
-   across overhead), a pea rolling across its middle, a line of boost down it,
-   and up onto the road again; a third shorter than the curve, narrow, and a
-   fall into the counter's edge is the price. The sink's jump and the oranges
-   stay. The toaster pops: two slices spring up out of the road beside it in
-   turn (a bob hazard, harmless while down).
+   *Design note (second pass; 1.24 km, a bot lap of 50 to 53 s).* **Start:** the
+   chopping-board straight under the window, then a long left-hander round the fruit
+   bowl and the salt and pepper. **Signature piece:** the **stand mixer**: its arm
+   reaches over the road at the foot of the cooker and two whisks sweep the road under it
+   (balloon heads on poles, a turn every five seconds and a bit, half a turn apart, a
+   gap you time). The road then climbs onto the cooker (four metres up, burner rings
+   glowing on the hob, a line of boost on the inside) and the spatula lying beside it is
+   a kicker for a hop. **Risk and reward:** over the sink or round it: the sink is a
+   ramp and a gap to fly (a fall and the drone fishes you out), the **drainer** is a
+   steel draining board sloping into a trough three metres below the counter (ribbed,
+   wet, as slippery as ice) with a tap above it dripping on a beat, and out the far
+   end; the **cutlery drawer** cuts across the inside of the sweeping curve (down a
+   ramp into a drawer, spoons and forks across overhead, a pea rolling across it,
+   boost along its floor, narrow). **Wow:** the toaster's slots fire you across the
+   crumb tray. **Run home:** spilt milk (ice) on a bend, slices of toast popping up in
+   turn, the grater's tunnel and the long straight back to the line.
 3. **Harbour Lights** (harbour): night on the quay, cranes and ships, a
-   humpback bridge over a dock and a swing bridge on the back straight to fly
-   over, right angles that lean a little into their turns, crabs scuttling
-   across the chicane.
-   *Design note (the redesign).* A split on the first straight: the **quay** is
-   the quick, plain way; the other goes up a gangway onto the **deck of a moored
-   cargo ship** (three and a half metres over the water, no barrier either side
-   between the gangways, stacks of containers and a gantry crane striding over
-   it) and down a gangway at the far end, a line of boost down the deck to pay
-   for the longer way if nobody goes over the side. It parts from the quay far
-   enough (and climbs late enough) that the ground between the two is never a
-   step for a kart. Also on the quay: the **ferry ramp**, a gap where the long
-   straight meets the water with a trick lip to fly it, and a crane's container
-   that swings round over the dock road on the race clock. (A drawbridge needs
-   the moving set-pieces engine, not built here.)
+   drawbridge that goes up on the clock, the lighthouse on the sea wall, a
+   cargo ship's deck to drive over, swinging containers and a ferry ramp to
+   fly, broad bends that lean a little into their turns, crabs scuttling
+   across the quay.
+   *Design note (second pass; 1.2 km, a bot lap of 48 to 50 s).* **Start:** along
+   the quay to the **drawbridge**: two stone gate towers and a footbridge across the road,
+   signal lamps over its middle, a bell, a counterweight on each tower, and a steel leaf either side of the road that stands up while it is raised. It keeps the
+   race clock: red while the leaf is down (the road is just road), amber blinking and
+   the bell for the second and a half before it goes up, green while it is raised (a
+   quarter of every ten seconds), and then the leaves are up, the lip ahead is live and a kart that takes
+   it flies the dock. Time it and you gain ground, miss it and you drive over: nothing is
+   lost. Then a left-hander up onto the sea wall and the **lighthouse hairpin** with open
+   water on its outside (the duck), and a chicane past the warehouses. **Signature piece
+   and risk and reward:** the ship. A split: the main road goes up a gangway onto the
+   **deck of a moored cargo ship** (no barrier, a gantry crane over it, a line of boost down
+   it) and off its stern in a **cannon** that fires you 56 m across the water to the pier; the
+   **quay** is the plain way round beside it, at ground level, with crabs scuttling across
+   and a forklift, and nothing to fall off. **Wow:** the cannon off the stern. **Run home:**
+   two cranes swing a container across the road each, half a beat apart (a shadow on the
+   road shows where), the dry-dock hairpin, a boost pad, and the **ferry ramp**, a gap at
+   the water with a trick lip to fly it, on the way to the line.
 4. **Canyon Run** (canyon): the steep climb (sixteen metres), the ridge road,
    a jump over a gap in the ridge, a lip to fly off into the tumble down
    S-bends that lean one way and the other, boulders rolling down the
