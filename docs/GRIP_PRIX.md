@@ -1234,9 +1234,17 @@ Fun Fair a calliope waltz that becomes a brass march; Glacier Pass icy bells, a 
 Volcano Rush driven twin guitars over rock toms; Starlight Ribbon a pumping supersaw synthwave; Five Finger Circuit a
 calypso on steel pans), the menu and lobby, the two result screens, the podium and the win and lose jingles.
 
+The menu and lobby theme, "Pick Your Kart" (`pieces/menu.ts`), is sunny jazz-funk in F at 122 bpm, written anew after
+the owner heard the first one (a flute and ukulele tune) and found it the worst of the lot: a Rhodes alone on Fmaj9, a
+punchy synth bass that pops the octave (`bass-funk`, no sub-octave, so the kick stays clear), a syncopated four-note
+hook on a bright synth lead (`lead-funk`) answered by a clavinet (`clav`), a muted guitar scratching sixteenths
+(`gtr-muted`), brass stabs on the turnarounds, a bridge on an FM e-piano an octave down over strings, the hook again a
+tone higher with horns doubling it, and a turn on C9 that falls back into the Rhodes. 40 bars, about 79 seconds. It was
+one of three candidates (with synth-pop and chiptune-pop), chosen by ear.
+
 - **Writing.** A piece is sections of bars (`pieces/*.ts`): chord symbols with extensions, a tune written note by note
   (call and response in the rests), and generated bass, comping and arpeggio parts from named rhythms (`patterns.ts`:
-  walking and walk-and-push upright lines, slap, calypso, surf, lilt, rolling, pulse and gallop basses; Charleston,
+  walking and walk-and-push upright lines, slap, funk, calypso, surf, lilt, rolling, pulse and gallop basses; Charleston,
   bossa, sparse and pushed comps). Most pieces open with an intro or a build, state the tune, answer it, change
   colour in a bridge, and finish with a *lift* (the chorus again a tone higher with the band swelling: `shift` on a
   section, with `withFinale` in `pieces/dsl.ts`) and a two-bar *turn* on the dominant that falls into the first chord,
