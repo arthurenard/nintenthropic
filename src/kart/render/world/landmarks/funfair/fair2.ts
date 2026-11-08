@@ -15,14 +15,14 @@ import { bulb, bulbLine, CANDY, CREAM, DARK, G_GOLD, G_PINK, G_RED, G_WARM, G_WH
 /**
  * A big wheel astride the road. Two A-frames splay from the hub down to feet well outside the barrier (so what is over the
  * road is a hand of steel and candy stripes more than ten metres up), a wheel of two rims with spokes and bulbs turns slowly,
- * and each of its eight cars hangs upright from its own pin, so it swings as it comes over your head.
+ * and each of its six cars hangs upright from its own pin, so it swings as it comes over your head.
  */
 export const ferrisGate: LandmarkSpec = {
   footprint: 0,
   build() {
     const R = 19;
     const HUB = 31;
-    const N = 8;
+    const N = 6;
     const ZS = 2.2;
     const W = 0.16;
     const FOOT = 20;
@@ -253,38 +253,41 @@ export const cannonTent: LandmarkSpec = {
  * standing to one side of where the cannonball lands (the road runs in front of it).
  */
 export const safetyNet: LandmarkSpec = {
-  footprint: 8,
+  footprint: 0,
   build() {
     const lit = new MeshBuilder();
     const glow = new MeshBuilder();
     const glass = new MeshBuilder();
     const W = 7.5;
     const H = 9;
-    for (const s of [-1, 1]) {
-      stripedRod(lit, [s * W, -0.5, 0], [s * W, H, 0], 0.6, 6, RED, CREAM);
-      lit.blob(s * W, H + 0.3, 0, 0.55, 0.55, 0.55, GOLD, 0);
-      lit.rod([s * W, H - 0.5, 0], [s * (W + 1.6), 0, -3.2], 0.18, STEEL);
-      bulb(glow, s * W, H + 0.95, 0, 0.5, lightAt(s + 3));
-    }
-    stripedRod(lit, [-W, H - 0.3, 0], [W, H - 0.3, 0], 0.28, 10, RED, CREAM);
-    // The net: a lattice of ropes, sagging towards its middle.
-    const sag = (x: number): number => 0.9 * (1 - (x / W) * (x / W));
-    for (let i = 0; i <= 10; i++) {
-      const x = -W + (i / 10) * 2 * W;
-      lit.rod([x, 0.6 - sag(x) * 0.3, 0], [x, H - 0.5 - sag(x), 0], 0.08, rgb("#d9cfa8"));
-    }
-    for (let j = 1; j <= 7; j++) {
-      const y = 0.6 + (j / 8) * (H - 1.2);
-      for (let i = 0; i < 10; i++) {
-        const x0 = -W + (i / 10) * 2 * W;
-        const x1 = -W + ((i + 1) / 10) * 2 * W;
-        lit.rod([x0, y - sag(x0), 0], [x1, y - sag(x1), 0], 0.08, rgb("#d9cfa8"));
+    // One landmark holds the pair (one either side of the road, so it is three draws and not six).
+    for (const c of [-24, 24]) {
+      for (const s of [-1, 1]) {
+        stripedRod(lit, [c + s * W, -0.5, 0], [c + s * W, H, 0], 0.6, 6, RED, CREAM);
+        lit.blob(c + s * W, H + 0.3, 0, 0.55, 0.55, 0.55, GOLD, 0);
+        lit.rod([c + s * W, H - 0.5, 0], [c + s * (W + 1.6), 0, -3.2], 0.18, STEEL);
+        bulb(glow, c + s * W, H + 0.95, 0, 0.5, lightAt(s + 3));
       }
+      stripedRod(lit, [c - W, H - 0.3, 0], [c + W, H - 0.3, 0], 0.28, 10, RED, CREAM);
+      // The net: a lattice of ropes, sagging towards its middle.
+      const sag = (x: number): number => 0.9 * (1 - (x / W) * (x / W));
+      for (let i = 0; i <= 10; i++) {
+        const x = -W + (i / 10) * 2 * W;
+        lit.rod([c + x, 0.6 - sag(x) * 0.3, 0], [c + x, H - 0.5 - sag(x), 0], 0.08, rgb("#d9cfa8"));
+      }
+      for (let j = 1; j <= 7; j++) {
+        const y = 0.6 + (j / 8) * (H - 1.2);
+        for (let i = 0; i < 10; i++) {
+          const x0 = -W + (i / 10) * 2 * W;
+          const x1 = -W + ((i + 1) / 10) * 2 * W;
+          lit.rod([c + x0, y - sag(x0), 0], [c + x1, y - sag(x1), 0], 0.08, rgb("#d9cfa8"));
+        }
+      }
+      // A faint glassy sheet so it reads from far away, and the padded foot.
+      glass.quad([c - W, 0.4, 0], [c + W, 0.4, 0], [c + W, H - 0.6, 0], [c - W, H - 0.6, 0], rgb("#cfe6ff"));
+      lit.box(c, 0.5, 0, 2 * W + 1, 1.0, 1.6, ramp(RED, mixRgb(RED, WHITE, 0.4)));
+      for (let k = 0; k < 7; k++) lit.box(c - W + 1 + (k / 6) * (2 * W - 2), 0.5, 0.85, 1.0, 0.9, 0.12, CREAM);
     }
-    // A faint glassy sheet so it reads from far away, and the padded foot.
-    glass.quad([-W, 0.4, 0], [W, 0.4, 0], [W, H - 0.6, 0], [-W, H - 0.6, 0], rgb("#cfe6ff"));
-    lit.box(0, 0.5, 0, 2 * W + 1, 1.0, 1.6, ramp(RED, mixRgb(RED, WHITE, 0.4)));
-    for (let k = 0; k < 7; k++) lit.box(-W + 1 + (k / 6) * (2 * W - 2), 0.5, 0.85, 1.0, 0.9, 0.12, CREAM);
     return { lit, glow, glass };
   },
 };

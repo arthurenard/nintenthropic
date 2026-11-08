@@ -2123,7 +2123,7 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    the far side and rejoin the midway at a shallow angle, with a line of boost
    at the bottom of the drop: the risk and the reward. The wow moments are the
    flight over the arch, the **Ferris wheel you drive under** (a wheel fifty
-   metres tall on legs that stand clear of the road, eight cars swinging as
+   metres tall on legs that stand clear of the road, six cars swinging as
    they come over your head), and the plunge. Then the hairpin, the dark
    funhouse tunnel, the spinning plaza, a ramp, and a chicane under the swinging
    boats for the run home. What is new: the cannon and its tent and nets, the

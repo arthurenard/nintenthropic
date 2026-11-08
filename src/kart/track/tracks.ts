@@ -697,8 +697,7 @@ export const FUN_FAIR: TrackDef = {
   landmarks: [
     { kind: "entrance-arch", at: 0.0801, offset: 0, span: 16 },
     { kind: "cannon-tent", at: 0.0215, offset: -30, scale: 1, turn: 1.57 },
-    { kind: "safety-net", at: 0.097, offset: -17 },
-    { kind: "safety-net", at: 0.097, offset: 17 },
+    { kind: "safety-net", at: 0.097, offset: 0 },
     { kind: "ferris-gate", at: 0.466, offset: 0 },
     { kind: "ferris-wheel", at: 0.0546, offset: -88, scale: 1.5 },
     { kind: "fireworks", at: 0.9836, offset: -30 },
