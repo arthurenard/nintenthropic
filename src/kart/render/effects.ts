@@ -35,6 +35,10 @@ class Sprites {
   /** Light holds its brightness most of its life and then drops away; smoke fades steadily. */
   private readonly hold: boolean;
 
+  /** The share of emissions made (1 = all): the load governor thins particles when frames run long. */
+  density = 1;
+  private credit = 0;
+
   constructor(capacity: number, additive: boolean) {
     this.n = capacity;
     this.hold = additive;
@@ -73,6 +77,11 @@ class Sprites {
     gravity = 0,
     drag = 0,
   ): void {
+    if (this.density < 1) {
+      this.credit += this.density;
+      if (this.credit < 1) return;
+      this.credit -= 1;
+    }
     const i = this.next;
     this.next = (this.next + 1) % this.n;
     this.x[i] = x;
@@ -348,6 +357,12 @@ export class Effects {
     this.now = new Sprites(160, true);
     this.streaks = new Streaks(Math.max(80, Math.round(capacity * 0.14)));
     this.group.add(this.norm.points, this.add.points, this.now.points, this.streaks.mesh);
+  }
+
+  /** Makes this share of the sparks, smoke and trails (1 = all); the lamps and glows redrawn every frame are kept. */
+  set density(share: number) {
+    this.add.density = share;
+    this.norm.density = share;
   }
 
   setDustColour(r: number, g: number, b: number): void {

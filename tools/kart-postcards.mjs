@@ -45,7 +45,7 @@ const CWEBP = process.env.CWEBP ?? (existsSync("/opt/homebrew/bin/cwebp") ? "/op
 const POSES = {
   "meadow-loop": {
     // The windmill and the tethered balloons from the outside of the left-hand bend that wraps the hill; Bun drifts with orange sparks.
-    at: 0.242,
+    at: 0.26,
     boxes: false,
     focus: 0,
     eye: { d: 16.5, off: 6.5, up: 0.5 },
@@ -78,12 +78,12 @@ const POSES = {
   "harbour-lights": {
     // Night on the quay, from behind: the karts drive away from us past the lighthouse and its beam, a crane and the town's
     // lights, and what glows is their tail lamps and Juniper's flame (head on, the headlights were big white blobs on the road).
-    at: 0.1768,
+    at: 0.235,
     boxes: false,
     focus: 4,
-    eye: { d: 34, off: -3.5, up: 0.5 },
-    target: { lm: "lighthouse", d: 0, off: 10, up: 13 },
-    fov: 58,
+    eye: { d: 30, off: -4.5, up: 0.7 },
+    target: { at: 0.235, d: 12, off: 12, up: 8 },
+    fov: 62,
     roll: 3,
     karts: [
       { id: 4, d: 21, off: 2.8, boost: 0.6, yaw: 3.4 },
@@ -93,86 +93,85 @@ const POSES = {
     ],
   },
   "canyon-run": {
-    // Under the rock arch, low, with the striped mesas behind in golden light; the karts come out of it at the camera.
-    at: 0.1393,
+    // The dynamite cannon at the end of the ridge: Pepper and Bun in the air over the gorge, Kit on the pad, the barrels beside the road, mesas in golden light.
+    at: 0.387,
     boxes: false,
     focus: 1,
-    eye: { d: 27, off: -2.4, up: 0.45 },
-    target: { d: 0, off: -3, up: 9 },
-    fov: 62,
-    roll: 3,
+    eye: { d: -10, off: 9, up: 6.5 },
+    target: { d: 52, off: 0, up: 3 },
+    fov: 64,
+    roll: -2,
     karts: [
-      { id: 1, d: 20, off: -0.4, boost: 1.2 },
-      { id: 0, d: 14.5, off: 3.4 },
-      { id: 3, d: 9, off: -3.2 },
-      { id: 2, d: 3, off: 1.4 },
+      { id: 1, d: 38, off: -0.5, boost: 1.2, up: 8.5, speed: 30 },
+      { id: 0, d: 26, off: 3.0, up: 7.5, speed: 30 },
+      { id: 3, d: 12, off: -3.0, up: 4.0, speed: 30 },
+      { id: 2, d: -2, off: 1.4, speed: 30 },
     ],
   },
   "fun-fair": {
-    // Head-on through the lit FUN FAIR entrance arch: the big wheel, fireworks and a purple dusk.
-    at: 0.0801,
+    // Under the Ferris wheel the road runs beneath: its cars swing overhead, the coaster and the lights behind, the pack driving in.
+    at: 0.466,
     boxes: false,
     focus: 2,
-    eye: { d: 34, off: -3.5, up: 0.7 },
-    target: { d: 0, off: -2, up: 7.5 },
-    fov: 58,
-    roll: 3,
+    eye: { d: -12, off: -3.5, up: 0.9 },
+    target: { d: 26, off: -1, up: 21 },
+    fov: 64,
+    roll: 2,
     karts: [
-      { id: 2, d: 26, off: 1.2, boost: 1.2, yaw: 0.35 },
-      { id: 0, d: 21, off: -3.2, yaw: -0.2 },
-      { id: 3, d: 13, off: 3.4 },
-      { id: 1, d: 7, off: -1.4 },
+      { id: 2, d: 12, off: 1.2, boost: 1.2 },
+      { id: 0, d: 8, off: -3.2 },
+      { id: 3, d: 3, off: 3.4 },
+      { id: 1, d: -2, off: -1.4 },
     ],
   },
   "glacier-pass": {
-    // The ice arch on the frozen lake, the aurora above, the karts driving away from us (a yaw of about pi turns each one
-    // round, so the camera sees tail lamps and flames; head on, their headlights were white blobs); Bun's flame trails.
-    at: 0.1898,
+    // The ski-jump: the pack gliding off the brow over the crevasse, the blue ice below the road, the mountains and the aurora beyond.
+    at: 0.6875,
     boxes: false,
     focus: 0,
-    eye: { d: 33, off: 4.5, up: 0.5 },
-    target: { d: 3, off: -3, up: 9 },
-    fov: 60,
+    eye: { d: -6, off: 12, up: 7 },
+    target: { d: 55, off: -2, up: 1 },
+    fov: 62,
     roll: -3,
     karts: [
-      { id: 0, d: 25, off: -1.0, boost: 1.2, yaw: 3.4 },
-      { id: 3, d: 19, off: 3.8, yaw: 3.0 },
-      { id: 1, d: 13, off: -4.5, yaw: 3.2 },
-      { id: 5, d: 8, off: 2.0, yaw: 3.1 },
+      { id: 0, d: 40, off: -1.0, boost: 1.2, up: 8.5, speed: 30 },
+      { id: 3, d: 28, off: 3.8, up: 8.0, speed: 30 },
+      { id: 1, d: 14, off: -4.5, up: 4.5, speed: 30 },
+      { id: 5, d: 0, off: 2.0, speed: 30 },
     ],
   },
   "volcano-rush": {
-    // Rear view into the obsidian arch: the volcano erupting beside it, lava light on everything.
-    at: 0.0581,
+    // Under the lava bombs: the crater rim, the lava tube glowing at the right, a kart boosting ahead.
+    at: 0.4215,
     boxes: false,
     focus: 1,
-    time: 12,
-    eye: { d: -43, off: 2.5, up: 1.0 },
-    target: { d: 20, off: -4, up: 11 },
-    fov: 58,
+    time: 3.4,
+    eye: { d: -22, off: 2.5, up: 2.2 },
+    target: { d: 22, off: -1, up: 6 },
+    fov: 62,
     roll: 2,
     karts: [
-      { id: 1, d: -35, off: -0.5, boost: 1.2 },
-      { id: 0, d: -29.5, off: 3.4 },
-      { id: 3, d: -24, off: -3.4 },
-      { id: 2, d: -18, off: 1.4 },
+      { id: 1, d: -8, off: -0.5, boost: 1.2 },
+      { id: 0, d: -3, off: 3.4 },
+      { id: 3, d: 2, off: -3.4 },
+      { id: 2, d: 7, off: 1.4 },
     ],
   },
   "starlight-ribbon": {
-    // Through a ring gate on a boost strip, the nebula behind, the ribbon glowing; the karts head for the gate with their
-    // backs to us (a yaw of about pi), so the glow is a tail flame, not a headlight blob.
-    at: 0.1722,
+    // The ribbon at the fork: the comet trail splitting off beside the aurora, meteors on the horizon.
+    at: 0.082,
     boxes: false,
     focus: 3,
-    eye: { d: 30, off: -3.5, up: 0.7 },
-    target: { d: 0, off: -1, up: 6.5 },
-    fov: 60,
-    roll: 3,
+    time: 2.0,
+    eye: { d: -22, off: 2.5, up: 2.4 },
+    target: { d: 26, off: -5, up: 4 },
+    fov: 62,
+    roll: 2,
     karts: [
-      { id: 3, d: 21, off: 1.0, boost: 1.2, yaw: 3.3 },
-      { id: 0, d: 15, off: -4.0, yaw: 3.0 },
-      { id: 1, d: 10, off: 4.0, yaw: 3.2 },
-      { id: 5, d: 4, off: -1.2, yaw: 3.1 },
+      { id: 3, d: -8, off: 1.0, boost: 1.2 },
+      { id: 0, d: -3, off: -4.0 },
+      { id: 1, d: 2, off: 4.0 },
+      { id: 5, d: 6, off: -1.2 },
     ],
   },
   "five-finger-circuit": {

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { TrackGeometry } from "../track/geometry";
-import { HARBOUR_LIGHTS as HARBOUR_AS_BUILT } from "../track/tracks";
+import { QUAY as HARBOUR_AS_BUILT } from "./quayFixture";
 import { GO_TICK } from "./kart";
 import { ARENA, count, input, level, patch, race, racer, racers, run, toGo, view } from "./testing";
 
-/** Harbour Lights with its bridges levelled: these tests drive its start straight as the flat road it was. */
-const HARBOUR_LIGHTS = level(HARBOUR_AS_BUILT);
+/** Harbour Lights with its bridges levelled: these tests drive its start straight as the flat road it was, with no ship-deck road leaving it. */
+const HARBOUR_LIGHTS = { ...level(HARBOUR_AS_BUILT), routes: [] };
 const harbour = TrackGeometry.build(HARBOUR_LIGHTS);
 
 /** A lone player on the harbour's start straight, through the countdown. */

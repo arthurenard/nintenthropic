@@ -23,7 +23,7 @@ import { analyseFeatures, WALL_DISTANCE } from "./features";
 /** Set CORRIDOR_REPORT=1 to print what the test finds. */
 const REPORT = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.CORRIDOR_REPORT;
 
-const fmt = (o: Offender | null) => (o ? `${o.height.toFixed(2)} m at s=${o.s.toFixed(0)}, ${o.beyond.toFixed(1)} m beyond the edge` : "none");
+const fmt = (o: Offender | null) => (o ? `${o.height.toFixed(2)} m at (${o.at?.map((v) => v.toFixed(0)).join(", ")}) s=${o.s.toFixed(0)} on ${o.what},${o.beyond.toFixed(1)} m beyond the edge` : "none");
 
 describe("the drivable area", () => {
   for (const base of TRACKS) {
@@ -90,9 +90,11 @@ describe("the barrier's picture", () => {
           if (def.id !== "five-finger-circuit") expect(side.wall[i], `${def.id} hides a barrier at 6 m (sample ${i})`).toBeGreaterThan(WALL_DISTANCE);
         }
       }
-      // Canyon's hairpin cut hides plenty; the palm island's fingertips a little; the other tracks nothing.
+      // Canyon's hairpin cut hides plenty; the palm island's fingertips a little; the tracks with branch roads a stretch at each junction; the others nothing.
       if (def.id === "canyon-run") expect(hidden, def.id).toBeGreaterThan(20);
       else if (def.id === "five-finger-circuit") expect(hidden, def.id).toBeGreaterThan(0);
+      // A track with branch roads has its barrier opened where a branch leaves or joins the road (no wall across the way): they hide a stretch of it.
+      else if ((def.routes ?? []).length > 0) expect(hidden, def.id).toBeGreaterThan(0);
       else expect(hidden, def.id).toBe(0);
     }
   });

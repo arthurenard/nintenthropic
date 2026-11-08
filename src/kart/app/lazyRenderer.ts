@@ -17,6 +17,7 @@ export function lazyRenderer(make: () => Promise<RaceRenderer>): RaceRenderer {
   let views: readonly number[] | null = null;
   let controls: Readonly<Record<number, ControlKind>> | null = null;
   let ceiling = 1;
+  let rivals: Readonly<Record<number, number>> | null = null;
   return {
     async load(track, racers, onProgress) {
       const made = await make();
@@ -28,6 +29,7 @@ export function lazyRenderer(make: () => Promise<RaceRenderer>): RaceRenderer {
       if (size) made.resize(...size);
       if (views) made.setViews(views);
       if (controls) made.setControls?.(controls);
+      if (rivals) made.setRivals?.(rivals);
       if (ceiling < 1) made.limitResolution?.(ceiling);
       await made.load(track, racers, onProgress);
     },
@@ -45,6 +47,10 @@ export function lazyRenderer(make: () => Promise<RaceRenderer>): RaceRenderer {
     setControls(kinds) {
       controls = kinds;
       real?.setControls?.(kinds);
+    },
+    setRivals(next) {
+      rivals = next;
+      real?.setRivals?.(next);
     },
     limitResolution(value) {
       ceiling = value;

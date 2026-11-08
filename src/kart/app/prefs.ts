@@ -6,6 +6,7 @@
  * renaming them would forget every returning player's choices.
  */
 import { CHARACTERS, characterById } from "../characters";
+import { cleanChoice } from "../rules";
 import { TIERS, lowerTier, type Tier } from "../render/quality";
 import { cleanName, defaultName } from "./format";
 import type { SoundLevels, Steering } from "./services";
@@ -18,6 +19,7 @@ const KEYS = {
   ceiling: "handy.kart.ceiling.v1",
   fps: "handy.kart.fps.v1",
   photo: "handy.kart.photo.v1",
+  rules: "handy.kart.rules.v1",
 } as const;
 
 /** How a player drives. */
@@ -283,4 +285,13 @@ export function loadFinishPhoto(storage: Storage | undefined = local()): boolean
 
 export function saveFinishPhoto(on: boolean, storage: Storage | undefined = local()): boolean {
   return write(storage, KEYS.photo, on);
+}
+
+/** The host's last Party Rules choice (rules.ts: "normal", a card, "shuffle" or "daily"); "normal" for none, or a choice this build does not know. */
+export function loadRules(storage: Storage | undefined = local()): string {
+  return cleanChoice(read<unknown>(storage, KEYS.rules));
+}
+
+export function saveRules(choice: string, storage: Storage | undefined = local()): boolean {
+  return write(storage, KEYS.rules, cleanChoice(choice));
 }

@@ -71,6 +71,13 @@ export function trackMapSvg(def: TrackDef, options: MapOptions = {}): string {
     const p = landmarkPoint(l);
     extend(p.x, p.z, 12);
   }
+  for (const rr of geo.routes) {
+    for (const c of rr.samples) extend(c.x, c.z, c.width / 2 + 10);
+    for (const l of rr.def.landmarks ?? []) {
+      const p = rr.point(l.at * geo.length, l.offset);
+      extend(p.x, p.z, 12);
+    }
+  }
   const header = 92;
   const margin = 26;
   /** The strip under the map: the height profile and the lean. */
@@ -205,6 +212,63 @@ export function trackMapSvg(def: TrackDef, options: MapOptions = {}): string {
     push(`<polyline points="${at(0, -w)} ${at(0, w)}" stroke="#111" stroke-width="5" stroke-dasharray="4 4" stroke-dashoffset="4"/>`);
     const p = geo.point(0, w + 2);
     push(`<text x="${px(p.x) + 8}" y="${py(p.z) + 4}" font-size="13" font-weight="700" fill="${ink}">START</text>`);
+  }
+
+  // The alternate routes: the branch road over the main road's map, with what it adds.
+  for (const rr of geo.routes) {
+    const rdef = rr.routeDef;
+    const colour = rdef.kind === "shortcut" ? "#ff9f0a" : "#30b0c7";
+    const rhalf = (s: number) => rr.at(s).width / 2;
+    const rat = (s: number, offset: number): string => {
+      const p = rr.point(s, offset);
+      return `${px(p.x).toFixed(1)},${py(p.z).toFixed(1)}`;
+    };
+    const rband = (from: number, to: number, lo: (s: number) => number, hi: (s: number) => number): string => {
+      const n = Math.max(2, Math.ceil((to - from) / step));
+      const a: string[] = [];
+      const b: string[] = [];
+      for (let i = 0; i <= n; i++) {
+        const s = from + ((to - from) * i) / n;
+        a.push(rat(s, lo(s)));
+        b.push(rat(s, hi(s)));
+      }
+      return [...a, ...b.reverse()].join(" ");
+    };
+    push(`<polygon points="${rband(rr.from, rr.to, (s) => -rhalf(s), (s) => rhalf(s))}" fill="${dark ? "#586478" : "#6b7280"}" stroke="${colour}" stroke-width="2.2" stroke-linejoin="round"/>`);
+    for (const d of rr.def.drops ?? []) {
+      for (const sign of [-1, 1]) {
+        if (d.gap || (sign < 0 && d.side === "right") || (sign > 0 && d.side === "left")) continue;
+        push(`<polygon points="${rband(d.from * geo.length, d.to * geo.length, (s) => sign * rhalf(s), (s) => sign * (rhalf(s) + 6))}" fill="#e5334b" opacity="0.28"/>`);
+      }
+    }
+    {
+      const n = Math.max(2, Math.ceil((rr.to - rr.from) / step));
+      const pts: string[] = [];
+      for (let i = 0; i <= n; i++) pts.push(rat(rr.from + ((rr.to - rr.from) * i) / n, 0));
+      push(`<polyline points="${pts.join(" ")}" fill="none" stroke="#f6f6f2" stroke-width="1" stroke-dasharray="8 10" opacity="0.8"/>`);
+    }
+    for (const pad of rr.def.boostPads ?? []) {
+      const s = pad.at * geo.length;
+      push(`<polygon points="${rband(s - 3.5, s + 3.5, () => pad.offset - 3, () => pad.offset + 3)}" fill="${GROUND_COLOUR.boost}" stroke="#4a5a00" stroke-width="1"/>`);
+    }
+    for (const ramp of rr.def.ramps ?? []) {
+      const s = ramp.at * geo.length;
+      push(`<polygon points="${rband(s - 8, s, (x) => -rhalf(x), (x) => rhalf(x))}" fill="#ffd60a" opacity="0.85" stroke="#8a6d00" stroke-width="1"/>`);
+    }
+    for (const h of rr.def.hazards ?? []) {
+      const first = hazardAt(rr, h, 0);
+      push(`<circle cx="${px(first.x).toFixed(1)}" cy="${py(first.z).toFixed(1)}" r="${Math.max(4, h.radius * scale).toFixed(1)}" fill="#ff6a00" opacity="0.85" stroke="#fff" stroke-width="1.5"/>`);
+      push(`<text x="${(px(first.x) + 7).toFixed(1)}" y="${(py(first.z) - 6).toFixed(1)}" font-size="11" font-weight="700" fill="#ff6a00" stroke="${background}" stroke-width="3" paint-order="stroke">${esc(h.kind)}</text>`);
+    }
+    for (const l of rr.def.landmarks ?? []) {
+      const s = l.at * geo.length;
+      const p = rr.point(s, l.offset);
+      if (l.span) push(`<polygon points="${rband(s - l.span / 2, s + l.span / 2, (x) => -rhalf(x) - 2, (x) => rhalf(x) + 2)}" fill="#8b5cf6" opacity="0.5" stroke="#5b2fd0" stroke-width="1.5"/>`);
+      push(`<circle cx="${px(p.x).toFixed(1)}" cy="${py(p.z).toFixed(1)}" r="${l.span ? 3 : 5}" fill="#5b2fd0" stroke="#fff" stroke-width="1.5"/>`);
+      push(`<text x="${(px(p.x) + 7).toFixed(1)}" y="${(py(p.z) + 4).toFixed(1)}" font-size="11" fill="${ink}" stroke="${background}" stroke-width="3" paint-order="stroke">${esc(l.kind)}</text>`);
+    }
+    const mid = rr.point((rr.from + rr.to) / 2, rhalf((rr.from + rr.to) / 2) + 5);
+    push(`<text x="${(px(mid.x) + 4).toFixed(1)}" y="${(py(mid.z) + 4).toFixed(1)}" font-size="12" font-weight="700" fill="${colour}" stroke="${background}" stroke-width="3" paint-order="stroke">${esc(rdef.id)} (${rdef.kind}, ${Math.round(rr.realLength)} m for ${Math.round(rr.span)})</text>`);
   }
 
   // Distance marks every 100 m along the lap, to read positions off.

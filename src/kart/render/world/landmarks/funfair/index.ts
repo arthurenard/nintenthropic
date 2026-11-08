@@ -13,6 +13,7 @@ import { bumperCar, teacupRide } from "./hazards";
 import { carousel, ferrisWheel, helterSkelter } from "./rides";
 import { bigTop, entranceArch, rollercoaster } from "./spans";
 import { balloonStand, fireworks, foodStall, hookADuck } from "./stalls";
+import { FAIR2_LANDMARKS } from "./fair2";
 
 export const LANDMARKS: Record<string, LandmarkSpec> = {
   "ferris-wheel": ferrisWheel,
@@ -25,6 +26,7 @@ export const LANDMARKS: Record<string, LandmarkSpec> = {
   "hook-a-duck": hookADuck,
   "helter-skelter": helterSkelter,
   fireworks,
+  ...FAIR2_LANDMARKS,
 };
 
 export const HAZARDS: Record<string, HazardSpec> = {

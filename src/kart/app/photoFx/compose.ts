@@ -180,12 +180,12 @@ export function paintStamp(c: Ctx, x: number, y: number, w: number, h: number, l
 }
 
 /** The effects over a card at x, y, w, h at time `t`, clipped to the card. */
-export function paintFx(c: Ctx, x: number, y: number, w: number, h: number, t: number, look: Look, place: number, field: number): void {
+export function paintFx(c: Ctx, x: number, y: number, w: number, h: number, t: number, look: Look, place: number, field: number, intro?: number): void {
   c.save();
   c.beginPath();
   c.rect(x, y, w, h);
   c.clip();
   c.translate(x, y);
-  drawFx(c, w, h, t, look, flourishFor(place, field), place, false);
+  drawFx(c, w, h, t, look, flourishFor(place, field), place, false, intro);
   c.restore();
 }

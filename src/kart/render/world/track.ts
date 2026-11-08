@@ -15,7 +15,8 @@ import type { TrackGeometry, TrackSample } from "../../track/geometry";
 import { clamp } from "../math";
 import type { QualitySettings } from "../quality";
 import { Bank } from "./bank";
-import { buildBarriers, SOFT_PUSH } from "./barriers";
+import { KartSpace } from "./kartSpace";
+import { buildBarriers, onAnotherRoad, onKartGround, SOFT_PUSH } from "./barriers";
 import { MeshBuilder, rgb, scaleRgb, type Rgb, type V3 } from "./builder";
 import { SOLID_MARGIN, WALL_DISTANCE as WALL, type Features } from "./features";
 import { GROUND_SINK, type Terrain } from "./terrain";
@@ -76,13 +77,69 @@ function surfaceStripes(kind: string): [Rgb, Rgb] | null {
   }
 }
 
-export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrain: Terrain, quality: QualitySettings, groundMetres = 64): TrackMeshes {
+const spaces = new WeakMap<TrackGeometry, KartSpace>();
+
+/** Drops the triangles of `b` that stand on ground a kart can drive on of another road than `track` (compacting its arrays). */
+function cullOnOtherRoads(track: TrackGeometry, b: MeshBuilder): void {
+  const { position, normal, color, uv } = b;
+  const triangles = position.length / 9;
+  let kept = 0;
+  for (let t = 0; t < triangles; t++) {
+    const o = t * 9;
+    const x = (position[o]! + position[o + 3]! + position[o + 6]!) / 3;
+    const z = (position[o + 2]! + position[o + 5]! + position[o + 8]!) / 3;
+    if (anotherRoadHolds(track, x, z)) continue;
+    if (kept !== t) {
+      for (let k = 0; k < 9; k++) {
+        position[kept * 9 + k] = position[o + k]!;
+        normal[kept * 9 + k] = normal[o + k]!;
+        color[kept * 9 + k] = color[o + k]!;
+      }
+      if (uv.length > 0) for (let k = 0; k < 6; k++) uv[kept * 6 + k] = uv[t * 6 + k]!;
+    }
+    kept++;
+  }
+  position.length = kept * 9;
+  normal.length = kept * 9;
+  color.length = kept * 9;
+  if (uv.length > 0) uv.length = kept * 6;
+}
+
+/** Is (x, z) ground a kart can drive on, of a road other than `track` itself (the nearest by the sim's own rule)? */
+function anotherRoadHolds(track: TrackGeometry, x: number, z: number): boolean {
+  const main = track.open ? (track as unknown as { main: TrackGeometry }).main : track;
+  let space = spaces.get(main);
+  if (!space) {
+    space = new KartSpace(main.def, main);
+    spaces.set(main, space);
+  }
+  return space.insideAnother(x, z, track.route, 0.5, 70);
+}
+
+/** Can a kart be at (x, z) by the sim's own rule (on any road of the track, within its barrier)? Only asked of a track with branch roads. */
+function kartCanBeAt(track: TrackGeometry, x: number, z: number): boolean {
+  const main = track.open ? (track as unknown as { main: TrackGeometry }).main : track;
+  let space = spaces.get(main);
+  if (!space) {
+    space = new KartSpace(main.def, main);
+    spaces.set(main, space);
+  }
+  const p = space.place(x, z, 70);
+  return p !== null && p.past < 0.6;
+}
+
+export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrain: Terrain, quality: QualitySettings, groundMetres = 64, own?: Features): TrackMeshes {
   const n = track.samples.length;
   const spacing = track.spacing;
   const samples = track.samples;
-  const features = terrain.features;
+  // A branch road is built by the same code, open at both ends: its own features, no start line, no bunting.
+  const features = own ?? terrain.features;
+  const open = track.open;
+  /** Metres of road between samples (a branch's samples are spaced in the lap's metres). */
+  const realStep = spacing * track.stretch;
   const bank = Bank.of(track);
-  const S = (i: number): TrackSample => samples[((i % n) + n) % n]!;
+  const wrapI = open ? (i: number) => Math.max(0, Math.min(n - 1, i)) : (i: number) => ((i % n) + n) % n;
+  const S = (i: number): TrackSample => samples[wrapI(i)]!;
   /** A point `off` metres right of sample i's centre, lifted by dy, following the bank. */
   const P = (i: number, off: number, dy = 0): V3 => {
     const a = S(i);
@@ -99,10 +156,9 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
   }
   /** The ground's uv of four corners, as quad() wants them. */
   const groundUv = (...p: V3[]): number[] => p.flatMap((q) => [q[0] / groundMetres, q[2] / groundMetres]);
-  const chunkOf = (i: number) => Math.min(chunks - 1, Math.floor(((i % n) + n) % n / CHUNK));
+  const chunkOf = (i: number) => Math.min(chunks - 1, Math.floor(wrapI(i) / CHUNK));
   const glows: Glow[] = [];
   const additive = new MeshBuilder();
-  const wrapI = (i: number) => ((i % n) + n) % n;
   const ctx: TrackBuild = {
     track,
     style,
@@ -123,6 +179,31 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     open: (i, side) => (side < 0 ? features.dropLeft : features.dropRight)[wrapI(i)]!,
     gap: (i) => features.gap[wrapI(i)] === 1,
   };
+  // With branch roads: the barrier is not drawn where it would stand on ground a kart can drive on (of another road than this one: a
+  // point just outside this road's own barrier is outside it, so only another road's drivable area can hold it).
+  const crossed = new Uint8Array(2 * n);
+  if (track.routes.length > 0 || open) {
+    for (let i = 0; i < n; i++) {
+      const a = samples[i]!;
+      for (const side of [-1, 1] as const) {
+        if (ctx.open(i, side) > 0.5) continue;
+        // Across the barrier's thickness (its face to its far side): on the ground of another road at either.
+        for (const out of [0.3, 1.6]) {
+          const o = side * (a.width / 2 + ctx.wall(i, side) + out);
+          if (anotherRoadHolds(track, a.x - a.tz * o, a.z + a.tx * o)) crossed[2 * i + (side < 0 ? 0 : 1)] = 1;
+        }
+        const far = side * (a.width / 2 + ctx.wall(i, side) + 1.3);
+        if (kartCanBeAt(track, a.x - a.tz * far, a.z + a.tx * far)) crossed[2 * i + (side < 0 ? 0 : 1)] = 1;
+      }
+    }
+  }
+  if (track.routes.length > 0 || open) {
+    ctx.hidden = (i, side) => {
+      const k = wrapI(i);
+      const next = wrapI(i + 1);
+      return (side < 0 ? features.hiddenLeft : features.hiddenRight)[k] === 1 || crossed[2 * k + (side < 0 ? 0 : 1)] === 1 || crossed[2 * next + (side < 0 ? 0 : 1)] === 1;
+    };
+  }
   const colour = {
     kerbA: rgb(style.kerb[0]),
     kerbB: rgb(style.kerb[1]),
@@ -136,8 +217,8 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
   /** The road's up at sample i: tipped back on a climb, forward on a descent, and sideways by its lean. */
   const roadUp = (i: number): V3 => {
     const a = S(i);
-    const grade = (S(i + 1).y - S(i - 1).y) / (2 * spacing);
-    const lean = Math.tan(bank.rollAt(i * spacing));
+    const grade = (S(i + 1).y - S(i - 1).y) / (2 * realStep);
+    const lean = Math.tan(bank.rollAt(a.s));
     const x = -(grade * a.tx + lean * a.tz);
     const z = lean * a.tx - grade * a.tz;
     const len = Math.hypot(x, 1, z);
@@ -153,8 +234,8 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     const b = S(i + 1);
     const hw0 = a.width / 2;
     const hw1 = b.width / 2;
-    const v0 = (i * spacing) / ROAD_TILE;
-    const v1 = ((i + 1) * spacing) / ROAD_TILE;
+    const v0 = (i * realStep) / ROAD_TILE;
+    const v1 = ((i + 1) * realStep) / ROAD_TILE;
     // Four strips across, so a banked road is not a single tilted plane through its middle.
     const cols = bank.any ? 4 : 1;
     for (let k = 0; k < cols; k++) {
@@ -256,8 +337,8 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     const b = S(i + 1);
     // Bends right (+): the outside is the left (negative offset).
     const side = a.curvature > 0 ? -1 : 1;
-    // On an open edge the kerb would be the shelf's: leave it.
-    if (ctx.open(i, side) > 0.3) continue;
+    // On an open edge the kerb would be the shelf's: leave it (and where a branch road leaves, there is no edge).
+    if (ctx.open(i, side) > 0.3 || (ctx.hidden(i, side) && ctx.wall(i, side) > 6.5)) continue;
     const stripe = Math.floor(i / 2) % 2 === 0 ? colour.kerbA : colour.kerbB;
     // A kerb has a profile: it rises from the road in a short bevel, runs flat along its top, and bevels down to the verge.
     // The bevels take the light differently from the top, which is what makes the stripe read as a solid thing.
@@ -274,6 +355,10 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     ];
     const rx = -a.tz * side;
     const rz = a.tx * side;
+    // Not across another road (where a branch leaves or joins this one).
+    if (track.routes.length > 0 || open) {
+      if ([a.width / 2 - 0.1, a.width / 2 + 0.6, a.width / 2 + 1.3].some((o) => onAnotherRoad(ctx, a.x + rx * o, a.z + rz * o, 0.6))) continue;
+    }
     const slope: V3 = [rx * 0.62, 0.78, rz * 0.62];
     const slopeIn: V3 = [-rx * 0.62, 0.78, -rz * 0.62];
     const bevel = scaleRgb(stripe, 0.8);
@@ -309,10 +394,13 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       if (!tight[i] || i - last < 7) continue;
       const a = S(i);
       const side = a.curvature > 0 ? -1 : 1;
-      if (ctx.open(i, side) > 0.1 || ctx.gap(i)) continue;
+      if (ctx.open(i, side) > 0.1 || ctx.gap(i) || ctx.hidden(i, side)) continue;
       const o = side * (a.width / 2 + ctx.wall(i, side) + 1.45 + (style.barrier === "tyres" ? 0.5 : 0.2) + ((SOFT_PUSH as Record<string, number | undefined>)[style.barrier] ?? 0));
       const cx = a.x - a.tz * o;
       const cz = a.z + a.tx * o;
+      // Not on another stretch of road (a branch's bends can lie close to one another).
+      if (onKartGround(ctx, cx, cz) || onKartGround(ctx, cx + (-a.tz * side) * 1.7, cz + (a.tx * side) * 1.7)) continue;
+      if ((track.routes.length > 0 || open) && (kartCanBeAt(track, cx, cz) || kartCanBeAt(track, cx + (-a.tz * side) * 1.7, cz + (a.tx * side) * 1.7))) continue;
       const y0 = a.y + bank.liftAt(i, side * (a.width / 2)) + 0.3;
       // The viewer is on the road looking outward: f = outward direction.
       const fx = side > 0 ? -a.tz : a.tz;
@@ -367,10 +455,10 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
   }
 
   // ── Start line and gantry at s = 0 ───────────────────────────────────────
-  const g0 = track.at(0);
   const startLights: V3[] = [];
   let banner = { x: 0, y: 0, z: 0, yaw: 0, width: 1, height: 1 };
-  {
+  if (!open) {
+    const g0 = track.at(0);
     const bd = deco[0]!;
     const hw = g0.width / 2;
     const cols = Math.max(8, Math.round(g0.width / 0.9 / 2) * 2);
@@ -445,7 +533,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
   }
 
   // ── Bunting along the start straight, by day ─────────────────────────────
-  if (style.bunting) {
+  if (style.bunting && !open) {
     const flagColours = ["#ff453a", "#ffd60a", "#0a84ff", "#30d158", "#ffffff", "#ff9f0a", "#bf5af2"].map(rgb);
     const pole = rgb("#d8dce6");
     const string = rgb("#2b2e37");
@@ -496,13 +584,14 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     const poolPos: number[] = [];
     const poolCol: number[] = [];
     const lampEvery = 46;
-    const count = Math.floor(track.length / lampEvery);
+    const lapSpan = open ? (n - 1) * spacing : track.length;
+    const count = Math.floor(lapSpan / lampEvery);
     for (let k = 0; k < count; k++) {
-      const s = (k + 0.5) * (track.length / count);
+      const s = (k + 0.5) * (lapSpan / count);
       const i = Math.round(s / spacing);
       const a = S(i);
       const side = k % 2 === 0 ? 1 : -1;
-      if (ctx.open(i, side) > 0.1) continue;
+      if (ctx.open(i, side) > 0.1 || ctx.hidden(i, side)) continue;
       const o = side * (a.width / 2 + ctx.wall(i, side) + 2.4);
       const px = a.x - a.tz * o;
       const pz = a.z + a.tx * o;
@@ -565,6 +654,10 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
   buildFestoons(ctx);
   const pads = buildPads(ctx);
   const patches = buildPatches(ctx);
+
+  // With branch roads: nothing of this road's decoration stands on ground a kart can drive on of another road (a barrier across the way
+  // where the walls are open, a lamp or a post beside the junction).
+  if (track.routes.length > 0 || open) for (const b of deco) cullOnOtherRoads(track, b);
 
   return {
     road: road.filter((b) => !b.empty).map((b) => b.build()),

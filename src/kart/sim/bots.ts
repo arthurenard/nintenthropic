@@ -28,7 +28,8 @@ import { IDLE_INPUT, TICK, TICK_HZ, type DriveInput } from "../contract";
 import type { TrackGeometry } from "../track/geometry";
 import { hazardAt, type HazardPose } from "../track/hazards";
 import { rocketTarget } from "./items";
-import { GO_TICK, courseOf, forwardSpeed, yawRate } from "./kart";
+import { GO_TICK, courseOf, forwardSpeed, onIce, yawRate } from "./kart";
+import { onRoute, steeringRoute } from "./routes";
 import { tableAt, type Corner } from "./plan";
 import { racecraft, type Fight } from "./racecraft";
 import { clamp, q3, wrapAngle, type KartState, type World } from "./state";
@@ -355,6 +356,15 @@ const ROAD = new Float64Array(LOOK_STEPS.length * 4);
 export function roadAhead(geo: TrackGeometry, s: number, speed: number, into: Float64Array, metres?: Float64Array): void {
   const samples = geo.samples;
   for (let step = 0; step < LOOK_STEPS.length; step++) {
+    if (geo.open) {
+      // A branch road clamps at its ends.
+      const c = geo.at(s + (metres ? metres[step]! : speed * LOOK_STEPS[step]!));
+      into[4 * step] = c.x;
+      into[4 * step + 1] = c.z;
+      into[4 * step + 2] = c.tx;
+      into[4 * step + 3] = c.tz;
+      continue;
+    }
     const w = geo.wrap(s + (metres ? metres[step]! : speed * LOOK_STEPS[step]!));
     const i = Math.floor(w / geo.spacing) % samples.length;
     const a = samples[i]!;
@@ -474,10 +484,12 @@ function bendWeight(w: World, c: Corner, s: number): number {
   return 1;
 }
 
-export function botInput(w: World, k: KartState): DriveInput {
+export function botInput(world: World, k: KartState): DriveInput {
   const m = k.bot;
   if (k.t < GO_TICK) return { ...IDLE_INPUT, itemPresses: m.presses };
 
+  // The road it steers by: its own, or the branch it has chosen to take (alternate routes, routes.ts).
+  const w = onRoute(world, steeringRoute(world, k));
   const { geo, plan } = w;
   const terrain = plan.terrain;
   const fwd = forwardSpeed(k);
@@ -610,7 +622,7 @@ export function botInput(w: World, k: KartState): DriveInput {
     } else {
       m.cut = 0;
     }
-  } else if (k.skill >= B.cutSkill - 0.35 * style.verge && plan.cuts.length > 0 && k.spin === 0 && k.ground !== "ice") {
+  } else if (k.skill >= B.cutSkill - 0.35 * style.verge && plan.cuts.length > 0 && k.spin === 0 && !onIce(w, k)) {
     const nitro = (k.item === "nitro" || k.item === "nitro3") && k.roll === 0;
     // A Nitro in hand, or a boost already going (long enough, or any for the bold).
     if (nitro || k.boost > ticks(style.verge > 0.5 ? 0.6 : 1.0)) {
@@ -661,7 +673,7 @@ export function botInput(w: World, k: KartState): DriveInput {
   }
   m.steer = q3(steer);
   // A wobble on a straight (not near an edge, a ramp, a bend or ice).
-  const calm = !beside && !cutting && toRamp > 60 && k.ground !== "ice" && Math.abs(tableAt(plan, plan.curve, k.s + 10)) < B.driftCurvature;
+  const calm = !beside && !cutting && toRamp > 60 && !onIce(w, k) && Math.abs(tableAt(plan, plan.curve, k.s + 10)) < B.driftCurvature;
   steer = clamp(steer + wobble(w, k, style, calm), -1, 1);
 
   // Drifting the long bends (not on ice, not into a ramp, not across a verge), unless it lets this one go by.
@@ -671,14 +683,14 @@ export function botInput(w: World, k: KartState): DriveInput {
   if (m.drifting) {
     // A botched drift lets go at the apex, before the charge has come to much.
     const botched = takeKart?.drift === "short" && bendKart !== null && bendKart.toApex < 0;
-    const ending = bendLeft < 7 || (k.drift !== 0 && Math.sign(tableAt(plan, plan.curve, k.s + 2)) !== k.drift) || k.spin > 0 || toRamp < 30 || cutting || k.ground === "ice" || botched;
+    const ending = bendLeft < 7 || (k.drift !== 0 && Math.sign(tableAt(plan, plan.curve, k.s + 2)) !== k.drift) || k.spin > 0 || toRamp < 30 || cutting || onIce(w, k) || botched;
     const failed = k.drift === 0 && k.hop === 0;
     if (ending || failed) m.drifting = false;
   } else if (
     k.skill > 0.35 &&
     k.spin === 0 &&
     !k.offroad &&
-    k.ground !== "ice" &&
+    !onIce(w, k) &&
     !cutting &&
     toRamp > 40 &&
     takeKart?.drift !== "skip" &&

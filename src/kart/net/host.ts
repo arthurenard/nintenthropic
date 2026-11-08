@@ -37,6 +37,7 @@ import {
   type SessionClosed,
 } from "../contract";
 import { GP_RESULTS_MS, GP_STANDINGS_MS, GrandPrixRun, cupById } from "../grandprix";
+import { dealCard, effectsOf, todayKey, type CardId } from "../rules";
 import { TrackGeometry } from "../track/geometry";
 import { raceTrack } from "../track/mirror";
 import { Autopilot } from "./autopilot";
@@ -118,6 +119,8 @@ export class HostSession implements Session {
   private result: RaceResult | null = null;
   /** A Grand Prix under way (through its podium), and when (ms) its results or standings came up. */
   private gp: GrandPrixRun | null = null;
+  /** The Party Rules card dealt for the race being run (or last run), or null for none. */
+  private card: CardId | null = null;
   private gpSince = 0;
   private kartSlots: Record<number, number> = {};
   private code: string | null = null;
@@ -391,6 +394,7 @@ export class HostSession implements Session {
       karts: { ...this.kartSlots },
       race: this.raceId,
       pause: this.paused,
+      ...(this.card ? { card: this.card } : {}),
     };
     return this.lobbyCache;
   }
@@ -454,13 +458,14 @@ export class HostSession implements Session {
     if (players.length === 0) return;
     if (this.gp) {
       // On the podium: the same cup again from its first race. In a race: that race again. Between races: nothing to redo.
-      if (this.phase === "podium") this.gp = null;
+      const fresh = this.phase === "podium";
+      if (fresh) this.gp = null;
       else if (this.phase !== "racing") return;
-      this.launch(players);
+      this.launch(players, !fresh);
       return;
     }
     if (this.phase !== "racing" && this.phase !== "results") return;
-    this.launch(players);
+    this.launch(players, this.phase === "racing");
   }
 
   /** The host's: moves a Grand Prix on from its results to the standings, and from them to the next race or the podium. */
@@ -494,27 +499,30 @@ export class HostSession implements Session {
 
   /** The grid for the race about to start, and the Grand Prix it belongs to (begun here on a cup's first race). */
   private grid(players: LobbyState["players"], seed: number): ReturnType<typeof buildSetup> {
-    if (this.settings.mode !== "grand-prix" && !this.gp) return buildSetup(players, this.settings, seed);
+    const card = this.card ?? undefined;
+    if (this.settings.mode !== "grand-prix" && !this.gp) return buildSetup(players, this.settings, seed, undefined, card);
     if (!this.gp || this.gp.race === 0) {
       // A cup's first race (or its restart): the room's grid, which the cup then keeps.
       const cup = this.gp?.cup ?? cupById(this.settings.cup).id;
       const track = raceTrack(cupById(cup).tracks[0]!, this.settings.mirror);
-      const built = buildSetup(players, this.settings, seed, track);
+      const built = buildSetup(players, this.settings, seed, track, card);
       this.gp = GrandPrixRun.begin(cup, built.setup.racers);
       return built;
     }
     // The cup's later races: the players as they are now, every bot as it was, the leader on pole.
     const track = raceTrack(this.gp.track, this.settings.mirror);
-    const here = buildSetup(players, { ...this.settings, bots: false }, seed, track);
-    const racers = this.gp.grid(here.setup.racers);
+    const here = buildSetup(players, { ...this.settings, bots: false }, seed, track, card);
+    const racers = this.gp.grid(here.setup.racers, effectsOf(card).reverseGrid);
     const karts: Record<number, number> = {};
     for (const racer of racers) if (racer.player !== null) karts[racer.id] = racer.player;
-    return { setup: { ...here.setup, racers }, karts };
+    return { setup: { ...here.setup, racers, ...(card ? { rule: card } : {}) }, karts };
   }
 
   /** Builds the grid and the race and tells everyone to begin: a first start, a race again, a restart. */
-  private launch(players: LobbyState["players"]): void {
+  private launch(players: LobbyState["players"], sameCard = false): void {
     const seed = Math.floor(this.env.random() * 2 ** 32) >>> 0;
+    // The card for this race, from the host's choice (Shuffle never deals the one just played); a race begun again keeps its own.
+    if (!sameCard) this.card = dealCard(this.settings.rules, seed, todayKey(), this.card);
     const { setup, karts } = this.grid(players, seed);
     this.race = this.env.createRace(setup);
     this.raceId = seed;
@@ -556,6 +564,7 @@ export class HostSession implements Session {
       start: {
         track: this.gp ? this.gp.track : this.settings.track,
         mirror: this.settings.mirror === true,
+        ...(this.card ? { card: this.card } : {}),
         laps: setup.laps,
         seed,
         racers: setup.racers,
@@ -570,6 +579,7 @@ export class HostSession implements Session {
     this.endRace();
     this.phase = "lobby";
     this.gp = null;
+    this.card = null;
     this.result = null;
     this.kartSlots = {};
     this.paused = null;

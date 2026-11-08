@@ -3,6 +3,7 @@ import { TRACKS } from "../../track/tracks";
 import { clipExtension, shareName } from "../finishShare";
 import { gradePixels, parseFilter, stampText } from "./compose";
 import { drawFx } from "./effects";
+import { clearOf, type Scene } from "./fxKit";
 import { flourishFor, LOOKS, LOOP, lookFor } from "./looks";
 
 /** A canvas context that only writes down what it is asked to do (numbers rounded), to compare frames. */
@@ -94,6 +95,38 @@ describe("the effects", () => {
       expect(frame("meadow-loop", 0.7 + LOOP, place, 4)).toEqual(a);
       expect(a).not.toEqual(frame("meadow-loop", 0.7, 5, 8));
     }
+  });
+});
+
+describe("keeping off the face", () => {
+  const scene: Scene = { w: 400, h: 300, u: 300, t: 0 };
+  it("lets effects show in full at the edges and shrinks them over the middle of the card", () => {
+    expect(clearOf(scene, 5, 5)).toBe(1);
+    expect(clearOf(scene, 395, 290)).toBe(1);
+    expect(clearOf(scene, 200, 140)).toBeLessThan(0.2);
+    expect(clearOf(scene, 200, 140)).toBeLessThan(clearOf(scene, 120, 140));
+    expect(clearOf(scene, 120, 140)).toBeLessThan(clearOf(scene, 20, 140) + 1e-9);
+  });
+});
+
+describe("the winner's flash", () => {
+  function flashFrame(intro?: number): string[] {
+    const r = recorder();
+    drawFx(r.context, 320, 240, 1.3, lookFor("meadow-loop"), "crown", 1, true, intro);
+    return r.log;
+  }
+  it("is only in a clip's first moments (given an intro), and not in the loop or the shared picture", () => {
+    const plain = flashFrame();
+    expect(flashFrame(2)).toEqual(plain);
+    expect(flashFrame(0.1)).not.toEqual(plain);
+    expect(flashFrame(0.1).length).toBeGreaterThan(plain.length);
+  });
+  it("is the winner's alone", () => {
+    const r1 = recorder();
+    const r2 = recorder();
+    drawFx(r1.context, 320, 240, 1.3, lookFor("meadow-loop"), "sparkle", 2, true, 0.1);
+    drawFx(r2.context, 320, 240, 1.3, lookFor("meadow-loop"), "sparkle", 2, true);
+    expect(r1.log).toEqual(r2.log);
   });
 });
 

@@ -180,6 +180,67 @@ or a cart with its load stands the way the original does and what was clear of
 the road on the original is clear on its mirror. The secret track is in
 the host's track list (single races) once the host's device has opened it.
 
+### Party Rules
+
+A single ruleset gets stale; a twist makes the same tracks feel new at almost
+no cost, and Today's Card gives a reason to open the link each day. The host's
+lobby has a **Rules** row of chips (`LobbySettings.rules`, in `app/lobby.ts`,
+built from `CHOICES` in `src/kart/rules.ts`): **Normal** (no twist, the
+default), nine cards, **Shuffle** (a card for every race) and **Today's
+Card** (one card for the whole date). Guests see the choice read-only, and
+the lobby's waiting line names it. The host's last choice is kept
+(`handy.kart.rules.v1`, `loadRules`/`saveRules` in `app/prefs.ts`) and given
+to the next room the host opens; an unknown or damaged value reads as Normal.
+
+The cards are data, in `rules.ts` (`CARDS`, each a name, a one-line
+explanation and a `RuleEffects`: multipliers, all 1 for "as usual"):
+
+| Card | What changes | Where it is read |
+| --- | --- | --- |
+| Tiny Karts | size 0.6 (kart and driver), turns 1.12x quicker | render (`KartActor.size`), sim (`KartState.size`: two karts touch when their smaller circles do; `turn` on the wheel and the drift's yaw) |
+| Big Heads | driver's head 1.8x | render (`KartPose.headScale`, `Driver.update`; the head rides a little higher) |
+| Heavy Day / Feather Day | every kart drives as a heavy / light, whoever its driver is | sim (`modsFor` in `kart.ts` picks the weight class) |
+| Ice Day | the road is as slippery as ice (the verge, boost strips and the track's own patches keep their ground); bots treat it as ice (`onIce`: no drifting, cuts or leaning) | sim (`groundOf` in `kart.ts`) |
+| Item Frenzy | boxes are back after 0.5 s (3 s usually), the strongest items (`STRONG_ITEMS`) 3x likelier | sim (`items.ts`: `boxRespawn`, `drawItem`) |
+| Pucks Only | boxes give only a puck or a three-pack, by the place's own odds | sim (`items.ts` `drawItem`) |
+| Turbo Day | top speed and pick-up +15%; the speed cap rises with it | sim (`modsFor`, `capSpeed`) |
+| Reverse Grid | a cup's last place starts on pole; in a single race (and a cup's first) the sharpest bots lead and the players start at the back, last slot first | net (`buildSetup`'s `rule`, `GrandPrixRun.grid(players, reverse)`) |
+
+**Mirror Madness** (the track flips every lap) is not a card: a track's
+geometry, plan, landmarks and every guest's copy are built once for a race, so
+flipping them mid-race is neither cheap nor safe. Mirror Mode stays the switch.
+
+**Dealing.** The host turns the choice into a card as each race begins
+(`dealCard(choice, seed, day, last)`): a card is itself; Shuffle draws from the
+race's seed and never the card just played; Today's Card reads only the date
+(`dailyCard(todayKey())`, the UTC calendar date hashed by FNV-1a, so the whole
+world has the same card on a date and the card changes from day to day). A race
+begun again from the pause keeps its card; Play Again from the results deals
+anew. A cup runs on the choice it began with, so Shuffle deals each of its
+four races a card. Only the card's id crosses the wire: `StartInfo.card`,
+`LobbyState.card` (the card of the race being run or last run, for the
+results and standings) and `LobbySettings.rules` (the choice). A guest builds
+its sim with `RaceSetup.rule` and the sim names it in `RaceView.rule`, which
+the picture reads; a card an older or newer build does not know changes
+nothing. Everything a card does is a function of the setup and the race's own
+state, so a guest's copy and a snapshot restore replay the host's race
+exactly (`sim/rules.test.ts`).
+
+**Saying it.** The loading screen shows the card's name and line under the
+track's name; for the first seven seconds of the race (the countdown
+included) a note with the same words sits at the foot of the screen
+(`#rule-chip`, `RaceScreen.ruleChip`), on every device, a phone that is only a
+wheel included; the results' eyebrow names the card ("Meadow Loop · 1 lap ·
+Ice Day") and the standings say "Points after Meadow Loop, raced under Ice
+Day."
+
+**Tests.** `rules.test.ts` (the cards, dealing, the date), `sim/rules.test.ts`
+(each effect, the replay, and six bots finishing a race under each card on
+Meadow Loop and Harbour Lights), `net/rules.test.ts` (the choice and the card
+over the wire, Shuffle through a cup, Reverse Grid), `app/rules.test.ts` (the
+kept choice and the words); e2e `race-shell.spec.ts` picks a card, sees it on
+the race and finds it remembered.
+
 ## Where people play
 
 A **room** has up to four players across any number of devices. One device
@@ -520,10 +581,12 @@ the tracks that do (24 to 34 when the machine was quiet): under 0.4% of a frame.
   `data:image/jpeg;base64,`, nothing more), any kart the sender does not drive,
   any race but this one, and a second photo of a kart. They are kept for one
   race, in memory, and a new race (a restart too) starts with none.
-- **The wire** (protocol 9; 7 changed only how devices connect, 8 added the
-  `photo` message both ways, 9 the new tracks' set pieces and air sections, which every device must build alike). A snapshot is one JSON line, about 1.1 KB for
+- **The wire** (protocol 10; 7 changed only how devices connect, 8 added the
+  `photo` message both ways, 9 the tracks' set pieces and air sections, 10 the
+  road a kart is on, the Party Rules card, who hit whom, and the second pass on
+  every track). A snapshot is one JSON line, about 1.1 KB for
   eight karts: the tick, the dice, the items in the air, the eggs, and the
-  kart table, 54 numbers a kart (where it is and how fast, drift, boost, item,
+  kart table, 55 numbers a kart (the last, which road it is on) (where it is and how fast, drift, boost, item,
   lap, the bot's own state...). A kart's row is mostly zeros and what the kart
   before it has, so the table goes as its first row against zeros and each
   row after as what differs from the row before it: a word of bits for every
@@ -1240,6 +1303,7 @@ a 1440x900 window at 2x, resolution pinned at 1 so tiers compare at equal pixels
   same race stepped a sixtieth of a second at a time (`?manual=1`, `Math.random` and the page's clock fixed) and the
   canvases compared byte for byte at frames 150, 500, 900 and 1500. `shots.mjs`: the same posed still from two dev pages
   at each tier, with the difference in 8-bit levels.
+- `split.mjs` also takes `--dpr 2 --size WxH --soft --cpu n --level n` (a sharper window, SwiftShader, a slower main thread, a held governor step) and prints the governor's step and the resolution as the race went (`trace`).
 - `calls.mjs`: what a frame's draw calls are: one frame of the stepped race, each kind of object drawn (where it hangs
   in the scene, the kind of mesh and material), how many times in the views and in their shadow passes, and a total for
   each view. Calls and triangles are counted, so unlike a frame time they do not move with the machine's load.
@@ -1425,14 +1489,71 @@ this machine's single-thread speed four views stop holding 60 fps; the answer to
 lower). Proposals: karts (welded meshes sooner, fewer draw calls a kart), the tracks (fewer distinct materials in the
 landmarks) and a mid-race step down for the shadow pass of views 3 and 4.
 
-*Not done, and not measured, against what was asked of this area:* the shadow pass still runs once per view (four times
-with four players); there is no per-view resolution (the one dynamic resolution covers the whole canvas) and no tier that
-steps down mid-race beyond `onStrain`; shader pre-warm was only observed (nothing links after the green light), not
-changed; hands jumping between players, the wheel freezing, input-to-kart latency, tracker read rates, a laptop hosting
-phones as wheels over real Wi-Fi (host snapshot cost) and any older laptop, integrated GPU or Safari were not measured.
-The `--cpu n` figures are one run per side. A friend's "bugging" report is therefore not explained: no frame hitch was
-found on a fast machine, so it is likely weaker hardware or tracking. If the minimap's canvas is resized it stays blank
-until its next draw, at most 30 ms.
+**Weaker machines, second pass: a shared shadow pass and the load governor** (2026-11-07; `render/shadowGroups.ts`,
+`render/loadGovernor.ts`, `renderer.ts`). A friend's laptop "bugged" in local multiplayer; the first pass found nothing on
+the M4 Max, so this pass stood a weak machine in for it (`split.mjs --dpr 2 --cpu 6`: four players, Retina pixels, a main
+thread six times slower, on a host with a load average of 10 to 35, so read the milliseconds as a direction and the calls and
+triangles as exact) and took the work that grows with the views away a step at a time.
+
+- *What a frame of four views is made of* (`calls.mjs`, Canyon Run, high): the karts are the biggest part of it, about a
+  third of the draw calls (the new bodies are MeshPhysicalMaterial, 75 objects, half of those calls in the shadow pass),
+  then the scenery, then a tail of about a hundred small kinds (landmarks and set pieces, 200 calls). The shadow pass is a
+  fifth of the calls and, on the GPU, a share of the 17 ms the views take at 2x.
+- *One shadow pass for views whose karts are near each other* (`shadowGroups`): the map is aimed at the middle of the group
+  and drawn once, with the group's first view; the others draw with it as it stands (`shadowMap.autoUpdate`), and the
+  casters are the karts any of the group's views can see. The views are drawn group by group, so a later group's map never
+  replaces an earlier one's. Spread is a number of metres (half the tier's shadow range at step 1, the range at step 2,
+  more later); at step 0 every view has its own pass, as before.
+- *The load governor* (`LoadGovernor`; the levels are `lookFor`): five steps, each a number or a flag and none a new shader
+  program (no program links after the green light at any step, measured with `split.mjs`). Step 1: shared shadows within
+  half the range, karts welded from 24 m (a kart's `LOD` distance is now live), 75% of the particles, 4 taps in the boost's
+  blur. Step 2: shadows within the range, at most 3 passes, welded from 18 m, 55% of the particles, scenery beyond the fog's
+  far end left out (`reach` in `cull.ts`), 3 taps. Step 3: within 1.2 ranges, 2 passes, 15 m, 40%, scenery beyond 85% of the
+  fog, 2 taps. Step 4: one pass for the frame, merging within 1.2 ranges and no more, so a kart at the edge of its group keeps most of its own surroundings in the map (the shared map is half a range wide each way; a view farther away than that has its own pass, or at the 1-pass limit loses cast shadows, only the kart's blob, which has not been seen in a real race, only in dev-page stills), 12 m, 30%,
+  70% of the fog, no streaks. Step 0 is the picture as it was: `same.mjs --against` on the commit before this one is
+  identical at frames 150, 500 and 900, Canyon Run, Fun Fair and Five Finger Circuit, 1 and 4 views, high.
+- *When it steps.* Down: two slow windows in a row (45 frames each, median over 1.25 times 16.7 ms; one window if over 1.8
+  times), then 2 s left alone. A run of steps is judged from where it began once it is two down (a step of a few per cent
+  is not undone before the next): if neither the frames nor the time the main thread took to build them (not quantised
+  to whole refreshes) came down by 5%, the whole run is put back and left alone until the frames change (a browser holding
+  the page to 30 fps, a busy hand tracker). Up: 12 s of easy windows, then one step as a trial; a trial that fails is
+  undone and that step closed for 30 s, then 60 s, up to 4 min; three trials a race. It cannot flicker. Dynamic
+  resolution waits for the governor's first two steps (they cost the picture less than blur) and acts at once after, or when
+  steps were found futile. A race starts at the step the device ended the last one at, per number of views
+  (`handy.kart.load.v1`, 14 days); a step is written down only after it has held for 20 s of racing, so a start-up hitch (hand
+  tracker, shaders) cannot leave a fast machine on a lower picture for later races. The target is 60 Hz: a screen or a browser
+  holding the page to 30 fps is met by the futile check (two steps down, then undone). `?load=n` holds a step for the bench and the eye.
+- *Measured* (`bench.mjs --extra "&load=n"`, dev page, high, four views, 1440x900 at 2x, pinned resolution, one run each:
+  calls, k triangles, GPU ms views / post, CPU ms): Canyon Run step 0 771, 3209k, 21.2 / 7.2, 11.5; step 1 541, 1972k,
+  6.9 / 4.0, 6.7; step 2 496, 1817k, 7.5 / 4.0, 6.6; step 4 436, 1547k, 8.9 / 4.6, 7.2. Fun Fair 593, 1660k at step 0 and 518,
+  1543k at step 4; Five Finger Circuit 705, 2432k and 644, 2312k (its calls are the set pieces and landmarks, which no step
+  touches). On the weak stand-in, whole races on the real page (`split.mjs --players 4 --dpr 2 --cpu 6`, 40 s, old = the
+  commit before, new = this; the host quieter, about 10):
+
+  | | fps | frames over 33 / over 50 ms | main-thread tasks over 50 ms | draw calls | where it ended |
+  | --- | --- | --- | --- | --- | --- |
+  | Canyon Run, before | 44.3 | 543 / 17 | 13 | 512 | |
+  | Canyon Run, after | 46.8 | 488 / 7 | 7 | 456 | step 2, resolution 0.95 |
+  | Fun Fair, before | 42.9 | 611 / 20 | 17 | 575 | |
+  | Fun Fair, after | 46.8 | 527 / 0 | 0 | 461 | step 2 to 3, resolution 1 |
+
+  On the normal machine (1440x900 at 1x, four players, 25 s) before and after are both 60 fps, p99 16.8 ms, no frame
+  over 33 ms, no program linked; the governor stays at step 0. Four players at 2x and 4x slower: both sides around 40 to 49
+  fps over several runs, the host's load moving them more than the change did; the run that was hardest hit (load 30
+  or more) went from 33 to 50 ms frames in a third of the frames to a fifth, which is the direction, not a figure.
+- *Shader pre-warm*: the loading screen's `compileAsync` and two pictures through the whole chain already built every program
+  (`linked 0` after the loading screen, countdown included, with the new kart bodies, the set pieces and every governor step
+  held with `?load=`, on Canyon Run and Fun Fair); nothing was changed there.
+- *Not done.* Per-view resolution: the post chain reads one picture, so a view drawn smaller needs the bloom and the grade
+  to read it at another scale; the one dynamic resolution still covers the whole canvas (and `handsFirst` lowers it for
+  the tracker). A tier that changes MSAA or the shadow map's size mid-race (a new target, a few hundred ms). Drawing views at
+  alternate frames (half rate each) under heavy load. Hiding far landmarks and set pieces per view (the long tail of calls;
+  they move on timers, so a bounding sphere kept at load is not safe). SwiftShader (`--soft`) was tried and says nothing but
+  that it is slow (10 fps, 640x360, 4 views, with a 2x spread between runs). Not measured on an older laptop, an integrated
+  GPU, Windows or Safari; hands jumping between players, the wheel freezing, input-to-kart latency, tracker read rates and a
+  laptop hosting phones as wheels over real Wi-Fi were not looked at. The `--cpu n` figures are one run per side. If the
+  minimap's canvas is resized it stays blank until its next draw, at most 30 ms. A headless screenshot of the real page may
+  come out black or cropped under load (the canvas is not preserved); the dev page's is reliable.
 
 **Tiers.** `guessTier(gpu, cores, { splitScreen: true })` (Grip Prix passes it; the arcade's own guess is unchanged): a
 base Apple chip (M1 to M4) starts at medium, as do Safari and an iPad, which report only "Apple GPU" (unless the
@@ -1518,6 +1639,9 @@ bench's races not being the same moment), 9 to 19% more garbage a frame (canyon-
 models at all); a cap on the pixels of a huge window (a 5K display at 2x draws 15 million pixels at the high tier);
 merging the track's road, kerb and verge meshes beyond 150 m; the race giving up shadows or bloom before pixels when the
 tracker is short of the GPU (`handsFirst.ts` only knows the resolution).
+
+
+**The second-pass Meadow, Kitchen and Harbour tracks, four views, high tier** (2026-11-08, `tools/perf/bench.mjs --rounds 3` alternating the first-pass checkout and this one; draw calls vary by 25% from one frame to the next as the pack moves, so the single-frame `calls.mjs` figures were averaged over frames at 6, 12, 20 and 32 s). Frame time: Meadow 8.42 to 8.43 ms, Kitchen 7.51 to 7.34, Harbour 6.57 to 7.13 (+9%, CPU +11%: one more moving landmark, three lamps, the leaves, counterweights, and the extra swinging containers). Draw calls by the bench frame: Meadow 658 to 624, Kitchen 758 to 936 (+23%: the whisk, toast, orange and drip pieces and the mixer's and cooker's burners, all drawn per view; frame time did not move), Harbour 600 to 639; by the average of four frames: Meadow +12%, Kitchen +4%, Harbour +15%. Over the 10% budget on Harbour's frame time and calls and on Kitchen's calls: each new set piece is one more instanced draw per view, and cutting them would cut the set pieces. Time to first frame is +6% (Meadow, Kitchen) and +40% on Harbour (more landmark geometry to bake), and Kitchen's worst start-up frame is 72 ms against 15 (a one-off shader hitch before the lights); both are before the green light.
 
 ## App (`race.html`, `src/kart/app/`, `src/kart/main.ts`)
 
@@ -1675,14 +1799,33 @@ tight type, springy motion; a white pill is the one main action of a screen;
    (Harbour); a sun flare, a dust devil and a tumbleweed (Canyon); fireworks
    and confetti (Fun Fair); frost creeping in, snow and glitter (Glacier);
    embers and a lava glow (Volcano); a ringed planet, twinkles and shooting
-   stars (Starlight); palm-leaf shadows, bubbles and a sun glint (Five Finger).
-   By place (`flourishFor`): the winner has a bobbing crown and a gold show,
-   second and third silver and bronze sparkles, the last of three or more a
-   small rain cloud. Each effect (`effects.ts`) is a pure function of the clock
+   stars (Starlight); palm-frond shadows, bubbles and a sun glint (Five Finger).
+   The **fireworks** (`fireworks.ts`) are real bursts: a rocket climbing in an
+   arc from a corner with a tail of sparks, a white flash as it goes off, then
+   sparks that fly out fast and slow down (drag), droop (gravity), leave short
+   streaks and fade, a pistil of a second colour, and a crackle of glitter as
+   the last die; they go off at the sides and above the head, so a face in the
+   middle is never under one. The **frost** (`frost.ts`) grows in from the edges
+   and corners only: a frosted haze along each edge and feathery ferns of ice
+   (stem, branches, twigs) that creep out and back, translucent, with a cool
+   shadow under the white so they show on a bright picture, and crystals that
+   glint. The **palms** (`palms.ts`) are fronds from the two top corners, each
+   with a curved midrib and tapered leaflets that rustle, a soft-edged shadow
+   over a warm patch of sun, and the sun's glint below the stamp. Everything
+   that drifts over the whole card (snow, petals, confetti, sprinkles, bubbles,
+   glitter) shrinks over the middle (`clearOf`, `fxKit.ts`), and the butterflies,
+   steam, dust devil, balloon and lighthouse beam keep to the sides or the top.
+   By place (`flourishFor`, `places.ts`): the winner has a bobbing crown, a gold
+   show at the sides (not where the track has fireworks of its own), a gold
+   shimmer running round the frame once a loop and the camera's flash as the
+   card comes up (the page's CSS; a clip's first 0.4 s has it too: `intro` on
+   `drawFx`, never in the loop or the frozen picture), second and third silver
+   and bronze sparkles, the last of three or more a small rain cloud that
+   drips: drops fall and splash low on the card, and beads run down the glass. Each effect (`effects.ts`) is a pure function of the clock
    and the card's size, with no state, and repeats within `LOOP` (4 s): so the
    shared picture can freeze it on its best frame (`Look.peak`), a clip can loop
    without a join, and the tests compare frames. `player.ts` draws them on one
-   canvas per card, one loop for all at most 30 times a second at no more than
+   canvas per card, one loop for all at most 60 times a second at no more than
    1.25 pixels a px, only for cards that are on screen (IntersectionObserver)
    while the page shows; Reduce Motion draws the best frame once. The page's
    grade is CSS (`filter` on the picture, a soft-light wash, a vignette), the
@@ -1744,6 +1887,77 @@ pills' code). The stage is now measured when it is resized (`fit`), the room's v
 out when the lobby changes and not every frame: 1.0 style recalculation a frame (1.01, 1.00 in two runs) and 0.002 to
 0.016 ms in the pills' code. The flush that remains is the one the page must make once a frame; the style time in all
 (0.17 to 0.19 ms a frame) did not move.
+
+## Rivalries (`src/kart/rivals.ts`)
+
+People remember rivalries, not placings. Across a session (a cup, or several
+races in one room, until the room is left) the game keeps score of who spun
+out whom and who finished ahead of whom, and turns it into a small story. It
+is kind: nothing here is a leaderboard of shame, and nothing appears in
+Practice alone (no ledger is made for a `solo` session). It works the same for
+keyboard, pad and wheel players: it reads the race's events, not the controls.
+
+**One sheet per device.** Each device keeps its own ledger from the events it
+saw, so a guest who joins mid-session counts from when they arrived (and a tab
+that was hidden may miss a few events): two screens in one room can show
+slightly different grudges or awards. The host does not send a shared tally.
+
+**Bookkeeping.** `Rivalries` (one per room, made in `KartApp.attach`, cleared in
+`teardown`) is fed by the race screen from the race events, which every screen
+already receives (the host's and the guests' alike), so **nothing new travels
+over the wire** and the sim is untouched:
+
+- a `hit` event (`kart` spun, `by` the sender, `cause`: puck, seeker, slick,
+  decoy, skyrocket, blast, comet, storm) is attributed to its sender; a hazard
+  (`by: null`) and a kart's own item (`by === kart`) count for no one;
+- a `bump` counts as a hit only when it is hard (strength 0.85 and up) and one
+  kart was clearly quicker (3 m/s): the quicker one rammed (two Comets bumping
+  count for no one). A bump spins no one, so the numbers say "hits", not spin-outs;
+- `finish(standings)`, once per race, counts head-to-head (who finished ahead
+  of whom, for every pair with at least one person in it), places gained from the
+  grid, and photo finishes (neighbours within 0.15 s of each other).
+
+People are keyed as the Grand Prix's rows are: a player by lobby slot (`p0`),
+a bot by name (`b:Mango`), so the score survives a changed grid. Three
+`Tally`s are kept from the same events: the **race**, the **cup** (reset at a
+cup's first race) and the **session**. A race started over (a restart) is taken
+back out of the score first; the same race number twice does nothing.
+
+**A grudge** is a pair with at least three hits between them (four if a bot is
+one of them), or at least three races together with head-to-head wins within
+one of each other (four with a bot). Two bots never make one. The pair is named
+with the one ahead first, and the bigger the hit total the bigger the grudge.
+
+**On screen.**
+
+- The race intro: as the countdown begins (or, after a slow load, in the race's
+  first seconds), a glass pill calls out the biggest
+  grudge among the karts in this race ("Kit vs Mango: 3-1", and under it what
+  the numbers count, "Hits between them" or "Who finishes ahead").
+- A **nemesis** is whoever has hit you the most (two hits for a person, three
+  for a bot, a bot's hits weighing a little less), or else your closest
+  head-to-head. A small chevron in their colour hovers over their kart in your
+  viewport only (`render/rivalMarks.ts`, set with the optional
+  `RaceRenderer.setRivals`; it fades in past 3 m and out towards 90 m, and never
+  gets above 85% opacity).
+- **Revenge**: when you hit your nemesis, "Revenge!" shows in your viewport (in
+  place of "Got Kit.") and a short sting plays (`kart_revenge`, the `revenge`
+  sound; the screen's own, so it bypasses the world's muffle).
+- **Awards** (`pickAwards`, shown by `app/awards.ts`) on the results after a
+  single race, and on the podium for the whole cup (a cup's races show none):
+  Sharpshooter (most hits), Magnet (hit the most), Pacifist (no hits, when
+  others were busy), Comeback Kid (most places gained), Photo Finisher (most
+  photo finishes), Nemesis of the Day (most hits on one person). Only people win
+  them, never a bot; a tie goes to all who tied, and everyone level gives none;
+  a cup asks for more than a race; at most four are shown and nobody has more
+  than two. When there is nothing to say, the panel is not there.
+
+**Tests.** `rivals.test.ts` (attribution of every source, bumps, restarts,
+cups, head-to-head, grudges, nemesis, revenge, award picks and ties),
+`render/rivalMarks.test.ts` (the marker's look), `cues.test.ts` (the sting is in
+the pack), and `e2e/race-rivals.spec.ts` (a scripted run of hits, put on the
+score sheet through `gripTest.rivals()`, earns an award on the results, a grudge
+in the next race's intro and a nemesis; Practice alone has none).
 
 ## Tests
 
@@ -1848,13 +2062,23 @@ front of them (or a laptop), and the TV is the host's screen.
   above them: they are met when it comes down). The picture is `render/world/airPads.ts` (flat light, and posts
   beyond the barrier and the camera's margin, like the start gantry's legs) and `render/parasol.ts`; the map draws
   the flight as a band. Mirror mode flips the pad's offset.
+  A section may be **timed**: `timed: { period, from, to, phase? }` makes its pad live only while the race clock's
+  cycle (seconds over `period`, plus `phase`) is in [from, to). It is a pure function of the clock, like a hazard,
+  so every device agrees and nothing is sent; outside the window the pad is plain road and a kart drives over it
+  (`arcLive` in sim/air.ts, asked by the sim's launch and the bots' plan). Harbour Lights' drawbridge is one
+  (`DRAWBRIDGE` in track/tracks.ts: ten seconds, live from 70% to 95%); the picture's two steel leaves either side of the road (tilting up, flat while it is down; they snap between the two with Reduce Motion), signals, bell and counterweights
+  keep the same clock (landmarks/harbourSet.ts), which is why a landmark's moving part now gets the race clock as a
+  third argument (`update(t, part, race)`, 0 before the start). The sim's racecraft, item and driving tests ran on the old Harbour Lights; its first-pass
+  layout (a long flat start, a flat bend) is kept as `sim/quayFixture.ts` for them, and `level()` in sim/testing.ts takes a
+  track's heights and air sections out.
   A planned flight never slows below a floor speed (`AIR.flightFloor` 12 m/s, a lip 8): a storm, a hit or a wall in
   mid-air cannot leave a kart hanging over the track, it carries on and lands. `sim/airTracks.test.ts` checks each air
   track (and its mirror): landing run straight, no hazard, item row or boost pad under a flight, bots fly every
   section, never fall, and finish across three seeds.
-  **Not built** (kept for the timed moving set pieces engine of the Track features section, or later): the
-  loop-the-loop ribbon, trick walls, vertical twists, the crumbling bridge over the lava, rock rain with a visible
-  build-up (Volcano's eruption is the paired lava bombs on a 7 s period), and the Five Finger beach waves.
+  **Not built** (later): the loop-the-loop ribbon, trick walls, vertical twists (a ribbon rolls only as far as the
+  road may lean, 0.35 rad, and two stretches of road never cross over one another: a road is found by the nearest centre
+  line), and a crumbling floor (a bridge that gives way on a timer: the sim has no floor that comes and goes). The rock rain,
+  the swell of lava over the Volcano's bridge and the Five Finger tide are built (the second pass's pieces, below).
 - **Drops** (`drops`): edges with no barrier. Over the edge (or into lava,
   a sink, space) the kart **falls**, and a **rescue drone** (a little
   propeller drone with a hook, Grip Prix's own) lifts it back to the road a
@@ -1889,20 +2113,42 @@ front of them (or a laptop), and the TV is the host's screen.
   `HazardPose.warn` (0..1) is the telegraph the picture shows; `top` is how
   high a crusher hangs. Helpers `sweeper`, `stomperRow` (a wave across the
   lanes, with gaps), `pendulum` and `crosser` spread a piece over its
-  hazards. The picture draws one instanced mesh per kind, one for the parts
+  hazards. A branch road's pieces are drawn along it, like the main road's. The picture draws one instanced mesh per kind, one for the parts
   that move, one for the parts that never do (gantries, beams, rails, lamp
   posts: written once, on the first frame) and one for the shadows. Reduce
   Motion turns the rattle and the lamp's flicker into a steady colour.
   Mirror mode negates the `span` of a swing or slide (or flips `dir` when a
   slide has no span) so they stay in step with the flipped road.
   The bots read the same poses a couple of seconds ahead, as for any hazard,
-  and wait (slow to 55%) or gamble (a tighter line) by skill. Not built yet:
-  turntable platforms that carry a kart, floors and gates that rise. Also
-  not built, from the round's wish list: the Canyon mine tunnel through the
-  mesa and a swaying rope bridge, a Fun Fair funhouse of mirrors and a Ferris
-  wheel to drive under with its swinging cars, the Glacier frozen waterfall
-  to drive behind and a real rolling avalanche. The Canyon and Glacier road
-  layouts are close to round one's; the set pieces are what changed.
+  and wait (slow to 55%) or gamble (a tighter line) by skill. Round two added the acorn (crush, from an oak's bough:
+  Meadow's creek road), the drip (crush, from a tap: Kitchen's drainer), the whisk (an orbit sweeper of balloon-whisk heads
+  under the stand mixer's arm) and the cargo-box (swing: a container on a crane's spreader, Harbour's dock road). Each
+  model carries its own dress (`PieceModel` in render/world/pieces.ts: where the piston takes hold, the gantry's colour,
+  how much of the red flush it takes), so a new kind is a model in `pieceSet.ts` and a name in `PIECE_KINDS`. Not built yet:
+  turntable platforms that carry a kart, floors and gates that rise. The
+  second pass on Canyon Run, Fun Fair and Glacier Pass built what the first
+  round's wish list left: the Canyon mine tunnel through a mesa and a rope
+  bridge, a Fun Fair Ferris wheel to drive under with its swinging cars and a
+  coaster to climb, the Glacier frozen waterfall to drive behind and a rolling
+  avalanche (a `slide` of kind `avalanche`: a slab of snow across the road, no
+  rails). A branch road's timed pieces are drawn too: the world builds the
+  instanced pieces for each route layer as it does for the main road, and
+  ticks them on the same race clock. Their models (rock crusher, wrecking
+  ball, ore cart, icicle, carousel horse, funhouse panel, mallet, swing boat,
+  avalanche) live in `render/world/pieceModels2B.ts`, added to the
+  piece table by `Object.assign`. Still not built: a Fun Fair funhouse of
+  mirrors as a room (the panels slide across the big top instead).
+  **The second pass's pieces** (`render/world/pieces2C.ts` models and `track/pieces2C.ts` helpers, no new motion: all are
+  the motions above under new names): `ember-rock` (Volcano) and `meteor` (Starlight) are "crush" hazards that fall out of
+  the sky (`rockRain`: rows of rocks across the road, each row a beat behind the last, each leaving a lane clear). A falling
+  rock has no piston or gantry: nothing is drawn until it warns; then its shadow grows and reddens on the road for
+  a second or more (a bomb comes in from on high, glowing, bigger as it nears), it falls, lies a moment and cools into the
+  road. `lava-surge` (Volcano's bridge) and `tide-wave` (Five Finger's wrist) are "slide" hazards
+  (`front`: a few pieces side by side that sweep the road together, from out of sight on one side to out of sight on the other,
+  the way round alternating): they have no rails and no lamp post (nowhere to stand on a bridge or a beach), and the
+  telegraph is the thing itself rising out of the lake or appearing at the road's edge as foam, growing for the last fifth of
+  the cycle before it runs. `plasma-orb` (Starlight) is a ball of `sweeper`. `coconut-bunch` (Five Finger) is a sky-falling "crush" like the rocks (a volley down the palm trail). A "slide" takes an optional `lead` (the share of its cycle its warning shows before it comes, default 0.22; the bridge's lava and the beach's tide use 0.36, about 2.5 s). A branch road's own timed pieces are drawn too (the
+  comet trail's meteors): `world/index.ts` hands a route's pieces to `buildPieces` as the main road's.
 - **Landmarks** (`landmarks`): set pieces the picture builds, by name from
   the theme's list below; `span` for a thing over the road (a tunnel, an
   arch). What the picture builds never stands where a kart can be: nothing
@@ -1953,19 +2199,58 @@ front of them (or a laptop), and the TV is the host's screen.
   height along the lap under the map, steep stretches in red and crests sharp
   enough to fly over marked, and the lean.
 
+- **Alternate routes** (`routes`, `RouteDef`): a branch road that leaves the
+  main road at `from` and rejoins it at `to` (fractions of the lap, never across
+  the start line). Either a **shortcut** (narrower, over rough ground or a jump,
+  shorter than what it replaces; a fall costs more than it saves) or a **split**
+  (two ways of much the same length, one high and one low). Any track can use
+  one; a branch is a road of its own: its own `points` (the junctions come from
+  the main road, the curve leaves and joins along its heading), `width`, `flare`
+  (metres over which it widens to the main road's width at each end, lying on it),
+  `ramps`, `drops`, `verges`, `surfaces`, `boostPads`, `hazards` and `landmarks`,
+  all in fractions of the BRANCH. `track/geometry.ts` builds each as a `RouteRoad`
+  (an open `TrackGeometry` whose samples are in the lap's metres, so `s` means
+  the same on every road). Races: a kart is on whichever road its centre is
+  nearest, keeping its own unless the other is clearly nearer (`project(x, z,
+  near, route)`; never kept in a snapshot, so the wire is unchanged), and every
+  part of the sim reads "the track" through `onRoute` (sim/routes.ts): terrain,
+  plan, falls, jumps, hills and the bots' line are the branch's own. Progress is
+  in the lap's metres on every road, so places stay right and a kart passing from
+  one road to the other never jumps (under 10 m once, the angle the branch leaves
+  at). The barrier opens at the junctions (`junctionGates`: each road's wall
+  stands out to the other's far edge where the two lie close, easing back to the
+  usual 6 m as they part) and the picture draws no wall where the other road's
+  ground is. Bots steer by the branch only within 14 m of its junction (until
+  then the main road's own ramps and speeds hold) and choose by temperament: the
+  aggressive take a shortcut 95% of laps, the careful 12%, scaled by the route's
+  `appeal` and (for a shortcut) the bot's skill; a die rolled by seed, kart, lap
+  and route, so every device agrees and nothing new is sent. The minimap and the
+  track maps draw the branches, and mirror mode mirrors them (`mirrorRoute`).
+  A kart-lap that takes the shortcut should save about 1.5 to 2.5 s over a
+  40 to 62 s lap; tracks.test.ts holds the best lap to its 40 s floor with them.
+  *Laying one out* (from the second pass): the two roads share ground where they lie close (the barrier opens between them, or on an
+  open edge the verge runs on to the other road's), and the picture's ground there follows the nearer centre line's height and
+  lean, so where the roads are closer than about 20 m they must have the same height (within half a metre) and the same bank
+  (the sum of the points' `bank` and, on a track that sets `bank`, the curvature's lean: a branch that kinks into the main
+  road gets a sudden lean). The corridor test says exactly where it fails. Put the junctions where the main road is flat and
+  straight (or leans the way the branch does); the branch's first and last waypoints belong on the main road a few tens of
+  metres out and the curve between them should be a smooth S (a sine, not a kink). On an open-edged road (space) give the branch the
+  same `drops`, or the camera finds a barrier where the ribbon has none. A solid landmark on a branch (a tunnel, an arch) must
+  stand 30 m clear of the main road, because its walls are the margin's business; the corridor test measures that too.
+
 ### What each theme can build
 
 | Theme | Landmarks | Hazards |
 | --- | --- | --- |
-| meadow | windmill, barn, pond, hay-bales, hot-air-balloon, sheep, flower-field | — |
-| canyon | mesa, rock-arch (span), cactus-grove, water-tower, mine-cart | boulder, tumbleweed, ore-cart (slide), wrecking-ball (swing), rock-crusher (crush) |
-| harbour | crane, lighthouse, ship, containers, warehouse, buoy | crab, forklift |
-| kitchen | teapot, fruit-bowl, toaster, grater (span: a tunnel), salt-shaker, pepper-mill, cookbook, cereal-box, mug, fork-arch (span), spoon-arch (span), sink, window, wall-clock | orange (roll), pea (cross), teacup (orbit) |
-| snow | igloo, cabin, snowman, ice-arch (span), ice-cave (span: a tunnel), pine-snow, gondola, ski-jump | penguin (cross), snowball (roll), yeti (bob), icicle (crush) |
-| volcano | volcano, lava-fall, basalt-columns, stone-bridge (span), obsidian-arch (span), hot-spring | fireball (bob), boulder (roll), geyser (bob) |
-| funfair | ferris-wheel, carousel, big-top (span: a tunnel), rollercoaster (span: over the road), entrance-arch (span), food-stall, balloon-stand, hook-a-duck, helter-skelter, fireworks | teacup-ride (orbit), bumper-car (cross), arm-ball (orbit: a carousel's bar), funhouse-panel (slide), mallet (crush), swing-boat (swing) |
-| space | ringed-planet, ring-gate (span), asteroid, satellite, space-station, nebula | asteroid (orbit), comet (roll) |
-| palm | palm-tree, beach-hut, surfboard, sandcastle, beach-towel, giant-ring (span), wristwatch (span: the start gantry) | crab (cross), coconut (roll), beach-ball (roll) |
+| meadow | windmill, barn, barn-run (span: a shortcut through a barn), pond, hay-bales, hot-air-balloon, sheep, flower-field, farm-gate (its lantern blinks in the last fifth of the flock's cycle), oak (the acorns' tree) | hay-roll (roll: a round bale down the hill), sheep-flock (slide: four sheep trotting across), acorn (crush) |
+| canyon | mesa, rock-arch (span), cactus-grove, water-tower, mine-cart, mine-tunnel (span: a mesa with a timbered tunnel through it), rope-bridge (span), headframe (a winding wheel that turns), dynamite-shack | boulder, tumbleweed, ore-cart (slide), wrecking-ball (swing), rock-crusher (crush) |
+| harbour | crane, lighthouse, ship, ship-deck (span: a cargo ship's deck with a gantry crane), containers, warehouse, buoy, drawbridge (two gate towers, signal lamps, a bell and counterweights on the race clock) | crab, forklift, swing-box (orbit: a crane's container), cargo-box (swing: a container hung from a crane) |
+| kitchen | teapot, fruit-bowl, toaster, grater (span: a tunnel), salt-shaker, pepper-mill, drawer (span: a drawer pulled out of the counter, cutlery across it), cookbook, cereal-box, mug, fork-arch (span), spoon-arch (span), sink, window, wall-clock, mixer (span: a stand mixer reaching over the road), cooker (span: the road is its hob, burner rings glowing), spatula, drainer (span: a tap over the draining board) | orange (roll), pea (cross), teacup (orbit), toast (bob: pops from the toaster), whisk (orbit: balloon-whisk heads on the mixer's arm), drip (crush: from the tap) |
+| snow | igloo, cabin, snowman, ice-arch (span), ice-cave (span: a tunnel), pine-snow, gondola, ski-jump, frozen-falls (span: a pocket behind a frozen waterfall) | penguin (cross), snowball (roll), yeti (bob), icicle (crush), avalanche (slide: a slab of snow across the road) |
+| volcano | volcano, lava-fall, basalt-columns, stone-bridge (span), obsidian-arch (span), hot-spring, lava-tube (span: a tunnel through the crater's rock) | fireball (bob), boulder (roll), geyser (bob), ember-rock (crush: falls from the sky), lava-surge (slide: a swell of lava) |
+| funfair | ferris-wheel, ferris-gate (a wheel to drive under, its cars swinging), coaster-trestle (span: the coaster's road on its trestle), cannon-tent, safety-net, carousel, big-top (span: a tunnel), rollercoaster (span: over the road), entrance-arch (span), food-stall, balloon-stand, hook-a-duck, helter-skelter, fireworks | teacup-ride (orbit), bumper-car (cross), arm-ball (orbit: a carousel's bar), funhouse-panel (slide), mallet (crush), swing-boat (swing) |
+| space | ringed-planet, ring-gate (span), asteroid, satellite, space-station, nebula | asteroid (orbit), comet (roll), meteor (crush: falls from the sky), plasma-orb (orbit: a sweeper's arm) |
+| palm | palm-tree, beach-hut, surfboard, sandcastle, beach-towel, giant-ring (span), wristwatch (span: the start gantry), tiki-arch (span: a gate of carved bamboo) | crab (cross), coconut (roll), beach-ball (roll), tide-wave (slide: a breaker), coconut-bunch (crush: falls from the palms) |
 
 ## The tracks
 
@@ -1974,10 +2259,25 @@ Two cups of four, as a Grand Prix is raced, and one secret.
 **Acorn Cup**
 
 1. **Meadow Loop** (meadow): the gentle opener. Up the windmill's hill
-   (eight metres, leaning into the long left-hander), down an S that leans
+   (eleven metres, leaning into the long left-hander), down an S that leans
    one way then the other, through a hollow and over a low hill to the pond
    by the banked hairpin (the duck); hay bales, a hot-air balloon drifting
    over.
+   *Design note (second pass; 1.19 km, a bot lap of 46 to 49 s).* **Start:** the
+   straight past the farm, a kink at the farm gate, then the road forks. **Signature
+   piece:** the windmill's hill, eleven metres of left-hander with a strip of boost on
+   its inside, and round hay bales rolling down it at you, one a lane, half a beat
+   apart. **Risk and reward:** two roads to the crest. The hill road is the fast one
+   and the bales are its price; the **creek road** winds low through the hollow, fords
+   the creek (wet stones, as slippery as ice) and climbs out under two oaks whose
+   acorns drop on a beat (a shake and a red flush, a shadow growing on the road), a
+   little slower unless you thread them. **Wow:** the glide off the crest, 76 m down
+   the hill over the pond under a parasol, ringed target on the meadow below. **Run
+   home:** the S over the meadow, the big U-turn where a flock of sheep trots across
+   every seven seconds (the farm gate's lantern starts blinking just before), the
+   **barn cut** across the inside of the U (a hay-bale ramp, a creek to fly, in one
+   door and out the other onto boost: a fall costs more than it saves), a low hill, and
+   the wide banked hairpin round the pond, the duck on its far bank.
 2. **Kitchen Rally** (kitchen): toy-sized karts on a giant kitchen counter
    in late-afternoon sun through the window. A chopping-board start
    straight; round the fruit bowl; a chicane between salt and pepper; under
@@ -1985,50 +2285,119 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    and the drone fishes you out — the duck floats in the sink); spilt milk
    (ice) on a bend; the counter's edge is a long open drop on the outside of a
    sweeping curve (the bends lean into their turns, that one highest on its
-   open outside); oranges roll down the counter; a teacup spins. Everything is
+   open outside); oranges roll down the counter; a whisk sweeps the road. Everything is
    enormous: the teapot is thirty metres tall.
+   *Design note (second pass; 1.24 km, a bot lap of 50 to 53 s).* **Start:** the
+   chopping-board straight under the window, then a long left-hander round the fruit
+   bowl and the salt and pepper. **Signature piece:** the **stand mixer**: its arm
+   reaches over the road at the foot of the cooker and two whisks sweep the road under it
+   (balloon heads on poles, a turn every five seconds and a bit, half a turn apart, a
+   gap you time). The road then climbs onto the cooker (four metres up, burner rings
+   glowing on the hob, a line of boost on the inside) and the spatula lying beside it is
+   a kicker for a hop. **Risk and reward:** over the sink or round it: the sink is a
+   ramp and a gap to fly (a fall and the drone fishes you out), the **drainer** is a
+   steel draining board sloping into a trough three metres below the counter (ribbed,
+   wet, as slippery as ice) with a tap above it dripping on a beat, and out the far
+   end; the **cutlery drawer** cuts across the inside of the sweeping curve (down a
+   ramp into a drawer, spoons and forks across overhead, a pea rolling across it,
+   boost along its floor, narrow). **Wow:** the toaster's slots fire you across the
+   crumb tray. **Run home:** spilt milk (ice) on a bend, slices of toast popping up in
+   turn, the grater's tunnel and the long straight back to the line.
 3. **Harbour Lights** (harbour): night on the quay, cranes and ships, a
-   humpback bridge over a dock and a swing bridge on the back straight to fly
-   over, right angles that lean a little into their turns, crabs scuttling
-   across the chicane.
-4. **Canyon Run** (canyon): the steep climb (sixteen metres), the ridge road,
-   a jump over a gap in the ridge, a lip to fly off into the tumble down
-   S-bends that lean one way and the other, boulders rolling down the
-   descent, a sand cut inside the hairpin for the brave.
+   drawbridge that goes up on the clock, the lighthouse on the sea wall, a
+   cargo ship's deck to drive over, swinging containers and a ferry ramp to
+   fly, broad bends that lean a little into their turns, crabs scuttling
+   across the quay.
+   *Design note (second pass; 1.2 km, a bot lap of 48 to 50 s).* **Start:** along
+   the quay to the **drawbridge**: two stone gate towers and a footbridge across the road,
+   signal lamps over its middle, a bell, a counterweight on each tower, and a steel leaf either side of the road that stands up while it is raised. It keeps the
+   race clock: red while the leaf is down (the road is just road), amber blinking and
+   the bell for the second and a half before it goes up, green while it is raised (a
+   quarter of every ten seconds), and then the leaves are up, the lip ahead is live and a kart that takes
+   it flies the dock. Time it and you gain ground, miss it and you drive over: nothing is
+   lost. Then a left-hander up onto the sea wall and the **lighthouse hairpin** with open
+   water on its outside (the duck), and a chicane past the warehouses. **Signature piece
+   and risk and reward:** the ship. A split: the main road goes up a gangway onto the
+   **deck of a moored cargo ship** (no barrier, a gantry crane over it, a line of boost down
+   it) and off its stern in a **cannon** that fires you 56 m across the water to the pier; the
+   **quay** is the plain way round beside it, at ground level, with crabs scuttling across
+   and a forklift, and nothing to fall off. **Wow:** the cannon off the stern. **Run home:**
+   two cranes swing a container across the road each, half a beat apart (a shadow on the
+   road shows where), the dry-dock hairpin, a boost pad, and the **ferry ramp**, a gap at
+   the water with a trick lip to fly it, on the way to the line.
+4. **Canyon Run** (canyon): the steep climb (sixteen metres), a hairpin with
+   a sand cut inside it, the ridge road's knife-edge sweepers and an ore-cart
+   crossing, a dynamite cannon at the ridge's end that throws you over the
+   gorge, a rope bridge, the tumble down S-bends that lean one way and the
+   other under swinging wrecking balls, the neck round its U, and the wash:
+   twenty-two metres of sand under three rock crushers. A **mine** through a
+   mesa cuts across the neck's U for the brave.
 
-   *Design note (round two).* The signature is the old mine: the rails cross
-   the road, and the quarry works it. Each lap has four beats you can read
-   and time. On the ridge, two ore carts cross the rails one each way (a red
-   lamp on a post lights before each runs), twenty metres before the long
-   run-up to the gap. After the jump and the lip, a rope bridge: ten metres of
-   planks over the gorge with nothing on either side. Down the tumble, two
-   wrecking balls swing across the road half a beat apart, so you weave. Out
-   of the neck the rails cross again, and then the wash: the gorge opens to
-   twenty-two metres of sand with three rock crushers falling in a wave
-   (shake, red shadow, slam), and a boost pad in the middle lane, under the
-   last one, for the brave. The wow moments: the jump, the bridge, the wash.
+   *Design note (the second pass).* The lap as a story: out of the start the
+   road climbs sixteen metres in an S that leans into each bend, turns on the
+   hairpin (a sand cut across its inside, for a Nitro) and runs the ridge in
+   a knife-edge of fast sweepers, with a pair of ore carts crossing the rails
+   one each way (a red lamp on a post lights before each runs). The signature
+   is the **dynamite cannon**: at the ridge's end a barrel throws every kart
+   over eighty-four metres of gorge (a `gap`: there is no way across on the
+   ground, `air` cannon, 9 m up), the wow moment, landing on a straight with
+   nothing beneath the flight. Then the **rope bridge**, fifty metres of
+   planks, ropes and cairns with a deck that leans one way and then the other
+   (banked 0.08 each way) and nothing either side, and the tumble: two
+   wrecking balls swing across the road half a beat apart, a boulder rolls,
+   so you weave. The risk and reward is the **mine**: a shortcut (about 70 m
+   shorter than the road round the neck's U, which has its own pair of ore
+   carts) through a mesa with a hole through it, a
+   timbered tunnel with rails and lanterns, narrow, with side galleries
+   where an ore cart crosses the road (reach 13 m, every 6.6 s: you wait at
+   the mouth or you gamble). It rejoins the wash at a gentle angle. The run
+   home is the wash: three rock crushers fall in a wave (shake, red shadow,
+   slam) with a boost pad in the middle lane under the last, for the brave.
+   What is new: the cannon (the old ridge gap and lip are gone), the longer
+   bridge and its model, the mine as a branch road with its tunnel, and the
+   mine's landmarks (`mine-tunnel`, `rope-bridge`, `headframe` with a turning
+   wheel, `dynamite-shack`, in `landmarks/canyonMine.ts`); the crusher, ball,
+   cart and boulder have proper models. Bots take both roads, time the
+   pieces and fly the cannon (every kart, every lap); a best lap runs about
+   45 s and the slowest under 57 s.
 
 **Comet Cup**
 
-5. **Fun Fair** (funfair): dusk, every ride lit. Under the entrance arch;
-   past two mallets (test your strength: one up while the other comes down);
-   round the carousel; along the rollercoaster's own course, the lift hill
-   (six and a half metres, weaving either side of the crest) and the plunge
-   to the dip under the coaster; the hairpin by the hook-a-duck stall (the
-   duck), banked hard; back through the big top, where striped funhouse walls
-   slide across the road one each way; the plaza, where a carousel turns in
-   the middle (one arm of horses to time) with bumper cars
-   crossing and a teacup ride beside; a ramp off the helter-skelter's foot;
-   the hall of mirrors chicane under two pirate ships swinging a beat apart (3.5 m either side of the middle);
-   fireworks over the finish.
+5. **Fun Fair** (funfair): dusk, every ride lit. A human-cannonball tent
+   beside the start straight and a cannon that fires you over the entrance
+   arch; two mallets (test your strength: one up while the other comes
+   down); round the carousel; along the rollercoaster's own course (a split:
+   the low road under the rails, or the coaster's own track on its trestle,
+   no barrier, to the top of the lift hill); the hairpin by the hook-a-duck
+   stall (the duck), banked hard; back under a Ferris wheel, through the big
+   top, where striped funhouse walls slide across the road one each way; the
+   plaza, where a carousel turns in the middle (one arm of horses to time)
+   with bumper cars crossing and a teacup ride beside; a ramp off the
+   helter-skelter's foot; the hall of mirrors chicane under two pirate ships
+   swinging a beat apart (3.5 m either side of the middle); fireworks over
+   the finish.
 
-   *Design note (round two).* The fair is a ride, so it has a ride's
-   rhythm: a quiet straight, a climb, a drop, a dark tunnel with moving
-   walls, a spinning plaza, a chicane. The top straight no longer runs
-   flat: its heights are the coaster's (up 6.5 m, down to -2.4 m), so the
-   plunge is the fair's wow moment, with a boost pad at the bottom. Every
-   moving thing is announced: mallets shake and redden, wall panels light a
-   lamp, the carousel turns slowly enough to read (6.5 s).
+   *Design note (the second pass).* The fair is a ride, so it has a ride's
+   rhythm. The lap as a story: the **human cannonball** starts it, the
+   pack is fired off the start straight over the entrance arch and the
+   safety nets beyond it (`air` cannon, 80 m, 7.5 m up), with a striped tent
+   and a cannon on the grass to say so; mallets shake and redden, and the
+   carousel turns slowly enough to read (6.5 s). The top straight is the
+   coaster's: it rolls up and down (up 3 m, down to -2 m) and from it a
+   **split** climbs the coaster's own trestle, higher (to 11.5 m) and longer
+   (about 240 m against 195), no barrier (a low red and cream kerb with lights marks each edge, and a fall costs you the
+   drone's fetch), to plunge down
+   the far side and rejoin the midway at a shallow angle, with a line of boost
+   at the bottom of the drop: the risk and the reward. The wow moments are the
+   flight over the arch, the **Ferris wheel you drive under** (a wheel fifty
+   metres tall on legs that stand clear of the road, six cars swinging as
+   they come over your head), and the plunge. Then the hairpin, the dark
+   funhouse tunnel, the spinning plaza, a ramp, and a chicane under the swinging
+   boats for the run home. What is new: the cannon and its tent and nets, the
+   coaster branch and its trestle (a span of rails, sleepers, bents and arches
+   of lights), the Ferris gate, and models for the mallet, funhouse panel,
+   carousel horse and swing boat (`landmarks/funfair/fair2.ts`,
+   `pieceModels2B.ts`). A best lap runs about 47 s, nobody falls.
 6. **Glacier Pass** (snow): an alpine pass at blue hour. A frozen lake (all
    ice, wide, level) to slide across in the valley, with a kicker on it (a
    short hop on the ice, a trick for a boost), then a climb of fifteen
@@ -2036,55 +2405,88 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    mountain hut, banked hard and falling all the way, a cliff on its outside
    and ice on its tight inside line; a crest to fly over on the shoulder, a
    twisting S that leans one way then the other through an ice cave glowing
-   blue, a long falling in-run to a ski-jump over a crevasse (a drop), and
-   moguls on the way home. Penguins waddle across, snowballs roll down at
-   you, a yeti pops out of a snowdrift once a lap. The duck sits by an
-   ice-fishing hole on the lake.
+   blue, a long falling in-run under an avalanche path, a ski-jump glide
+   over a crevasse, and moguls on the way home. Penguins waddle across,
+   snowballs roll down at you, a yeti pops out of a snowdrift once a lap.
+   The duck sits by an ice-fishing hole on the lake. A **split** behind a
+   frozen waterfall leaves the in-run for the brave.
 
-   *Design note (round two).* The pass has weather, and the weather is on a
-   timer. In the ice cave three icicles let go one after another down the
-   cave (each shakes, and its shadow reddens, a second before it drops), and out of the cave, on the in-run
-   to the ski-jump, two big snowballs thunder down, one each side in turn
-   (an avalanche you read and slip between, then straight into the jump).
-   The lake's kicker is the first wow moment, the corkscrew the second, the
-   cave the third, the ski-jump over the crevasse the fourth.
-7. **Volcano Rush** (volcano): black rock and rivers of lava (drops). Up the
+   *Design note (the second pass).* The pass has weather, and the weather is
+   on a timer. The lap as a story: the lake and its kicker, the climb, the
+   corkscrew round the hut, and the ice cave, where three icicles let go one
+   after another down the cave (each shakes, and its shadow reddens, a second
+   before it drops). The in-run is longer now, falling a long way south
+   before it bends; where it leaves the mountain's foot a **split**: the main
+   road runs straight under the **avalanche path**, two slabs of snow let go
+   across the road a beat apart from the slope on the left (a lamp on a post
+   lights before each, `slide` of kind `avalanche`); the other bears off left
+   into a pocket in the cliff, **behind a frozen waterfall** (dozens of fluted
+   columns of ice and a roof of it, lit blue from within), a longer road
+   with a line of boost along it and two icicles let go in turn, and rejoins
+   below. The signature is the **ski-jump**: off the brow of the in-run on a
+   **glide** (`air` glide, 84 m, 9 m up) over the crevasse (no barrier either
+   side), and down onto the flat beyond; the wow moments are the kicker, the
+   corkscrew, the cave, and the glide. Home is the moguls and the yeti. What
+   is new: the avalanche piece, the waterfall landmark (`landmarks/snow/falls.ts`),
+   the longer in-run and the branch, the glide in place of the old ski-jump
+   ramp and gap. A best lap runs about 58 s and the slowest about 72 s, the
+   less sure bots and the ones who took the falls.
+7. **Volcano Rush** (volcano): black rock and rivers of lava (drops), and the volcano is erupting. Up the
    volcano's flank in switchbacks (two banked hairpins, boulders rolling down
    the first leg at you); on the second leg a **geyser cannon** (`air` cannon,
    82 m, 8 m up) fires you across a tongue of lava that has eaten 66 m of the
-   road (a `gap`: there is no way across on the ground); a ridge twenty-two
-   metres up that weaves between lava on the outside of its bends, where the
-   **eruption** goes off on the race clock: a pair of lava bombs leaps from
-   either side every seven seconds (the middle is clear), the next pair half
-   a beat later; then off the brow on a **glide** (140 m, 11 m up, a parasol)
+   road (a `gap`: there is no way across on the ground); round the second hairpin onto the
+   **crater's rim**, twenty-five metres up and banked hard, where the **eruption** goes off
+   on the race clock; then off the brow on a **glide** (140 m, 11 m up, a parasol)
    down the mountain over the open lava fields, steering for the rings painted
    where the road comes back (the boost), and the stone bridge over the lava
-   lake with nothing either side, a boost strip along its left half only. The
-   volcano smokes behind it all; the duck relaxes in a hot spring beside the
-   second hairpin. *Design note:* the old jump over a lava gap became the
-   glide, because a ramp can only throw a kart one way and the brow is the
-   best view on the track; the cannon is the flank's wow moment and the
-   eruption the ridge's; the glide's landing is a straight, level run before
-   the last bends.
+   lake, where the lake swells up and runs across the deck. The volcano smokes behind it all; the duck relaxes in a hot
+   spring beside the second hairpin.
+   *Design note (round two).* The lap as a story: a quiet straight, the flank (the first set piece is
+   the cannon: the wow of the first half), the rim where the volcano erupts, the glide (the second wow) and the bridge
+   where the lake comes up to meet you, then home. Three engines together. **Timed pieces:** the eruption is three rows of
+   lava bombs (`rockRain`, `ember-rock`) falling on the rim's first straight, each row a beat behind the last and each leaving
+   a lane clear (outside, inside, middle): every bomb's shadow grows and reddens for a second and a half
+   before it lands, so the rows are a slalom you read; beyond them, on the lip, fireballs leap from the lava on either side in
+   turn. On the bridge two swells of lava (`lava-surge`, one each way, half a beat apart) rise out of the lake beside the deck
+   and sweep it (their warning shows for 2.5 s: the swell rises beside the deck first). **Route:** the **lava tube** is a shortcut that leaves the rim's first straight and runs under the crater's lip
+   (a tunnel through the rock, black on the outside and lit orange from two channels of lava along its walls; narrow, a strip of
+   boost down it, about 50 m shorter than the rim: two seconds) and out onto the rim's exit; it skips the fireballs, and the bombs fall on the road it
+   leaves, so the choice is made with the shadows already growing. **Air:** the cannon and the glide as before. *Reshaped:* the old ridge
+   that weaved between the lava is the crater's rim, a sweeping, banked left-hander round the cone with open lava on
+   its outside; the leg-two cannon and the brow-and-glide stay where their straight run-ups and landings need them. Not built:
+   the crumbling bridge (no timed floors), so the bridge's danger is the lake instead. The tube leaves where the rim is flat and
+   joins where it has begun to straighten out, so its ground and lean match the rim's.
 8. **Starlight Ribbon** (space): the finale. A glowing ribbon of road high
-   over a ringed planet: up the twist, where the ribbon rolls one way and
+   over a ringed planet: off the line the ribbon **splits**, then up the twist, where the ribbon rolls one way and
    then the other, two crests with **low-gravity lips** (`air` lip, 64 m, 5 m
    up: a slow, floaty arc each, a trick boosts on landing), a banked carousel
-   round the far end that falls all the way, with a **meteor shower** down it
+   round the far end that falls nine metres, with a **meteor shower** down it
    (two comets a beat apart, one each side) and an asteroid circling it, back
-   along a lower ribbon and down it on a **solar-sail glide** (70 m, 7 m up,
+   along a lower ribbon past a **plasma arm** and down it on a **solar-sail glide** (70 m, 7 m up,
    landing rings) and into the **cannon between two ribbons** (88 m, 9 m up,
    over 56 m of nothing). Almost no barriers (fall and the drone brings you
    back), boost strips, ring gates. The duck floats in an astronaut's helmet by
-   a satellite. *Design note:* the lips replace the natural crest jumps so the
-   floaty arcs are always the same, the asteroid moved off the dip so that
-   nothing waits where the lips land, and glide then cannon on one straight is
-   the finale's crescendo (a kart that lands the glide on its mark has speed
-   for the cannon).
-
+   a satellite.
+   *Design note (round two).* The lap as a story: the split at the start (a choice between two ribbons), the twist (the roll),
+   the crests (the float), the carousel (the fall, under the shower), the plasma arm (a gate to time) and the glide and the cannon in
+   a row (the wow, a crescendo: a kart that lands the glide on its mark has speed for the cannon). **Route:** the ribbon splits
+   into the **aurora** (the main ribbon: wide, a strip of boost, a comet rolling down it) and the **comet trail** (narrower and a
+   couple of metres lower at its swing, open to the void like the ribbon, three rows of meteors striking it, each row's shadow
+   growing for more than a second; an asteroid beside it and a ring gate over it), about the same length: a split with two
+   characters, 50-50 for the bots. **Timed pieces:** the meteors (`rockRain`, `meteor`, drawn on the branch by the route's own
+   piece layer) and the plasma arm (`sweeper` of `plasma-orb`, one arm of 8.4 m turning every 6.2 s across the 20 m ribbon: wait for
+   it or slip by its far side). **Air:** the lips, the glide, the cannon, as before. *Reshaped:* the carousel falls nine metres
+   instead of five and the lower ribbon, glide and cannon run lower, so the lap has more height to lose; the curvature lean
+   (the track's `bank`) is gone and every bend is banked by its own points, so that the split's junctions can be flat; the twist is
+   later on the first ribbon (after the split rejoins) and its outline is new: the ribbon swings out right, rolling hard (0.42 rad), and
+   back across to the left on its way up to the crests, instead of a straight climb with a lean, and the lower ribbon has a lazy S in it. The
+   crests, the spiral and the descent keep their shape because the lips, the glide and the cannon need their straight run-ups. Not built: a
+   loop-the-loop or a corkscrew that crosses over itself (a road is found by its nearest centre line, so two coils of one road would be mistaken
+   for each other), so the twist is a banked S and the wow moments stay the glide and the cannon.
 **Secret: Five Finger Circuit** (palm): an island shaped like an open hand,
 seen from above — the hand you play with. The road runs up and down every finger
-(the fingertips are hairpins), round the thumb, across the palm and back
+(the fingertips are banked hairpins), round the thumb, across the palm and back
 along the wrist, where a giant wristwatch is the start gantry; a ring to
 drive through on the straight by the wrist (the fingers are too close to one
 another for anything to stand between them); palm trees, beach huts, crabs, coconuts.
@@ -2092,11 +2494,23 @@ A **wrist cannon** (36 m, 5 m up) on the first diagonal hops a kart up from the 
 toward the first finger, a **fingertip lip** (34 m, 3.5 m up) hops the first finger's
 long leg, and the **thumb glide** (95 m, 8 m up, a parasol) takes a kart off the thumb's
 tip and down to the wrist over the water, to rings painted at the foot of the thumb.
-*Design note:* the fingers are too close together and the legs too short for long
-flights (a cannon needs 20 m of road after it before a hard bend), so the hand gets
-short hops and one long glide down the thumb, the one long straight on the map; waves
-washing the beach road on a timer are not built (see the timed set pieces). The
-minimap is a hand, tilted: every finger climbs to its tip and back. The duck
-sunbathes, in sunglasses, in the middle of the palm.
+*Design note (round two).* The lap as a story: the wrist and the cannon (the start), the
+fingers, one by one, each a climb and a hairpin and a drop (the middle finger the highest, six metres up), the
+**palm trail** (the choice), the thumb and its glide (the wow), the wrist's beach where the tide comes in, and home.
+The hand is tilted and now climbs more: every finger rises to its tip and back (twice as high
+as before) and the tips are banked hairpins; the wrist has a **watch-strap buckle** (the road swings out to the sea side and back in a wide S) before the
+last U onto the start straight. The outline of the fingers is otherwise the first pass's: knuckle kinks in the finger legs were tried and
+dropped (a 13 m road with a 12 m kink is too sharp for the chase camera and for the slowest bots), and the legs are 26 m apart, so
+there is no room for more shape without the roads passing close to each other. The palm trail leaves earlier than it did (on the
+pinky's leg, before the valley's corner): where it left at the corner itself the bots circled on the mouth of the fork. **Route:** the **palm trail** is a shortcut that leaves
+the pinky's side of the first valley, runs straight on across the sand of the palm under the ring finger (a **tiki arch**
+at its mouth, carved bamboo posts with chevrons, lanterns and torches; a strip of boost; the palms lean over it and shake a volley of coconuts (`coconut-bunch`, three rows, a beat apart, a lane clear each time) onto it) and
+comes up onto the middle finger's long leg: narrower, flat, and a little shorter than going over the ring finger, and the volley is what it costs.
+(It had to run under the fingers, not across them: a road is found by the nearest centre line, so no road may cross another, and
+a zig-zag has no chord that skips a finger without crossing a leg.) **Timed pieces:** the **tide**, two sets of breakers (`tide-wave`, three joined pieces each, 12 m of white-crested water) that
+wash up the wrist's beach road from the sea, one each side of the first bend, half a beat apart: each shows as foam at the
+road's edge and grows for 2.3 s before it runs across; and the **coconut volley** on the palm trail (above). **Air:** the cannon, the lip and the glide, as before. The fingers are too close together
+and the legs too short for long flights (a cannon needs 20 m of road after it before a hard bend), so the hand gets short hops and one
+long glide down the thumb. The minimap is a hand, tilted. The duck sunbathes, in sunglasses, in the middle of the palm, below the trail.
 Unlocked by winning both cups (or, for those who know, the Konami code on the
 start screen).

@@ -29,6 +29,7 @@ import { stepItems, pressItem, rocketTarget } from "./items";
 import { DRAFT_FULL, GO_TICK, NO_EMIT, bumpKarts, courseOf, forwardSpeed, newKart, placeOnTrack, settle, slipstream, stepKart, viewHop } from "./kart";
 import { planFor } from "./plan";
 import { standings, updatePlaces, updateProgress } from "./progress";
+import { effectsOf } from "../rules";
 import { applySnapshot, takeSnapshot } from "./snapshot";
 import { clamp, type EventBody, type KartState, type SimState, type World } from "./state";
 import { ticks, TUNING } from "./tuning";
@@ -74,7 +75,8 @@ class Sim implements SimRace {
 
   constructor(readonly setup: RaceSetup) {
     const plan = planFor(setup.track);
-    const karts = setup.racers.map((racer, place) => newKart(racer, place, plan.geo));
+    const rule = effectsOf(setup.rule);
+    const karts = setup.racers.map((racer, place) => newKart(racer, place, plan.geo, rule));
     this.state = {
       tick: 0,
       karts,
@@ -102,6 +104,7 @@ class Sim implements SimRace {
       kart: (id) => this.byId.get(id),
       rng: countedRandom(setup.seed),
       emit: this.emit,
+      rule,
       bestPlayer: null,
     };
     updatePlaces(this.world);
@@ -271,6 +274,7 @@ class Sim implements SimRace {
       laps: this.world.laps,
       track: this.setup.track,
       racers: this.setup.racers,
+      ...(this.setup.rule ? { rule: this.setup.rule } : {}),
       karts,
       things,
       events,

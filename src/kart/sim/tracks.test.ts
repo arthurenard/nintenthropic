@@ -13,26 +13,26 @@ import { trackStats } from "./trackStats";
 
 /** What each theme can build (docs/GRIP_PRIX.md, "What each theme can build"). */
 const LANDMARKS: Record<TrackTheme, string[]> = {
-  meadow: ["windmill", "barn", "pond", "hay-bales", "hot-air-balloon", "sheep", "flower-field"],
-  canyon: ["mesa", "rock-arch", "cactus-grove", "water-tower", "mine-cart"],
-  harbour: ["crane", "lighthouse", "ship", "containers", "warehouse", "buoy"],
-  kitchen: ["teapot", "fruit-bowl", "toaster", "grater", "salt-shaker", "pepper-mill", "cookbook", "cereal-box", "mug", "fork-arch", "spoon-arch", "sink", "window", "wall-clock"],
-  snow: ["igloo", "cabin", "snowman", "ice-arch", "ice-cave", "pine-snow", "gondola", "ski-jump"],
-  volcano: ["volcano", "lava-fall", "basalt-columns", "stone-bridge", "obsidian-arch", "hot-spring"],
-  funfair: ["ferris-wheel", "carousel", "big-top", "rollercoaster", "entrance-arch", "food-stall", "balloon-stand", "hook-a-duck", "helter-skelter", "fireworks"],
+  meadow: ["windmill", "barn", "barn-run", "pond", "hay-bales", "hot-air-balloon", "sheep", "flower-field", "farm-gate", "oak"],
+  canyon: ["mesa", "rock-arch", "cactus-grove", "water-tower", "mine-cart", "mine-tunnel", "rope-bridge", "headframe", "dynamite-shack"],
+  harbour: ["crane", "lighthouse", "ship", "ship-deck", "containers", "warehouse", "buoy", "drawbridge"],
+  kitchen: ["teapot", "fruit-bowl", "toaster", "grater", "drawer", "salt-shaker", "pepper-mill", "cookbook", "cereal-box", "mug", "fork-arch", "spoon-arch", "sink", "window", "wall-clock", "mixer", "cooker", "spatula", "drainer"],
+  snow: ["igloo", "cabin", "snowman", "ice-arch", "ice-cave", "pine-snow", "gondola", "ski-jump", "frozen-falls"],
+  volcano: ["volcano", "lava-fall", "basalt-columns", "stone-bridge", "obsidian-arch", "hot-spring", "lava-tube"],
+  funfair: ["ferris-wheel", "carousel", "big-top", "rollercoaster", "entrance-arch", "food-stall", "balloon-stand", "hook-a-duck", "helter-skelter", "fireworks", "ferris-gate", "coaster-trestle", "cannon-tent", "safety-net"],
   space: ["ringed-planet", "ring-gate", "asteroid", "satellite", "space-station", "nebula"],
-  palm: ["palm-tree", "beach-hut", "surfboard", "sandcastle", "beach-towel", "giant-ring", "wristwatch"],
+  palm: ["palm-tree", "beach-hut", "surfboard", "sandcastle", "beach-towel", "giant-ring", "wristwatch", "tiki-arch"],
 };
 const HAZARDS: Record<TrackTheme, string[]> = {
-  meadow: [],
+  meadow: ["hay-roll", "sheep-flock", "acorn"],
   canyon: ["boulder", "tumbleweed", "ore-cart", "wrecking-ball", "rock-crusher"],
-  harbour: ["crab", "forklift"],
-  kitchen: ["orange", "pea", "teacup"],
-  snow: ["penguin", "snowball", "yeti", "icicle"],
-  volcano: ["fireball", "boulder", "geyser"],
+  harbour: ["crab", "forklift", "swing-box", "cargo-box"],
+  kitchen: ["orange", "pea", "teacup", "toast", "whisk", "drip"],
+  snow: ["penguin", "snowball", "yeti", "icicle", "avalanche"],
+  volcano: ["fireball", "boulder", "geyser", "ember-rock", "lava-surge"],
   funfair: ["teacup-ride", "bumper-car", "arm-ball", "funhouse-panel", "mallet", "swing-boat"],
-  space: ["asteroid", "comet"],
-  palm: ["crab", "coconut", "beach-ball"],
+  space: ["asteroid", "comet", "meteor", "plasma-orb"],
+  palm: ["crab", "coconut", "beach-ball", "tide-wave", "coconut-bunch"],
 };
 
 describe("the cups", () => {

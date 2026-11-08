@@ -300,7 +300,8 @@ export interface LandmarkLayer {
   count: number;
   /** Triangles of span landmarks cut away for standing in another stretch of the road's ground (see cutAtOtherStretches). */
   cuts: number;
-  update(time: number): void;
+  /** `time` is the wall clock (sails, wheels); `race` the race's own clock, for what keeps the sim's time (a drawbridge, a lamp before the sheep). */
+  update(time: number, race?: number): void;
   dispose(): void;
 }
 
@@ -425,7 +426,7 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
   const keepOut: KeepOut[] = [];
   const roofs: Roof[] = [];
   const chunks = new Map<number, Chunk>();
-  const animated: ((t: number) => void)[] = [];
+  const animated: ((t: number, race: number) => void)[] = [];
   const halos: (Halo & { phase: number })[] = [];
   const disposables: { dispose(): void }[] = [];
   /** Soft dark blobs on the ground under the big things, so they sit there instead of floating. */
@@ -541,7 +542,7 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
       if (part.glow && !part.glow.empty) shift(part.glow, mats.glow);
       if (part.glass && !part.glass.empty) shift(part.glass, mats.glass);
       group.add(outer);
-      animated.push((t) => part.update(t, inner));
+      animated.push((t, race) => part.update(t, inner, race));
     }
     keepOut.push({ x: p.x, z: p.z, r: Math.max(spec.footprint ?? 0, r * 0.85) });
     // Its contact shadow: the footprint's ellipse, nudged away from the sun.
@@ -662,8 +663,8 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
     roofs,
     count,
     cuts,
-    update(time) {
-      for (const f of animated) f(time);
+    update(time, race = 0) {
+      for (const f of animated) f(time, race);
     },
     dispose() {
       for (const d of disposables) d.dispose();

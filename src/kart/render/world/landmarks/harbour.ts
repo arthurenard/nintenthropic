@@ -7,6 +7,7 @@ import { Group, Mesh, type Object3D } from "three";
 import type { Paint } from "../builder";
 import { byHeight, extrudeZ, grid, lathe, MeshBuilder, mixRgb, prism, ramp, rgb, rockBlob, scaleRgb, shapes, torus, xf, type Rgb, type V3 } from "./kit";
 import type { Halo, HazardSpec, LandmarkSpec, MovingPart } from "./types";
+import * as second from "./harbourSet";
 
 const TAU = Math.PI * 2;
 
@@ -723,16 +724,103 @@ const forklift: HazardSpec = {
   },
 };
 
+/**
+ * The deck of a moored cargo ship that the road runs along (a span, built in the road's frame, whose y = 0 is the deck): hull
+ * plates down to the water either side, a yellow rail and its posts, stacks of containers beyond the rail, a gantry crane
+ * striding over the deck. The edges have no barrier: fall off and the drone fishes you out.
+ */
+const shipDeck: LandmarkSpec = {
+  span: true,
+  defaultSpan: 80,
+  build(ctx) {
+    const lit = new MeshBuilder();
+    const glow = new MeshBuilder();
+    const halos: Halo[] = [];
+    const L = ctx.span;
+    const z0 = -L / 2;
+    const z1 = L / 2;
+    const rnd = ctx.rnd;
+    const side = ctx.halfWidth + 2.6;
+    const steps = Math.max(2, Math.round(L / 4));
+    for (const s of [-1, 1]) {
+      // The hull's plates, from the waterline to the deck edge, red below and navy above.
+      extrudeZ(lit, [[s * side, -9], [s * side, -3.4], [s * side, -0.3]], z0, z1, steps, (p, i) => scaleRgb(mixRgb(HULL_RED, NAVY, Math.min(1, (p[1] + 9) / 8.7)), i % 2 ? 1.05 : 0.95));
+      extrudeZ(lit, [[s * (side - 0.7), -0.3], [s * (side - 0.7), -9]], z0, z1, steps, scaleRgb(STEEL_D, 0.8));
+      lit.box(s * (side - 0.35), -0.15, 0, 0.8, 0.3, L, STEEL);
+      // The rail: posts every 4 m and two bars, low enough that a kart can see over it.
+      for (let z = z0 + 1; z <= z1 - 0.5; z += 4) lit.box(s * (side + 0.2), 0.55, z, 0.16, 1.1, 0.16, YELLOW);
+      lit.box(s * (side + 0.2), 1.0, 0, 0.14, 0.14, L, YELLOW);
+      lit.box(s * (side + 0.2), 0.5, 0, 0.12, 0.12, L, YELLOW);
+      // Containers stacked on the hatch covers beyond the rail, two or three high, gaps between the stacks.
+      for (let z = z0 + 5; z < z1 - 4; z += CL + 0.5) {
+        const rows = 1 + Math.floor(rnd() * 3);
+        const col = BOX_COLOURS[Math.floor(rnd() * BOX_COLOURS.length)]!;
+        for (let r = 0; r < rows; r++) {
+          const c = r === 0 ? col : BOX_COLOURS[Math.floor(rnd() * BOX_COLOURS.length)]!;
+          lit.box(s * (side + 2.6 + (rnd() < 0.3 ? 0.3 : 0)), r * CH + CH / 2 + 0.2, z, CW, CH, CL, ramp(scaleRgb(c, 0.62), c));
+          lit.box(s * (side + 2.6 - CW / 2 - 0.02), r * CH + CH / 2 + 0.2, z, 0.1, CH - 0.5, CL - 0.5, scaleRgb(c, 0.5));
+        }
+      }
+      // A mast light by the bow-most stack.
+      lit.post(s * (side + 0.2), 0, z1 - 1.2, 0.12, 3.2, STEEL, 6);
+      glow.blob(s * (side + 0.2), 3.35, z1 - 1.2, 0.3, 0.3, 0.3, s < 0 ? [3.2, 0.4, 0.3] : [0.3, 3.0, 0.6], 0);
+      halos.push({ x: s * (side + 0.2), y: 3.35, z: z1 - 1.2, size: 4.5, colour: s < 0 ? [3, 0.4, 0.3] : [0.3, 2.8, 0.6], alpha: 0.8 });
+    }
+    // A gantry crane straddling the deck at the middle: legs beyond the stacks, the beam well over a kart, a cab and lights.
+    const gantry = side + 8.4;
+    for (const s of [-1, 1]) {
+      lit.box(s * gantry, 7, 0, 1.4, 14, 1.4, ramp(scaleRgb(CRANE_RED, 0.7), CRANE_RED));
+      lit.box(s * gantry, 0.5, 0, 2.4, 1.0, 2.4, STEEL_D);
+    }
+    lit.box(0, 14.2, 0, 2 * gantry + 1.8, 1.5, 1.8, ramp(CRANE_RED, CRANE_WHITE));
+    lit.box(0, 15.4, 0, 2 * gantry + 2.4, 0.4, 2.2, STEEL);
+    lit.box(gantry * 0.35, 13.1, 0, 3.4, 1.6, 2.2, CRANE_WHITE);
+    glow.box(gantry * 0.35, 13.1, 1.12, 2.6, 0.7, 0.1, WINDOW);
+    for (let k = -2; k <= 2; k++) {
+      glow.blob(k * (gantry * 0.4), 13.3, 1.0, 0.28, 0.28, 0.28, SODIUM, 0);
+      halos.push({ x: k * (gantry * 0.4), y: 13.3, z: 1.0, size: 6, colour: SODIUM_HALO, alpha: 0.9 });
+    }
+    return { lit, glow, halos };
+  },
+};
+
 export const LANDMARKS: Record<string, LandmarkSpec> = {
   crane,
   lighthouse,
   ship,
+  "ship-deck": shipDeck,
   containers,
   warehouse,
   buoy,
+  ...second.LANDMARKS,
+};
+
+/** A container on a crane's hook, swinging round over the dock; a ring of hazard stripes on the box, a shadow-blind hook above. */
+const swingBox: HazardSpec = {
+  build(ctx) {
+    const b = new MeshBuilder();
+    const red = lift("#c8402e", 1.5);
+    b.box(0, 1.2, 0, 2.2, 2.0, 4.4, ramp(scaleRgb(red, 0.7), red));
+    for (let k = 0; k < 7; k++) b.box(0, 1.2, -1.9 + k * 0.63, 2.24, 1.9, 0.08, STEEL_D);
+    // The hook cables and spreader on top.
+    b.box(0, 2.3, 0, 2.3, 0.2, 4.5, STEEL_D);
+    for (const sz of [-1, 1]) b.rod([0, 2.4, sz * 1.9], [0, 5.5, 0], 0.08, BLACK);
+    const root = new Group();
+    root.add(new Mesh(b.build(), ctx.lit));
+    return {
+      root,
+      radius: 2,
+      update(s) {
+        // Sways on its cables a little more than the swing needs.
+        root.rotation.z = Math.sin(s.time * 2.1) * 0.08;
+        root.position.y = 0.35 + Math.sin(s.time * 3.3) * 0.05;
+      },
+    };
+  },
 };
 
 export const HAZARDS: Record<string, HazardSpec> = {
   crab,
   forklift,
+  "swing-box": swingBox,
 };

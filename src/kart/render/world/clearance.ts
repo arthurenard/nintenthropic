@@ -58,49 +58,66 @@ export class Clearance {
 
   constructor(private readonly terrain: Terrain) {
     const track = terrain.track;
-    const features = terrain.features;
-    const samples = track.samples;
-    const n = samples.length;
-    this.ax = new Float64Array(n);
-    this.az = new Float64Array(n);
-    this.ex = new Float64Array(n);
-    this.ez = new Float64Array(n);
-    this.len2 = new Float64Array(n);
-    this.len = new Float64Array(n);
-    this.left = new Float64Array(n);
-    this.right = new Float64Array(n);
-    this.half = new Float64Array(n);
-    this.limit = new Float64Array(n);
+    // The loop, then each branch road (alternate routes): every stretch of every road is filed, and a point is measured from the least.
+    const roads = [
+      { samples: track.samples, features: terrain.features, open: false },
+      ...track.routes.map((road, r) => ({ samples: road.samples, features: terrain.routeFeatures[r]!, open: true })),
+    ];
+    const total = roads.reduce((sum, road) => sum + road.samples.length, 0);
+    this.ax = new Float64Array(total);
+    this.az = new Float64Array(total);
+    this.ex = new Float64Array(total);
+    this.ez = new Float64Array(total);
+    this.len2 = new Float64Array(total);
+    this.len = new Float64Array(total);
+    this.left = new Float64Array(total);
+    this.right = new Float64Array(total);
+    this.half = new Float64Array(total);
+    this.limit = new Float64Array(total);
     let reach = 0;
     let longest = 0;
     let minI = Infinity;
     let maxI = -Infinity;
     let minJ = Infinity;
     let maxJ = -Infinity;
-    samples.forEach((s, i) => {
-      reach = Math.max(reach, s.width / 2 + Math.max(features.wallLeft[i]!, features.wallRight[i]!));
-      minI = Math.min(minI, Math.floor(s.x / BUCKET));
-      maxI = Math.max(maxI, Math.floor(s.x / BUCKET));
-      minJ = Math.min(minJ, Math.floor(s.z / BUCKET));
-      maxJ = Math.max(maxJ, Math.floor(s.z / BUCKET));
-    });
+    for (const road of roads) {
+      road.samples.forEach((s, i) => {
+        reach = Math.max(reach, s.width / 2 + Math.max(road.features.wallLeft[i]!, road.features.wallRight[i]!));
+        minI = Math.min(minI, Math.floor(s.x / BUCKET));
+        maxI = Math.max(maxI, Math.floor(s.x / BUCKET));
+        minJ = Math.min(minJ, Math.floor(s.z / BUCKET));
+        maxJ = Math.max(maxJ, Math.floor(s.z / BUCKET));
+      });
+    }
     this.reach = reach;
-    for (let k = 0; k < n; k++) {
-      const a = samples[k]!;
-      const b = samples[(k + 1) % n]!;
-      const ex = b.x - a.x;
-      const ez = b.z - a.z;
-      this.ax[k] = a.x;
-      this.az[k] = a.z;
-      this.ex[k] = ex;
-      this.ez[k] = ez;
-      this.len2[k] = ex * ex + ez * ez || 1;
-      this.len[k] = Math.sqrt(this.len2[k]!);
-      this.left[k] = Math.max(features.wallLeft[k]!, features.wallLeft[(k + 1) % n]!);
-      this.right[k] = Math.max(features.wallRight[k]!, features.wallRight[(k + 1) % n]!);
-      this.half[k] = Math.max(a.width, b.width) / 2;
-      this.limit[k] = Math.min(reach, this.half[k]! + Math.max(this.left[k]!, this.right[k]!));
-      longest = Math.max(longest, this.len[k]!);
+    const filed: { k: number; x: number; z: number }[] = [];
+    let base = 0;
+    for (const road of roads) {
+      const samples = road.samples;
+      const n = samples.length;
+      const features = road.features;
+      // A branch road is open at its ends: no stretch closes it.
+      const stretches = road.open ? n - 1 : n;
+      for (let i = 0; i < stretches; i++) {
+        const k = base + i;
+        const a = samples[i]!;
+        const b = samples[(i + 1) % n]!;
+        const ex = b.x - a.x;
+        const ez = b.z - a.z;
+        this.ax[k] = a.x;
+        this.az[k] = a.z;
+        this.ex[k] = ex;
+        this.ez[k] = ez;
+        this.len2[k] = ex * ex + ez * ez || 1;
+        this.len[k] = Math.sqrt(this.len2[k]!);
+        this.left[k] = Math.max(features.wallLeft[i]!, features.wallLeft[(i + 1) % n]!);
+        this.right[k] = Math.max(features.wallRight[i]!, features.wallRight[(i + 1) % n]!);
+        this.half[k] = Math.max(a.width, b.width) / 2;
+        this.limit[k] = Math.min(reach, this.half[k]! + Math.max(this.left[k]!, this.right[k]!));
+        longest = Math.max(longest, this.len[k]!);
+        filed.push({ k, x: a.x, z: a.z });
+      }
+      base += n;
     }
     this.slack = longest + 1e-6;
     this.i0 = minI;
@@ -108,10 +125,9 @@ export class Clearance {
     this.ni = maxI - minI + 1;
     this.nj = maxJ - minJ + 1;
     const lists: number[][] = [];
-    for (let k = 0; k < n; k++) {
-      const s = samples[k]!;
-      const at = (Math.floor(s.x / BUCKET) - minI) * this.nj + (Math.floor(s.z / BUCKET) - minJ);
-      (lists[at] ??= []).push(k);
+    for (const f of filed) {
+      const at = (Math.floor(f.x / BUCKET) - minI) * this.nj + (Math.floor(f.z / BUCKET) - minJ);
+      (lists[at] ??= []).push(f.k);
     }
     lists.forEach((list, at) => {
       this.buckets[at] = { stretches: Int32Array.from(list), reach: Math.max(...list.map((k) => this.limit[k]!)) };

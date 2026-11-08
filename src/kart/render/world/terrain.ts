@@ -48,8 +48,10 @@ export interface GroundInfo {
   level: number;
   /** s of the nearest sample. */
   s: number;
-  /** Index of the nearest sample. */
+  /** Index of the nearest sample (of its road's samples). */
   i: number;
+  /** The road it is: 0 the main road, 1.. a branch. */
+  route: number;
   /** Metres right of the centre line there (negative: left). */
   lateral: number;
 }
@@ -83,6 +85,10 @@ export class Terrain {
   readonly dropDepth: number;
   /** The road's banking, which the ground beside it follows. */
   readonly bank: Bank;
+  /** The branch roads' own features, banking and the roads themselves (`routeFeatures[r - 1]` is route `r`). */
+  readonly routeFeatures: Features[];
+  private readonly roads: TrackGeometry[];
+  private readonly banks: Bank[];
   private anyLava = false;
 
   private constructor(
@@ -103,6 +109,9 @@ export class Terrain {
     this.features = features;
     this.dropDepth = -DROP_DEPTH[style.id];
     this.bank = Bank.of(track);
+    this.roads = [track, ...track.routes];
+    this.banks = this.roads.map((road) => Bank.of(road));
+    this.routeFeatures = track.routes.map((road) => analyseFeatures(road));
     this.heights = new Float32Array(nx * nz);
     this.edges = new Float32Array(nx * nz);
     this.walls = new Float32Array(nx * nz).fill(WALL_DISTANCE);
@@ -128,7 +137,7 @@ export class Terrain {
     let maxX = -Infinity;
     let minZ = Infinity;
     let maxZ = -Infinity;
-    for (const s of track.samples) {
+    for (const s of [...track.samples, ...track.routes.flatMap((road) => road.samples)]) {
       minX = Math.min(minX, s.x);
       maxX = Math.max(maxX, s.x);
       minZ = Math.min(minZ, s.z);
@@ -148,33 +157,38 @@ export class Terrain {
 
   /** Ground facts at a point, by brute force over the centre line. */
   info(x: number, z: number): GroundInfo {
-    const samples = this.track.samples;
     const R = 28;
     const R2 = R * R;
     let best = Infinity;
     let bi = 0;
+    let bRoad = 0;
     let sumW = 0;
     let sumWY = 0;
-    for (let i = 0; i < samples.length; i++) {
-      const a = samples[i]!;
-      const dx = a.x - x;
-      const dz = a.z - z;
-      const d2 = dx * dx + dz * dz;
-      if (d2 < best) {
-        best = d2;
-        bi = i;
-      }
-      if (d2 < R2 * 7 && (i & 1) === 0) {
-        const w = Math.exp(-d2 / R2);
-        sumW += w;
-        sumWY += w * a.y;
+    // The nearest road wins (the loop, or a branch); the roads around all say how high the hills should stand.
+    for (let r = 0; r < this.roads.length; r++) {
+      const samples = this.roads[r]!.samples;
+      for (let i = 0; i < samples.length; i++) {
+        const a = samples[i]!;
+        const dx = a.x - x;
+        const dz = a.z - z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 < best) {
+          best = d2;
+          bi = i;
+          bRoad = r;
+        }
+        if (d2 < R2 * 7 && (i & 1) === 0) {
+          const w = Math.exp(-d2 / R2);
+          sumW += w;
+          sumWY += w * a.y;
+        }
       }
     }
-    const near = samples[bi]!;
+    const near = this.roads[bRoad]!.samples[bi]!;
     const d = Math.sqrt(best);
     const lateral = (x - near.x) * -near.tz + (z - near.z) * near.tx;
-    const lift = this.bank.liftAt(bi, lateral);
-    return { d, edge: d - near.width / 2, roadY: near.y, lift, level: sumW > 1e-6 ? sumWY / sumW : near.y, s: near.s, i: bi, lateral };
+    const lift = this.banks[bRoad]!.liftAt(bi, lateral);
+    return { d, edge: d - near.width / 2, roadY: near.y, lift, level: sumW > 1e-6 ? sumWY / sumW : near.y, s: near.s, i: bi, route: bRoad, lateral };
   }
 
   private fill(): void {
@@ -218,13 +232,13 @@ export class Terrain {
 
   /** Where the barrier stands beyond the road's edge on the side of `g.lateral` at its nearest sample: the ground out to there is the road's own. */
   private wallOf(g: GroundInfo): number {
-    const f = this.features;
+    const f = g.route === 0 ? this.features : this.routeFeatures[g.route - 1]!;
     return (g.lateral < 0 ? f.wallLeft : f.wallRight)[g.i] ?? WALL_DISTANCE;
   }
 
   /** How open the ground on the side of `g.lateral` is at its nearest sample, 0..1, within the theme's reach. */
   private openness(g: GroundInfo): number {
-    const f = this.features;
+    const f = g.route === 0 ? this.features : this.routeFeatures[g.route - 1]!;
     if (!f.anyDrop) return 0;
     const raw = g.lateral < 0 ? f.dropLeft[g.i]! : f.dropRight[g.i]!;
     if (raw < 0.001) return 0;

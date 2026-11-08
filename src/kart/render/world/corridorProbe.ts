@@ -34,6 +34,8 @@ export interface Spot {
   /** What a solid thing must stand above to count: the road, or the ground where it rises past the road (a hill is the ground's business, not a prop's). */
   ref: number;
   s: number;
+  /** The road it is on: 0 the main road, 1.. a branch. */
+  route: number;
   /** Metres beyond the road's edge (negative on the road). */
   beyond: number;
   side: -1 | 1;
@@ -52,32 +54,39 @@ export interface Spot {
  * cut across a hairpin's inside is the two legs' ground, meeting where each is the nearer).
  */
 export function drivableSpots(def: TrackDef, geo: TrackGeometry, bank: Bank, groundAt: (x: number, z: number) => number, along = 2, across = 1): Spot[] {
-  const sim = buildSimTerrain(def, geo);
+  // The loop, then each branch road: each with its own terrain and banking.
+  const roads = [geo, ...geo.routes];
+  const sims = roads.map((road) => buildSimTerrain(road === geo ? def : road.def, road));
+  const banks = roads.map((road) => (road === geo ? bank : Bank.of(road)));
   const spots: Spot[] = [];
-  const step = Math.max(1, Math.round(along / geo.spacing));
-  for (let i = 0; i < geo.samples.length; i += step) {
-    const c = geo.samples[i]!;
-    const half = c.width / 2;
-    for (const side of [-1, 1] as const) {
-      const open = isOpen(sim, c.s, side);
-      const wall = open ? TUNING.fall.edge + 0.5 : barrierDistance(sim, c.s, side);
-      for (let o = side > 0 ? 0 : across; o <= half + wall + (open ? 0 : SOLID_MARGIN); o += across) {
-        const lat = side * o;
-        const x = c.x - c.tz * lat;
-        const z = c.z + c.tx * lat;
-        const p = geo.project(x, z);
-        const pSide = p.offset > 0 ? 1 : -1;
-        const pOpen = isOpen(sim, p.s, pSide);
-        const pWall = pOpen ? TUNING.fall.edge + 0.5 : barrierDistance(sim, p.s, pSide);
-        const beyond = Math.abs(p.offset) - p.sample.width / 2;
-        const reach = pWall + (pOpen ? 0 : SOLID_MARGIN);
-        // Out of the nearest road's own corridor: not a place a kart can be.
-        if (beyond > reach) continue;
-        const y = p.sample.y + bank.lift(p.s, p.offset);
-        spots.push({ x, z, y, ref: Math.max(y, groundAt(x, z)), s: p.s, beyond, side: pSide, reach, margin: beyond > pWall, ox: -pSide * p.sample.tz, oz: pSide * p.sample.tx });
+  roads.forEach((road, r) => {
+    const sim = sims[r]!;
+    const step = Math.max(1, Math.round(along / road.spacing));
+    for (let i = 0; i < road.samples.length; i += step) {
+      const c = road.samples[i]!;
+      const half = c.width / 2;
+      for (const side of [-1, 1] as const) {
+        const open = isOpen(sim, c.s, side);
+        const wall = open ? TUNING.fall.edge + 0.5 : barrierDistance(sim, c.s, side);
+        for (let o = side > 0 ? 0 : across; o <= half + wall + (open ? 0 : SOLID_MARGIN); o += across) {
+          const lat = side * o;
+          const x = c.x - c.tz * lat;
+          const z = c.z + c.tx * lat;
+          const p = geo.project(x, z);
+          const pSim = sims[p.route]!;
+          const pSide = p.offset > 0 ? 1 : -1;
+          const pOpen = isOpen(pSim, p.s, pSide);
+          const pWall = pOpen ? TUNING.fall.edge + 0.5 : barrierDistance(pSim, p.s, pSide);
+          const beyond = Math.abs(p.offset) - p.sample.width / 2;
+          const reach = pWall + (pOpen ? 0 : SOLID_MARGIN);
+          // Out of the nearest road's own corridor: not a place a kart can be.
+          if (beyond > reach) continue;
+          const y = p.sample.y + banks[p.route]!.lift(p.s, p.offset);
+          spots.push({ x, z, y, ref: Math.max(y, groundAt(x, z)), s: p.s, route: p.route, beyond, side: pSide, reach, margin: beyond > pWall, ox: -pSide * p.sample.tz, oz: pSide * p.sample.tx });
+        }
       }
     }
-  }
+  });
   return spots;
 }
 
@@ -256,6 +265,8 @@ export interface Probe {
   style: ThemeStyle;
   terrain: Terrain;
   sim: SimTerrain;
+  /** The sim's terrain of the loop and then of each branch road (`sims[route]`). */
+  sims: SimTerrain[];
   spots: Spot[];
   grid: SpotGrid;
   env: PlaceEnv;
@@ -272,11 +283,12 @@ export function makeProbe(def: TrackDef, density: Density = { along: 2, across: 
   const bank = new Bank(geo);
   const style = styleFor(def.theme);
   const terrain = Terrain.build(geo, style, QUALITY[tier].cell);
-  const sim = buildSimTerrain(def, geo);
+  const sims = [geo, ...geo.routes].map((road) => buildSimTerrain(road === geo ? def : road.def, road));
+  const sim = sims[0]!;
   const spots = drivableSpots(def, geo, bank, (x, z) => terrain.heightAt(x, z), density.along, density.across);
   const wall = (s: number, side: -1 | 1) => barrierDistance(sim, s, side);
   const env: PlaceEnv = { track: geo, style, bank, groundAt: (x: number, z: number) => terrain.heightAt(x, z), wall };
-  return { def, geo, bank, style, terrain, sim, spots, grid: new SpotGrid(spots), env };
+  return { def, geo, bank, style, terrain, sim, sims, spots, grid: new SpotGrid(spots), env };
 }
 
 /** The landmarks of a track as the world places them: its list and the duck. */
@@ -326,14 +338,14 @@ function worstOf(probe: Probe, lowest: Map<number, Hit>): Map<string, Offender> 
  * is a ramp's wedge on the road; everything else is not.
  */
 function decorationOffenders(probe: Probe, material: MeshLambertMaterial, tier: Tier): Offender[] {
-  const { geo, terrain, sim } = probe;
-  const meshes = buildTrackMeshes(geo, probe.style, terrain, QUALITY[tier]);
+  const { geo, terrain, sims } = probe;
+  const built = [geo, ...geo.routes].map((road, r) => buildTrackMeshes(road, probe.style, terrain, QUALITY[tier], 64, r === 0 ? undefined : terrain.routeFeatures[r - 1]));
   const group = new Group();
-  for (const g of meshes.deco) group.add(new Mesh(g, material));
+  for (const meshes of built) for (const g of meshes.deco) group.add(new Mesh(g, material));
   const lowest = new Map<number, Hit>();
-  const ramps = terrain.features.ramps;
-  const onRamp = (s: number): boolean =>
-    ramps.some((r) => {
+  const ramps = built.map((meshes) => meshes.features.ramps);
+  const onRamp = (route: number, s: number): boolean =>
+    ramps[route]!.some((r) => {
       let d = r.lip - s;
       if (d > geo.length / 2) d -= geo.length;
       if (d < -geo.length / 2) d += geo.length;
@@ -342,10 +354,10 @@ function decorationOffenders(probe: Probe, material: MeshLambertMaterial, tier: 
   dropOnto(group, probe.grid, "decoration", lowest, (p) => {
     // The barrier's own picture: it stands from the face of the wall outward, and a soft one (a snowbank, a boulder) leans in a
     // little past the limit of a kart's centre (the wall less TUNING.barrierInset).
-    if (p.beyond >= barrierDistance(sim, p.s, p.side) - TUNING.barrierInset - 0.7) return true;
-    return p.beyond < 0 && onRamp(p.s);
+    if (p.beyond >= barrierDistance(sims[p.route]!, p.s, p.side) - TUNING.barrierInset - 0.7) return true;
+    return p.beyond < 0 && onRamp(p.route, p.s);
   });
-  for (const g of [...meshes.deco, ...meshes.road, ...meshes.verge, meshes.pads, meshes.pools, meshes.additive, ...meshes.patches.map((q) => q.geometry)]) g?.dispose();
+  for (const meshes of built) for (const g of [...meshes.deco, ...meshes.road, ...meshes.verge, meshes.pads, meshes.pools, meshes.additive, ...meshes.patches.map((q) => q.geometry)]) g?.dispose();
   const found = new Map<string, Offender>();
   for (const [k, hit] of lowest) {
     const p = probe.spots[k]!;
@@ -376,44 +388,52 @@ export function measureTrack(def: TrackDef, { tier = "high", things = true }: Me
   const quality = QUALITY[tier];
   // Finer than the default, so a pole or a post cannot fall between two samples.
   const probe = makeProbe(def, { along: 1, across: 0.5 }, tier);
-  const { geo, terrain, sim, spots } = probe;
+  const { geo, terrain, sims, spots } = probe;
 
   let rise: Offender | null = null;
   for (const p of spots) {
     if (p.margin) continue;
     const dy = terrain.heightAt(p.x, p.z) - p.y;
-    if (!rise || dy > rise.height) rise = { what: "ground", s: p.s, beyond: p.beyond, height: dy, depth: 0 };
+    if (!rise || dy > rise.height) rise = { what: `ground (road ${p.route})`, at: [p.x, p.z], s: p.s, beyond: p.beyond, height: dy, depth: 0 };
   }
 
   // Going out from the road across the drivable area and past the barrier: where is the first ground 2 m above the road there?
   let flank: Offender | null = null;
-  for (let i = 0; i < geo.samples.length; i += 2) {
-    const c = geo.samples[i]!;
-    for (const side of [-1, 1] as const) {
-      if (isOpen(sim, c.s, side) || gapAt(sim, c.s)) continue;
-      for (let e = 0; e < 200; e += 1) {
-        const lat = side * (c.width / 2 + e);
-        const x = c.x - c.tz * lat;
-        const z = c.z + c.tx * lat;
-        const p = geo.project(x, z);
-        const pSide = p.offset > 0 ? 1 : -1;
-        const past = Math.abs(p.offset) - p.sample.width / 2 - barrierDistance(sim, p.s, pSide);
-        if (past < 0 || isOpen(sim, p.s, pSide)) continue;
-        // Measured from the road's edge there (lift holds the edge's height beyond it): on a banked bend it is not the centre line's.
-        const road = p.sample.y + probe.bank.lift(p.s, p.offset);
-        if (terrain.heightAt(x, z) - road > 2) {
-          if (!flank || past < flank.beyond) flank = { what: "first flank", s: p.s, beyond: past, height: terrain.heightAt(x, z) - road, depth: -past };
-          break;
+  [geo, ...geo.routes].forEach((own, r) => {
+    for (let i = 0; i < own.samples.length; i += 2) {
+      const c = own.samples[i]!;
+      for (const side of [-1, 1] as const) {
+        if (isOpen(sims[r]!, c.s, side) || gapAt(sims[r]!, c.s)) continue;
+        for (let e = 0; e < 200; e += 1) {
+          const lat = side * (c.width / 2 + e);
+          const x = c.x - c.tz * lat;
+          const z = c.z + c.tx * lat;
+          const p = geo.project(x, z);
+          const pSim = sims[p.route]!;
+          const pSide = p.offset > 0 ? 1 : -1;
+          const past = Math.abs(p.offset) - p.sample.width / 2 - barrierDistance(pSim, p.s, pSide);
+          if (past < 0 || isOpen(pSim, p.s, pSide)) continue;
+          // Measured from the road's edge there (lift holds the edge's height beyond it): on a banked bend it is not the centre line's.
+          const road = p.sample.y + (p.route === 0 ? probe.bank : Bank.of(geo.routes[p.route - 1]!)).lift(p.s, p.offset);
+          if (terrain.heightAt(x, z) - road > 2) {
+            if (!flank || past < flank.beyond) flank = { what: "first flank", at: [x, z], s: p.s, beyond: past, height: terrain.heightAt(x, z) - road, depth: -past };
+            break;
+          }
         }
       }
     }
-  }
+  });
 
   const lowest = new Map<number, Hit>();
   const cuts: string[] = [];
   const mats = landmarkMaterials();
   const placed = placedLandmarks(def);
-  const keepOut = buildLandmarks(probe.env, placed, mats).keepOut;
+  // The branch roads' own landmarks, each placed along its road.
+  const routeEnvs: { env: PlaceEnv; placed: PlacedLandmark[] }[] = geo.routes.map((road, r) => ({
+    env: { track: road, style: probe.style, bank: Bank.of(road), groundAt: probe.env.groundAt, wall: (s: number, side: -1 | 1) => barrierDistance(sims[r + 1]!, s, side) },
+    placed: [...(road.def.landmarks ?? [])],
+  }));
+  const keepOut = [...buildLandmarks(probe.env, placed, mats).keepOut, ...routeEnvs.flatMap((e) => buildLandmarks(e.env, e.placed, mats).keepOut)];
   // One by one, so a hit has a name.
   if (things) {
     placed.forEach((lm: Landmark, k) => {
@@ -422,6 +442,14 @@ export function measureTrack(def: TrackDef, { tier = "high", things = true }: Me
       if (layer.cuts > 0) cuts.push(`${lm.kind}#${k}@${lm.at}: ${layer.cuts} triangles cut away where it stands in another stretch's ground`);
       layer.dispose();
     });
+    routeEnvs.forEach((e, r) =>
+      e.placed.forEach((lm: Landmark, k) => {
+        const layer = buildLandmarks(e.env, [lm], mats);
+        dropLayer(layer, probe.grid, `route${r + 1}:${lm.kind}#${k}@${lm.at}`, lowest);
+        if (layer.cuts > 0) cuts.push(`route${r + 1}:${lm.kind}#${k}@${lm.at}: ${layer.cuts} triangles cut away where it stands in another stretch's ground`);
+        layer.dispose();
+      }),
+    );
   }
   mats.dispose();
   const material = new MeshLambertMaterial({ vertexColors: true });
@@ -439,7 +467,7 @@ export function measureTrack(def: TrackDef, { tier = "high", things = true }: Me
   scenery.dispose();
   // The tufts and flowers beyond the barrier: grass a metre tall is not for the road or the verge either (in the camera's
   // margin it may grow: a camera passes through grass).
-  const foliage = buildFoliage(probe.style, terrain, quality, makeBakeUniforms(), keepOut, foliageBounds(geo.samples));
+  const foliage = buildFoliage(probe.style, terrain, quality, makeBakeUniforms(), keepOut, foliageBounds([...geo.samples, ...geo.routes.flatMap((road) => road.samples)]));
   if (foliage) {
     dropOnto(foliage.group, probe.grid, "foliage", lowest, (p) => p.margin);
     foliage.dispose();

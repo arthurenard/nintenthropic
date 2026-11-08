@@ -9,7 +9,7 @@
  * It only moves the point the bot aims at across the road and caps its speed:
  * the bot still drives by the same wheel and pedals as anyone.
  */
-import { forwardSpeed } from "./kart";
+import { forwardSpeed, onIce } from "./kart";
 import { clamp, type KartState, type World } from "./state";
 import { noise, type Style } from "./temperament";
 import { TUNING } from "./tuning";
@@ -58,7 +58,7 @@ export function racecraft(w: World, k: KartState, style: Style, aim: number, lef
   let shove = 0;
   const near = (range + 3) * (range + 3);
   for (const o of w.state.karts) {
-    if (o.id === k.id || o.rescue > 0) continue;
+    if (o.id === k.id || o.rescue > 0 || o.route !== k.route) continue;
     // Far off as the crow flies is far off along the road too: not worth the working out.
     if ((o.x - k.x) ** 2 + (o.z - k.z) ** 2 > near) continue;
     const ds = geo.delta(k.s, o.s);
@@ -78,7 +78,7 @@ export function racecraft(w: World, k: KartState, style: Style, aim: number, lef
     if (Math.abs(ds) > 2.8 || Math.abs(across) > 4.2 || o.comet > 0) continue;
     const towards = across >= 0 ? 1 : -1;
     const level = Math.abs(forwardSpeed(o) - fwd) < 3 && o.spin === 0 && o.zap === 0;
-    const leans = racing && calm && level && o.finished === null && k.ground !== "ice" && style.lean > 0 && noise(seed, k.id, o.id, Math.floor(k.progress / 50)) < style.lean * B.leanChance;
+    const leans = racing && calm && level && o.finished === null && !onIce(w, k) && style.lean > 0 && noise(seed, k.id, o.id, Math.floor(k.progress / 50)) < style.lean * B.leanChance;
     if (leans) shove += towards * B.leanIn;
     else if (Math.abs(across) < 2 * TUNING.kartRadius + 0.3) shove -= towards * (2 * TUNING.kartRadius + 0.3 - Math.abs(across)) * 0.8;
   }

@@ -41,7 +41,7 @@ export interface Foliage {
   group: Group;
   update(time: number): void;
   /** View `view` is about to be drawn: only the tufts and flowers its frustum reaches are drawn (see cull.ts). */
-  cull(view: number, frustum: Frustum): void;
+  cull(view: number, frustum: Frustum, eye?: { x: number; y: number; z: number }, reach?: number): void;
   /** Every instance again, for a draw that is not one of the views. */
   uncull(): void;
   dispose(): void;
@@ -322,8 +322,8 @@ export function buildFoliage(style: ThemeStyle, terrain: Terrain, quality: Quali
     update(t) {
       time.value = t;
     },
-    cull(view, frustum) {
-      for (const c of culls) c.select(view, frustum);
+    cull(view, frustum, eye, reach) {
+      for (const c of culls) c.select(view, frustum, eye, reach);
     },
     uncull() {
       for (const c of culls) c.all();

@@ -7,6 +7,7 @@
  * written is exactly what the race holds.
  */
 import type { RaceSnapshot } from "../contract";
+import { onRoute } from "./routes";
 import { groundAt } from "./terrain";
 import { ticks, TUNING } from "./tuning";
 import { settle } from "./kart";
@@ -24,9 +25,10 @@ export const KART_AT = {
   botPresses: 32, botWait: 33, botStuck: 34, botBack: 35, botNext: 36, botFreeze: 37, botSteer: 38, botDrifting: 39,
   botCut: 40, air: 41, vy: 42, flight: 43, trick: 44, rescue: 45, immune: 46,
   comet: 47, zap: 48, draft: 49, aloft: 50, shakes: 51, prime: 52, counter: 53,
+  route: 54,
 } as const;
 
-const KART_FIELDS = 54;
+const KART_FIELDS = 55;
 
 const item = (kind: KartState["item"]): number => (kind === null ? -1 : ITEM_KINDS.indexOf(kind));
 const kind = (index: number): KartState["item"] => (index < 0 ? null : (ITEM_KINDS[index] ?? null));
@@ -89,6 +91,7 @@ function packKart(k: KartState): number[] {
   a[KART_AT.shakes] = k.shakes;
   a[KART_AT.prime] = k.prime;
   a[KART_AT.counter] = k.counter;
+  a[KART_AT.route] = k.route;
   return a;
 }
 
@@ -149,9 +152,13 @@ function unpackKart(k: KartState, a: readonly number[], w: World): void {
   k.prime = a[KART_AT.prime]!;
   k.counter = a[KART_AT.counter]!;
   // What follows from the rest.
-  const c = w.geo.at(k.s);
+  const race = w.main ?? w;
+  // Which road it is on is sent, not worked out: where two roads overlap in a flare, nearest is not the same as the one it stayed on.
+  k.route = race.geo.routes.length > 0 ? Math.max(0, Math.min(race.geo.routes.length, Math.round(a[KART_AT.route] ?? 0))) : 0;
+  const road = onRoute(race, k.route);
+  const c = road.geo.at(k.s);
   k.y = c.y;
-  k.ground = groundAt(w.plan.terrain, k.s, k.offset, c.width / 2);
+  k.ground = groundAt(road.plan.terrain, k.s, k.offset, c.width / 2);
   k.offroad = TUNING.ground[k.ground].rough;
   k.wrongWay = k.wrong >= ticks(TUNING.race.wrongTime);
   k.t = w.state.tick;

@@ -145,10 +145,10 @@ export class GrandPrixRun {
   /**
    * The grid for the next race: the players as the room has them now
    * (`players`: racers for those still here, with the room's slots) and
-   * every bot as it was, leader on pole. Kart ids are the grid positions. A
+   * every bot as it was, leader on pole (or, `reverse`, last place). Kart ids are the grid positions. A
    * player who is no longer in the room is a bot.
    */
-  grid(players: readonly RacerSetup[]): RacerSetup[] {
+  grid(players: readonly RacerSetup[], reverse = false): RacerSetup[] {
     for (const entry of this.entries) {
       if (entry.racer.player === null) continue;
       const fresh = players.find((candidate) => candidate.player === entry.racer.player);
@@ -156,6 +156,8 @@ export class GrandPrixRun {
       else entry.racer = { ...entry.racer, player: null, skill: entry.racer.skill ?? 0.6 };
     }
     this.gridded = rankOf(this.entries, (e) => e.points, (e) => e.place);
+    // Reverse Grid (rules.ts): the cup's last place starts on pole.
+    if (reverse) this.gridded = [...this.gridded].reverse();
     return this.gridded.map((entry, i) => ({ ...entry.racer, id: i }));
   }
 

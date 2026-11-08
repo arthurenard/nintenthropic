@@ -18,6 +18,9 @@ import { photoFinish, resultLine, sofaLine, type PhotoFinish } from "./eggs";
 import { FinishGallery, type ShotCard } from "./finishGallery";
 import { clipType, shareClip, sharePhotos } from "./finishShare";
 import { cupById, pointsFor } from "../grandprix";
+import { cardById } from "../rules";
+import type { Award } from "../rivals";
+import { showAwards } from "./awards";
 import { lapsLabel, ordinal, raceTime } from "./format";
 import { hostName, standingRows, type StandingRow } from "./roster";
 import { colourDot, focusHeading } from "./ui";
@@ -51,6 +54,8 @@ export interface ResultsInput {
   photos?: ReadonlyMap<number, string>;
   /** Other devices' wheel players' karts, whose photos may still come: with none of them and no photo, there are no cards. */
   cameras?: ReadonlySet<number>;
+  /** The silly, kind awards the race earned (rivals.ts), when there is enough to say. */
+  awards?: readonly Award[];
 }
 
 /** The photo finish stays this long, ms: a beat and a half, and then it fades. */
@@ -101,13 +106,16 @@ export class ResultsScreen {
     }
   }
 
-  render({ result, lobby, session, racers, laps, trackName, trackId, still, grandPrix, rescues, photos, cameras }: ResultsInput): void {
+  render({ result, lobby, session, racers, laps, trackName, trackId, still, grandPrix, rescues, photos, cameras, awards }: ResultsInput): void {
     const rows = standingRows(result, racers, lobby, session.device);
     const mine = rows.filter((row) => row.mine);
     const cup = grandPrix ? cupById(grandPrix.cup) : null;
+    // The twist the race was run under, if the host dealt one, is part of how it is remembered.
+    const twist = cardById(lobby.card);
     setText(
       "results-eyebrow",
-      cup && grandPrix ? `${cup.name} · Race ${grandPrix.race + 1} of ${cup.tracks.length} · ${trackName} · ${lapsLabel(laps)}` : `${trackName} · ${lapsLabel(laps)}`,
+      (cup && grandPrix ? `${cup.name} · Race ${grandPrix.race + 1} of ${cup.tracks.length} · ${trackName} · ${lapsLabel(laps)}` : `${trackName} · ${lapsLabel(laps)}`) +
+        (twist ? ` · ${twist.name}` : ""),
     );
     // One of us on this screen: say how it went. Two on a camera, or none shown: just the results.
     const only = mine.length === 1 ? mine[0]! : null;
@@ -157,6 +165,8 @@ export class ResultsScreen {
         return tr;
       }),
     );
+
+    showAwards($("results-awards"), $("results-awards-list"), awards ?? []);
 
     // The host decides what happens next.
     const host = session.role !== "guest";

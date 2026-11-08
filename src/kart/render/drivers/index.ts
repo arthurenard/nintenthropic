@@ -59,6 +59,8 @@ export const WHEEL = { centre: [0, 0.12, 0.52] as V3, tilt: -0.95, grip: 0.15, t
 
 /** Drivers are drawn a little larger than life so they read from the chase camera. */
 export const DRIVER_SCALE = 1.14;
+/** How far a head rides up for each whole size it grows by (Big Heads), in the driver's own units. */
+const HEAD_LIFT = 0.12;
 
 // Dizzy stars: shared by every driver.
 const starGeometry = (() => {
@@ -107,6 +109,9 @@ export class Driver {
   private wave = 0;
   private fin = 0;
   private dizzy = 0;
+  /** The head's size now (Party Rules), and its height without that. */
+  private bigHead = 1;
+  private headY = 0;
 
   constructor(built: DriverBuild, base: V3 = [0, 0, 0], material: Material = kartMaterial(), species?: Species, seed = 0, modelled = false) {
     this.base.set(base[0], base[1], base[2]);
@@ -118,6 +123,7 @@ export class Driver {
     this.root.add(this.solid(built.torso, material));
     const headAt = built.headAt ?? HEAD_AT;
     this.head.position.set(headAt[0], headAt[1], headAt[2]);
+    this.headY = headAt[1];
     this.head.rotation.order = "YXZ";
     const headMesh = this.solid(built.head, material);
     this.head.add(headMesh);
@@ -230,6 +236,13 @@ export class Driver {
       (-m.steer * 0.4 + sway + glance) * (1 - Math.abs(this.back)) + this.back * 1.5,
       -m.lean * 0.35 + Math.sin(t * 13) * 0.34 * this.dizzy,
     );
+    // Big Heads: the head grows about its middle, and rides a little higher so the chin does not sink into the shoulders.
+    const big = m.headScale ?? 1;
+    if (big !== this.bigHead) {
+      this.bigHead = big;
+      this.head.scale.setScalar(big);
+      this.head.position.y = this.headY + (big - 1) * HEAD_LIFT;
+    }
     this.lids?.update(t, happy, this.dizzy, m.shut ?? 0);
     this.face?.update(t, moodOf({ happy, dizzy: this.dizzy, steer: m.steer, rest: this.rest }));
     this.stars.visible = this.dizzy > 0.05;

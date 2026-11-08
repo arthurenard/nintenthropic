@@ -22,11 +22,19 @@ export interface Place {
   walled: boolean;
   /** The road's height at the nearest point of the centre line. */
   roadY: number;
+  /** The road it is nearest: 0 the loop, 1.. a branch. */
+  route: number;
+}
+
+interface Road {
+  geo: TrackGeometry;
+  sim: SimTerrain;
+  buckets: Map<number, number[]>;
 }
 
 export class KartSpace {
-  private readonly buckets = new Map<number, number[]>();
-  private readonly sim: SimTerrain;
+  /** The loop, then each branch road: a point belongs to the nearest centre line of any of them, as in the sim. */
+  private readonly roads: Road[];
   /** The farthest from the centre line a kart can be, anywhere on the lap (half the widest road and the widest verge). */
   readonly reach: number;
 
@@ -34,14 +42,18 @@ export class KartSpace {
     def: TrackDef,
     private readonly geo: TrackGeometry,
   ) {
-    this.sim = buildTerrain(def, geo);
     let reach = 0;
-    geo.samples.forEach((s, i) => {
-      reach = Math.max(reach, s.width / 2 + Math.max(this.sim.barrierLeft[i]!, this.sim.barrierRight[i]!));
-      const key = this.key(Math.floor(s.x / BUCKET), Math.floor(s.z / BUCKET));
-      const list = this.buckets.get(key);
-      if (list) list.push(i);
-      else this.buckets.set(key, [i]);
+    this.roads = [geo, ...geo.routes].map((road) => {
+      const sim = buildTerrain(road === geo ? def : road.def, road);
+      const buckets = new Map<number, number[]>();
+      road.samples.forEach((s, i) => {
+        reach = Math.max(reach, s.width / 2 + Math.max(sim.barrierLeft[i]!, sim.barrierRight[i]!));
+        const key = this.key(Math.floor(s.x / BUCKET), Math.floor(s.z / BUCKET));
+        const list = buckets.get(key);
+        if (list) list.push(i);
+        else buckets.set(key, [i]);
+      });
+      return { geo: road, sim, buckets };
     });
     this.reach = reach;
   }
@@ -52,11 +64,39 @@ export class KartSpace {
 
   /** Where (x, z) is, by the nearest stretch of road within `look` metres; null when there is none that near. */
   place(x: number, z: number, look: number): Place | null {
-    const samples = this.geo.samples;
+    let best: Place | null = null;
+    let bestD = look * look;
+    for (const road of this.roads) {
+      const found = this.placeOn(road, x, z, bestD);
+      if (found && found.d2 < bestD) {
+        bestD = found.d2;
+        best = found.place;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Is (x, z) inside the barrier of some road other than `except` (by at least `inside` metres), whichever of them the point is
+   * nearest? Where two roads lie on one another it is on both: a kart that came by either can be there.
+   */
+  insideAnother(x: number, z: number, except: number, inside: number, look: number): boolean {
+    for (let r = 0; r < this.roads.length; r++) {
+      if (r === except) continue;
+      const found = this.placeOn(this.roads[r]!, x, z, look * look);
+      if (found && found.place.walled && found.place.past < -inside) return true;
+    }
+    return false;
+  }
+
+  private placeOn(road: Road, x: number, z: number, limit: number): { d2: number; place: Place } | null {
+    const { geo, sim, buckets } = road;
+    const samples = geo.samples;
     const n = samples.length;
+    const look = Math.sqrt(limit);
     const ci = Math.floor(x / BUCKET);
     const cj = Math.floor(z / BUCKET);
-    let best = look * look;
+    let best = limit;
     let bestK = -1;
     let bestF = 0;
     const rings = Math.ceil(look / BUCKET) + 1;
@@ -66,11 +106,12 @@ export class KartSpace {
       for (let i = ci - ring; i <= ci + ring; i++) {
         for (let j = cj - ring; j <= cj + ring; j++) {
           if (Math.max(Math.abs(i - ci), Math.abs(j - cj)) !== ring) continue;
-          const list = this.buckets.get(this.key(i, j));
+          const list = buckets.get(this.key(i, j));
           if (!list) continue;
           for (const k of list) {
             // The stretch from this sample to the next, and the one from the previous: a point's nearest may be on either.
-            for (const a0 of [k, (k - 1 + n) % n]) {
+            for (const a0 of geo.open ? [k, k - 1] : [k, (k - 1 + n) % n]) {
+              if (a0 < 0 || (geo.open && a0 >= n - 1)) continue;
               const a = samples[a0]!;
               const b = samples[(a0 + 1) % n]!;
               const ex = b.x - a.x;
@@ -89,11 +130,11 @@ export class KartSpace {
       }
     }
     if (bestK < 0) return null;
-    const c = this.geo.at(samples[bestK]!.s + bestF * this.geo.spacing);
+    const c = geo.at(samples[bestK]!.s + bestF * geo.spacing);
     const offset = (x - c.x) * -c.tz + (z - c.z) * c.tx;
     const side = offset > 0 ? 1 : -1;
-    const open = isOpen(this.sim, c.s, side);
-    const limit = open ? TUNING.fall.edge + 0.5 : barrierDistance(this.sim, c.s, side);
-    return { s: c.s, offset, past: Math.abs(offset) - c.width / 2 - limit, walled: !open, roadY: c.y };
+    const open = isOpen(sim, c.s, side);
+    const limitOut = open ? TUNING.fall.edge + 0.5 : barrierDistance(sim, c.s, side);
+    return { d2: best, place: { s: c.s, offset, past: Math.abs(offset) - c.width / 2 - limitOut, walled: !open, roadY: c.y, route: geo.route } };
   }
 }

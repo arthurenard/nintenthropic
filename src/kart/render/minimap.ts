@@ -52,11 +52,24 @@ export class Minimap {
   aspect = 1;
   private path: Path2D | null = null;
   private pathKey = "";
+  /** The alternate routes' own lines (open), drawn thinner than the road they leave and rejoin. */
+  private routes: [number, number][][] = [];
+  private routePath: Path2D | null = null;
+  private routeKey = "";
 
   setTrack(track: TrackGeometry): void {
     const step = Math.max(1, Math.round(4 / track.spacing));
     this.points = [];
     this.path = null;
+    this.routePath = null;
+    this.routes = track.routes.map((road) => {
+      const line: [number, number][] = [];
+      const every = Math.max(1, Math.round(4 / road.spacing));
+      for (let i = 0; i < road.samples.length; i += every) line.push([road.samples[i]!.x, road.samples[i]!.z]);
+      const last = road.samples[road.samples.length - 1]!;
+      line.push([last.x, last.z]);
+      return line;
+    });
     let minX = Infinity;
     let maxX = -Infinity;
     let minZ = Infinity;
@@ -68,6 +81,14 @@ export class Minimap {
       maxX = Math.max(maxX, s.x);
       minZ = Math.min(minZ, s.z);
       maxZ = Math.max(maxZ, s.z);
+    }
+    for (const line of this.routes) {
+      for (const [x, z] of line) {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minZ = Math.min(minZ, z);
+        maxZ = Math.max(maxZ, z);
+      }
     }
     this.cx = (minX + maxX) / 2;
     this.cz = (minZ + maxZ) / 2;
@@ -91,6 +112,23 @@ export class Minimap {
     path.closePath();
     this.path = path;
     this.pathKey = key;
+    return path;
+  }
+
+  /** The alternate routes' lines at a size, traced once like the outline. */
+  private routeLines(w: number, h: number, pad: number): Path2D {
+    const key = `${w}x${h}:${pad}`;
+    if (this.routePath && this.routeKey === key) return this.routePath;
+    const path = new Path2D();
+    for (const line of this.routes) {
+      line.forEach((p, i) => {
+        const [x, y] = this.project(p[0], p[1], w, h, pad);
+        if (i === 0) path.moveTo(x, y);
+        else path.lineTo(x, y);
+      });
+    }
+    this.routePath = path;
+    this.routeKey = key;
     return path;
   }
 
@@ -125,6 +163,16 @@ export class Minimap {
     ctx.strokeStyle = "rgba(255,255,255,0.88)";
     ctx.lineWidth = 5 * ui;
     ctx.stroke(outline);
+    if (this.routes.length > 0) {
+      // A branch road: thinner, so the map reads as a road with a way round beside it.
+      const lines = this.routeLines(w, h, pad);
+      ctx.strokeStyle = "rgba(0,0,0,0.5)";
+      ctx.lineWidth = 6.5 * ui;
+      ctx.stroke(lines);
+      ctx.strokeStyle = "rgba(255,255,255,0.8)";
+      ctx.lineWidth = 3.2 * ui;
+      ctx.stroke(lines);
+    }
 
     // The start line.
     const [sx, sy] = this.project(this.start[0], this.start[1], w, h, pad);

@@ -6,6 +6,7 @@
 import type { Paint } from "../builder";
 import { byHeight, extrudeZ, lathe, MeshBuilder, mixRgb, ramp, rgb, scaleRgb, shapes, xf, type Rgb, type Shade, type V3 } from "./kit";
 import type { HazardSpec, LandmarkSpec, MovingPart } from "./types";
+import * as second from "./meadowSet";
 
 const TAU = Math.PI * 2;
 
@@ -618,14 +619,72 @@ function flowerOn(b: MeshBuilder, x: number, z: number, h: number, col: Rgb, lea
   }
 }
 
+/**
+ * The barn the shortcut runs through (a span, built in the road's frame): a red barn open at both ends, white trim round the
+ * doors, a hayloft door high in each gable, tie beams across the road under the roof. In one door, out the other.
+ */
+const barnRun: LandmarkSpec = {
+  span: true,
+  defaultSpan: 32,
+  build(ctx) {
+    const lit = new MeshBuilder();
+    const L = ctx.span;
+    const z0 = -L / 2;
+    const z1 = L / 2;
+    // The walls stand beyond the barrier and the camera's margin (6 + 1.5 m past the road's edge).
+    const hi = ctx.halfWidth + 7.7;
+    const ho = hi + 0.7;
+    const eave = 6.4;
+    const peak = 12.2;
+    const shell = (w: number, e: number, p: number): [number, number][] => [[-w, 0], [-w, e], [-w * 0.68, e + (p - e) * 0.55], [0, p], [w * 0.68, e + (p - e) * 0.55], [w, e], [w, 0]];
+    const steps = Math.max(2, Math.round(L / 3));
+    const board = (y0: number, y1: number): Shade => (p, i) => scaleRgb(mixRgb(RED_D, RED, Math.min(1, Math.max(0, (p[1] - y0) / (y1 - y0)))), i % 2 === 0 ? 1.0 : 0.93);
+    extrudeZ(lit, shell(ho, eave, peak + 0.7), z0, z1, steps, board(0, peak));
+    extrudeZ(lit, shell(hi, eave, peak), z0, z1, steps, (p) => scaleRgb(mixRgb(WOOD_D, WOOD, Math.min(1, p[1] / peak)), 0.95));
+    // A slate roof over the shell: two slabs a side, as the beside-the-road barn's.
+    const slate = rgb("#4c5568");
+    const slateL = rgb("#6b7690");
+    for (const s of [-1, 1]) {
+      const pts: [number, number, number, number][] = [
+        [ho + 0.5, eave + 0.2, ho * 0.68, eave + (peak + 0.7 - eave) * 0.55],
+        [ho * 0.68, eave + (peak + 0.7 - eave) * 0.55, 0.2, peak + 1.0],
+      ];
+      for (const [ax, ay, bx, by] of pts) {
+        const dx = s * (bx - ax);
+        const dy = by - ay;
+        const len = Math.hypot(dx, dy);
+        const ang = Math.atan2(dy, dx);
+        lit.box(s * ax + dx / 2, ay + dy / 2 + 0.3, 0, len, 0.5, L + 1.6, ramp(slate, slateL), 0, 0, s * ang);
+      }
+    }
+    lit.box(0, peak + 1.25, 0, 1.0, 0.5, L + 1.8, rgb("#2f3644"));
+    // White trim round both open ends, and a hayloft door high in each gable.
+    for (const z of [z0, z1]) {
+      const out = z < 0 ? -0.3 : 0.3;
+      for (const s of [-1, 1]) lit.box(s * (ho + 0.05), eave / 2, z + out, 0.7, eave, 0.5, WHITE);
+      lit.box(0, eave + 1.4, z + out, 2 * ho, 0.7, 0.5, WHITE);
+      lit.box(0, eave + 4.4, z + out * 0.4, 3.0, 2.6, 0.5, WHITE);
+      lit.box(0, eave + 4.4, z + out * 0.8, 2.2, 1.9, 0.3, rgb("#2a2018"));
+      lit.blob(0, eave + 3.7, z + out * 1.2, 0.9, 0.5, 0.45, STRAW, 0);
+    }
+    // Tie beams across the road, well over a kart's head, with a lantern hung from each.
+    for (let z = z0 + 5; z < z1 - 3; z += 6.5) {
+      lit.box(0, eave + 1.0, z, 2 * hi, 0.45, 0.45, WOOD_D);
+    }
+    return { lit };
+  },
+};
+
 export const LANDMARKS: Record<string, LandmarkSpec> = {
   windmill,
   barn,
+  "barn-run": barnRun,
   pond,
   "hay-bales": hayBales,
   "hot-air-balloon": hotAirBalloon,
   sheep: sheepFlock,
   "flower-field": flowerField,
+  ...second.LANDMARKS,
 };
 
-export const HAZARDS: Record<string, HazardSpec> = {};
+export const HAZARDS: Record<string, HazardSpec> = { ...second.HAZARDS };

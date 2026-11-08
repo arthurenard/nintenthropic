@@ -69,6 +69,8 @@ export interface KartPose {
   rest?: number;
   /** 0..1: the eyes held shut this much, for a still picture (a blink is the driver's own). */
   shut?: number;
+  /** The driver's head, as a multiple of its size (Party Rules' Big Heads; 1 when absent). */
+  headScale?: number;
 }
 
 export interface KartModel {
@@ -217,6 +219,9 @@ export class KartActor {
   slope = 0;
   /** True while it is still dropping, before the hook has it. */
   falling = false;
+  /** Party Rules: the kart and its driver's size, and the driver's head (1: as usual). */
+  size = 1;
+  headScale = 1;
   /** Players who asked for less motion: no wobble and no tremble (the cameras and the effects leave their motion out the same way). */
   calm = false;
 
@@ -469,6 +474,7 @@ export class KartActor {
     this.z = pz;
     this.root.position.set(px, py, pz);
     this.root.rotation.set(rotX, rotY, rotZ, "YXZ");
+    if (this.root.scale.x !== this.size) this.root.scale.setScalar(this.size);
 
     // Motion-driven attitude.
     // A jump in speed no kart can make in a frame (a respawn, a snapshot's correction) is a cut, not a brake.
@@ -584,6 +590,7 @@ export class KartActor {
       brake: this.brakeGlow,
       lookBack: this.back,
       rest: this.restEase,
+      headScale: this.headScale,
     });
 
     // Shadow lies on the road, shrinking and paling while the kart is in the air or being carried.
