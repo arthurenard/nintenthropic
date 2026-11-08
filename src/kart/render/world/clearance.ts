@@ -13,7 +13,7 @@
  * this is never more than the sim's measure: what is clear here is clear in the race.
  */
 import type { TrackGeometry } from "../../track/geometry";
-import type { Features } from "./features";
+import { WALL_DISTANCE, type Features } from "./features";
 import type { Terrain } from "./terrain";
 
 /** Metres on a side of the buckets the centre line is filed in. */
@@ -82,7 +82,7 @@ export class Clearance {
     let maxJ = -Infinity;
     for (const road of roads) {
       road.samples.forEach((s, i) => {
-        reach = Math.max(reach, s.width / 2 + Math.max(road.features.wallLeft[i]!, road.features.wallRight[i]!));
+        reach = Math.max(reach, s.width / 2 + Math.max(WALL_DISTANCE, road.features.wallLeft[i]!, road.features.wallRight[i]!));
         minI = Math.min(minI, Math.floor(s.x / BUCKET));
         maxI = Math.max(maxI, Math.floor(s.x / BUCKET));
         minJ = Math.min(minJ, Math.floor(s.z / BUCKET));
@@ -110,8 +110,10 @@ export class Clearance {
         this.ez[k] = ez;
         this.len2[k] = ex * ex + ez * ez || 1;
         this.len[k] = Math.sqrt(this.len2[k]!);
-        this.left[k] = Math.max(features.wallLeft[i]!, features.wallLeft[(i + 1) % n]!);
-        this.right[k] = Math.max(features.wallRight[i]!, features.wallRight[(i + 1) % n]!);
+        // The barrier stands at least its usual six metres out, as far as the scenery's concerned: over a drop it is a rail at the
+        // road's edge, and a tree or a tuft still stays where it always did, clear of the deck.
+        this.left[k] = Math.max(WALL_DISTANCE, features.wallLeft[i]!, features.wallLeft[(i + 1) % n]!);
+        this.right[k] = Math.max(WALL_DISTANCE, features.wallRight[i]!, features.wallRight[(i + 1) % n]!);
         this.half[k] = Math.max(a.width, b.width) / 2;
         this.limit[k] = Math.min(reach, this.half[k]! + Math.max(this.left[k]!, this.right[k]!));
         longest = Math.max(longest, this.len[k]!);

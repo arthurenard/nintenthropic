@@ -6,6 +6,7 @@ import { TRACKS } from "../../track/tracks";
 import { DEV_TRACKS } from "../devTracks";
 import { QUALITY } from "../quality";
 import { Clearance } from "./clearance";
+import { WALL_DISTANCE } from "./features";
 import { KartSpace } from "./kartSpace";
 import { Terrain } from "./terrain";
 import { styleFor } from "./themes";
@@ -40,8 +41,8 @@ function plainAt(roads: PlainRoad[], reach: number, x: number, z: number, r: num
           if (d - r - reach >= best) continue;
           const len = Math.sqrt(len2);
           const lateral = (dx * -ez + dz * ex) / len;
-          const left = Math.max(features.wallLeft[k]!, features.wallLeft[(k + 1) % n]!);
-          const right = Math.max(features.wallRight[k]!, features.wallRight[(k + 1) % n]!);
+          const left = Math.max(WALL_DISTANCE, features.wallLeft[k]!, features.wallLeft[(k + 1) % n]!);
+          const right = Math.max(WALL_DISTANCE, features.wallRight[k]!, features.wallRight[(k + 1) % n]!);
           const wall = Math.abs(lateral) < r ? Math.max(left, right) : lateral > 0 ? right : left;
           best = Math.min(best, d - r - Math.max(a.width, b.width) / 2 - wall);
         }
@@ -51,8 +52,11 @@ function plainAt(roads: PlainRoad[], reach: number, x: number, z: number, r: num
   return best;
 }
 
-/** How far (metres) the two may differ: the sim measures from the curve through the samples, clearance.ts from the straight between them. */
-const SLACK = 0.15;
+/**
+ * How far (metres) the two may differ: the sim measures from the curve through the samples, clearance.ts from the straight between them,
+ * and a point 20 m out on the inside of a bend (a branch leaving the road) is that much nearer along the normal than to the curve.
+ */
+const SLACK = 0.4;
 
 /** Points scattered round the road, out to 45 m beyond its edge, where scenery comes nearest. */
 function pointsNear(geo: TrackGeometry, count: number, seed: number): [number, number][] {
@@ -118,7 +122,7 @@ describe("the search for the nearest stretch (clearance.ts)", () => {
         road.samples.forEach((s, i) => {
           const key = Math.floor(s.x / 16) * 100003 + Math.floor(s.z / 16);
           road.buckets.set(key, [...(road.buckets.get(key) ?? []), i]);
-          reach = Math.max(reach, s.width / 2 + Math.max(road.features.wallLeft[i]!, road.features.wallRight[i]!));
+          reach = Math.max(reach, s.width / 2 + Math.max(WALL_DISTANCE, road.features.wallLeft[i]!, road.features.wallRight[i]!));
         });
       }
       const rnd = seededRandom(def.id.length * 17 + 5);

@@ -583,7 +583,10 @@ export class TrackGeometry {
       }
     }
     const sample = this.at(bestS);
-    const offset = (x - sample.x) * -sample.tz + (z - sample.z) * sample.tx;
+    let offset = (x - sample.x) * -sample.tz + (z - sample.z) * sample.tx;
+    // Past an end of the road (its nearest point is the end itself) the lateral offset says nothing: the point may lie straight on along
+    // the road's line, thirty metres out, lateral to nothing. It is as far from the road as it is from its end.
+    if (best > offset * offset + 1e-6 && (bestS <= this.origin + 1e-6 || bestS >= this.samples[n - 1]!.s - 1e-6)) offset = Math.sign(offset || 1) * Math.sqrt(best);
     return { route: this.route, s: sample.s, offset, sample };
   }
 
@@ -604,7 +607,66 @@ const ROUTE_HUG = 14;
 /** ...and the same, shorter, where it rejoins: it comes in at an angle (the merge is a flare), and a longer hug would make it double back. */
 const ROUTE_HUG_END = 6;
 
-const smooth01 = (t: number): number => {
+/** Metres of clear ground between a branch's edge and the main road's, over which it eases up from the main road's height and lean to its own. */
+export const ROUTE_JOIN_EASE = 8;
+/** A branch's flare is only at the road it leaves where it is within this many lap metres (beyond the stretch it replaces) of it. */
+export const ROUTE_JOIN_REACH = 90;
+
+/** The tightest a branch's bend may be against its road: |curvature| x half the width, under 1 (the inside edge's own radius is the half width). */
+const ROUTE_TIGHTEST = 0.7;
+
+/**
+ * Eases the plan view of a branch road (x, z per sample, about a metre apart) wherever it bends tighter than `ROUTE_TIGHTEST`
+ * of its half width, by moving those samples toward the midpoint of their neighbours until none does (the first and last few
+ * samples stay on the main road).
+ */
+function relax(xs: number[], zs: number[], widths: number[]): void {
+  const n = xs.length;
+  const keep = 1;
+  const reach = 2;
+  for (let pass = 0; pass < 600; pass++) {
+    let moved = false;
+    for (let i = keep; i < n - keep; i++) {
+      const a = Math.max(0, i - reach);
+      const c = Math.min(n - 1, i + reach);
+      const ax = xs[i]! - xs[a]!;
+      const az = zs[i]! - zs[a]!;
+      const bx = xs[c]! - xs[i]!;
+      const bz = zs[c]! - zs[i]!;
+      const la = Math.hypot(ax, az);
+      const lb = Math.hypot(bx, bz);
+      if (la < 1e-6 || lb < 1e-6) continue;
+      const turn = Math.abs(Math.atan2(ax * bz - az * bx, ax * bx + az * bz));
+      const curvature = turn / ((la + lb) / 2);
+      if (curvature * (widths[i]! / 2) <= ROUTE_TIGHTEST) continue;
+      xs[i] = xs[i]! + ((xs[a]! + xs[c]!) / 2 - xs[i]!) * 0.5;
+      zs[i] = zs[i]! + ((zs[a]! + zs[c]!) / 2 - zs[i]!) * 0.5;
+      moved = true;
+    }
+    if (!moved) break;
+  }
+  evenly(xs, zs);
+}
+
+/** Puts the samples of a polyline an equal distance apart along it again (the ends stay), as relaxing it left them uneven. */
+function evenly(xs: number[], zs: number[]): void {
+  const n = xs.length;
+  const at = [0];
+  for (let i = 1; i < n; i++) at.push(at[i - 1]! + Math.hypot(xs[i]! - xs[i - 1]!, zs[i]! - zs[i - 1]!));
+  const total = at[n - 1]!;
+  const ox = xs.slice();
+  const oz = zs.slice();
+  let j = 0;
+  for (let i = 1; i < n - 1; i++) {
+    const want = (total * i) / (n - 1);
+    while (j < n - 2 && at[j + 1]! < want) j++;
+    const f = at[j + 1]! > at[j]! ? (want - at[j]!) / (at[j + 1]! - at[j]!) : 0;
+    xs[i] = ox[j]! + (ox[j + 1]! - ox[j]!) * f;
+    zs[i] = oz[j]! + (oz[j + 1]! - oz[j]!) * f;
+  }
+}
+
+export const smooth01 = (t: number): number => {
   const c = Math.min(1, Math.max(0, t));
   return c * c * (3 - 2 * c);
 };
@@ -716,11 +778,15 @@ export class RouteRoad extends TrackGeometry {
       arc += Math.hypot(p.x - prev.x, p.z - prev.z);
       fine.push({ ...p, s: arc });
     }
-    const realLength = arc;
-    const count = Math.max(8, Math.round(realLength));
-    const step = realLength / count;
-    const samples: TrackSample[] = [];
+    const count = Math.max(8, Math.round(arc));
+    const step = arc / count;
     const spacing = (to - from) / count;
+    // The branch's plan view and widths, sample by sample.
+    const xs: number[] = [];
+    const zs: number[] = [];
+    const widths: number[] = [];
+    const ownY: number[] = [];
+    const ownBank: number[] = [];
     let j = 0;
     for (let i = 0; i <= count; i++) {
       const at = i * step;
@@ -731,18 +797,44 @@ export class RouteRoad extends TrackGeometry {
       // The branch is the main road's own width where it leaves and joins, and its own between the flares.
       const own = p.width + (q.width - p.width) * f;
       const open = smooth01(at / flare);
-      const close = smooth01((realLength - at) / flare);
-      const width = (a.width + (own - a.width) * open) * (1 - close) + (b.width + (own - b.width) * close) * close;
-      const px = p.x + (q.x - p.x) * f;
-      const pz = p.z + (q.z - p.z) * f;
-      let py = p.y + (q.y - p.y) * f;
-      let pb = p.bank + (q.bank - p.bank) * f;
+      const close = smooth01((arc - at) / flare);
+      widths.push((a.width + (own - a.width) * open) * (1 - close) + (b.width + (own - b.width) * close) * close);
+      xs.push(p.x + (q.x - p.x) * f);
+      zs.push(p.z + (q.z - p.z) * f);
+      ownY.push(p.y + (q.y - p.y) * f);
+      ownBank.push(p.bank + (q.bank - p.bank) * f);
+    }
+    // A waypoint that is not straight ahead of the road it leaves makes a kink where the curve turns off, and a road is a ribbon
+    // as wide as the main road there: bent tighter than half its width its inside edge folds back over the road.
+    relax(xs, zs, widths);
+    let realLength = 0;
+    for (let i = 1; i < xs.length; i++) realLength += Math.hypot(xs[i]! - xs[i - 1]!, zs[i]! - zs[i - 1]!);
+    const samples: TrackSample[] = [];
+    for (let i = 0; i <= count; i++) {
+      const at = i * step;
+      const open = smooth01(at / flare);
+      const close = smooth01((arc - at) / flare);
+      const px = xs[i]!;
+      const pz = zs[i]!;
+      const width = widths[i]!;
+      let py = ownY[i]!;
+      let pb = ownBank[i]!;
       // Where it lies on the main road (the flares) it is at the main road's height and lean, and its own between them: no step.
-      if (open < 1 || close < 1) {
-        const mp = main.projectLoop(px, pz).sample;
-        const own = Math.min(open, close);
-        py = mp.y + (py - mp.y) * own;
-        pb = mp.bank + (pb - mp.bank) * own;
+      // That holds for as long as the two roads' surfaces overlap, which is longer than the flare where the branch parts from the
+      // road slowly: two surfaces lying over one another at different heights are a step, and a kart there is on both.
+      const near = main.projectLoop(px, pz);
+      const mp = near.sample;
+      const apart = Math.hypot(px - mp.x, pz - mp.z) - (mp.width + width) / 2;
+      // (Only the stretch of road it replaces, and a little each side, counts: a branch may pass over another part of the loop.)
+      const here = main.delta(near.s, from + i * spacing);
+      const lateral = Math.abs(here) < ROUTE_JOIN_REACH + (to - from) ? smooth01((apart + 1) / ROUTE_JOIN_EASE) : 1;
+      const joined = Math.min(open, close, lateral);
+      if (joined < 1) {
+        // The main road's surface at this very place, which on a banked road is above or below its centre line by the lean.
+        const across = Math.max(-mp.width / 2, Math.min(mp.width / 2, near.offset));
+        const surface = mp.y - across * Math.tan(mp.bank);
+        py = surface + (py - surface) * joined;
+        pb = mp.bank + (pb - mp.bank) * joined;
       }
       samples.push({
         s: from + i * spacing,

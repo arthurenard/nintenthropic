@@ -34,7 +34,7 @@ import { tableAt, type Corner } from "./plan";
 import { racecraft, type Fight } from "./racecraft";
 import { clamp, q3, wrapAngle, type KartState, type World } from "./state";
 import { noise, styleOf, wander, type Style } from "./temperament";
-import { isOpen } from "./terrain";
+import { isDrop } from "./terrain";
 import { ticks, TUNING } from "./tuning";
 import { bendNear, mood, takeOf, wideness, wobble, type BendNear, type Take } from "./variety";
 
@@ -535,12 +535,12 @@ export function botInput(world: World, k: KartState): DriveInput {
   const half = geo.at(sAim).width / 2;
   // Room to either side, less the usual margin and, beside an open edge, a wider one (wider the gentler the bot).
   const dropMargin = B.edgeMargin + B.dropMargin + B.dropSlack * (1 - k.skill);
-  const openLeft = isOpen(terrain, sAim, -1);
-  const openRight = isOpen(terrain, sAim, 1);
+  const openLeft = isDrop(terrain, sAim, -1);
+  const openRight = isDrop(terrain, sAim, 1);
   const roomLeft = Math.max(0, half - (openLeft ? dropMargin : B.edgeMargin));
   const roomRight = Math.max(0, half - (openRight ? dropMargin : B.edgeMargin));
   const room = Math.max(0, half - B.edgeMargin);
-  const beside = isOpen(terrain, k.s, -1) || isOpen(terrain, k.s, 1) || isOpen(terrain, k.s + 25, -1) || isOpen(terrain, k.s + 25, 1);
+  const beside = isDrop(terrain, k.s, -1) || isDrop(terrain, k.s, 1) || isDrop(terrain, k.s + 25, -1) || isDrop(terrain, k.s + 25, 1);
 
   // The bend the kart is in or coming to, the one the aim is in or coming to, and the one the aim may be coming out of:
   // how the bot takes each, this time round (each rolled once: they are often the same bend).
