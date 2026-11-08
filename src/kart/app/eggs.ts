@@ -280,7 +280,7 @@ export function tipsFor(kind: DriverControl["kind"] | null): string[] {
   switch (kind) {
     case "keyboard":
       return [
-        "Hold Space to drift, and let go to boost.",
+        "Tap Space to hop, steer into the bend and hold it to drift. Let go to boost.",
         "Press E or Shift to use an item.",
         "Press H to honk.",
         "Tap Down to brake, hold it to reverse.",
@@ -289,7 +289,7 @@ export function tipsFor(kind: DriverControl["kind"] | null): string[] {
       ];
     case "gamepad":
       return [
-        "Hold A to drift, and let go to boost.",
+        "Tap A to hop, steer into the bend and hold it to drift. Let go to boost.",
         "Press B or X to use an item.",
         "Press Y to honk.",
         "The right trigger goes, the left one stops.",
@@ -298,7 +298,7 @@ export function tipsFor(kind: DriverControl["kind"] | null): string[] {
       ];
     default:
       return [
-        "Open both hands in a bend to drift, and close them to boost.",
+        "Open both hands in a bend to drift, keep them open, and close them to boost.",
         "Open both hands on a straight to brake.",
         "Flick one hand to use an item.",
         "Clap to honk.",

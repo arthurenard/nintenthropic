@@ -563,11 +563,15 @@ export function stepKart(world: World, k: KartState, input: DriveInput, emit: Em
     // and closing the hands lets it go with its boost. The drift button is the keys' and the pad's own.
     const open = input.slide === true && brakeIn > 0;
     let slide = false;
-    if (k.drift !== 0 && k.slid) {
+    if (k.drift !== 0 && (k.slid || open)) {
       // Holding the bend: the hands stay open for the whole of it, whatever the wheel does. A frame or two of the camera
       // reading them as fists is waited out; only a reading gone for the whole of the grace lets the drift go.
-      if (open) k.lapse = 0;
-      else if (k.lapse < LAPSE_TICKS) k.lapse++;
+      if (open) {
+        k.lapse = 0;
+        k.slid = true;
+      } else if (k.lapse < LAPSE_TICKS) {
+        k.lapse++;
+      }
       slide = open || k.lapse < LAPSE_TICKS;
     } else if (k.drift === 0 && open && fwd > H.minSpeed && Math.abs(steerIn) > DR.wheel.steer) {
       // Open hands, a clear turn: a drift from the moment it has held for a few ticks. A brake on a straight, or at a crawl,
@@ -631,13 +635,13 @@ function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brak
   if (rising && k.hop === 0 && k.drift === 0 && fwd > H.minSpeed) k.hop = HOP_TICKS;
   // The direction is the wheel's, as it is on landing: with the button held, the first turn of the wheel (in the hop,
   // after it, or from a straight into a bend with the button still down) starts the drift that way.
-  if (k.drift === 0 && driftIn && Math.abs(steerIn) > H.minSteer && fwd > H.minSpeed * 0.8) {
+  if (k.drift === 0 && driftIn && Math.abs(steerIn) > H.minSteer && fwd > (k.hop > 0 ? H.minSpeed * 0.8 : H.minSpeed)) {
     k.drift = steerIn > 0 ? 1 : -1;
     k.charge = 0;
     k.level = 0;
     k.slid = slide;
-  } else if (k.drift !== 0 && k.hop > 0 && steerIn * k.drift <= -DR.flip) {
-    // Still in the hop, the wheel thrown the other way: that is the way it goes.
+  } else if (k.drift !== 0 && !k.slid && k.hop > 0 && steerIn * k.drift <= -DR.flip) {
+    // Still in the hop, the wheel thrown the other way: that is the way it goes (the open hands' drift keeps the turn that began it).
     k.drift = -k.drift as -1 | 1;
     k.charge = 0;
     k.level = 0;

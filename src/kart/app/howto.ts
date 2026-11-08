@@ -13,6 +13,7 @@
  */
 import type { ControlKind, DriveInput, DriverControl, WheelStatus } from "../contract";
 import { $, element, icon } from "../../ui/dom";
+import { TUNING } from "../sim/tuning";
 import { focusHeading } from "./ui";
 
 export type MoveId = "steer" | "go" | "brake" | "drift" | "item" | "honk";
@@ -47,7 +48,7 @@ export function howToDrive(kind: ControlKind): HowTo {
           { id: "steer", title: "Steer", keys: ["←", "→"], line: "Or A and D." },
           { id: "go", title: "Go", keys: ["↑"], line: "Or W." },
           { id: "brake", title: "Brake", keys: ["↓"], line: "Hold it to back up." },
-          { id: "drift", title: "Drift and Boost", keys: ["Space"], line: "Hold it in a bend to drift. Let go to boost." },
+          { id: "drift", title: "Drift and Boost", keys: ["Space"], line: "Tap to hop, steer and hold it to drift. Let go to boost." },
           { id: "item", title: "Use an Item", keys: ["E"], line: "Or Shift." },
           { id: "honk", title: "Honk", keys: ["H"], line: "Honk as you overtake." },
         ],
@@ -61,7 +62,7 @@ export function howToDrive(kind: ControlKind): HowTo {
           { id: "steer", title: "Steer", keys: ["Left Stick"], line: "Or the d-pad." },
           { id: "go", title: "Go", keys: ["RT"], line: "The right trigger." },
           { id: "brake", title: "Brake", keys: ["LT"], line: "Hold it to back up." },
-          { id: "drift", title: "Drift and Boost", keys: ["A"], line: "Hold it in a bend to drift. Let go to boost." },
+          { id: "drift", title: "Drift and Boost", keys: ["A"], line: "Tap to hop, steer and hold it to drift. Let go to boost." },
           { id: "item", title: "Use an Item", keys: ["B"], line: "Or X." },
           { id: "honk", title: "Honk", keys: ["Y"], line: "Honk as you overtake." },
         ],
@@ -75,7 +76,7 @@ export function howToDrive(kind: ControlKind): HowTo {
           { id: "steer", title: "Steer", icon: "wheel", line: "Turn your fists like a wheel." },
           { id: "go", title: "Go", icon: "gauge", line: "Keep your fists closed. The kart goes by itself." },
           { id: "brake", title: "Brake", icon: "brake", line: "Open both hands." },
-          { id: "drift", title: "Drift and Boost", icon: "bolt", line: "In a bend, open both hands to drift. Close them to boost." },
+          { id: "drift", title: "Drift and Boost", icon: "bolt", line: "In a bend, keep both hands open to drift. Close them to boost." },
           { id: "item", title: "Use an Item", icon: "sparkles", line: "Flick one hand open and shut." },
           { id: "honk", title: "Honk", icon: "speaker", line: "Clap." },
         ],
@@ -84,8 +85,10 @@ export function howToDrive(kind: ControlKind): HowTo {
   }
 }
 
-/** A wheel turned further than this lights Steer (and turns open hands from a brake into a drift). */
+/** A wheel turned further than this lights Steer. */
 export const TURNING = 0.3;
+/** Open hands with the wheel turned further than this are a drift, not a brake (the sim's say at speed). */
+const DRIFT_TURN = TUNING.drift.wheel.steer;
 
 /** The moves being held right now (an item and a honk are moments, counted apart). */
 export function heldMoves(kind: ControlKind, input: DriveInput, wheel: WheelStatus | null): Set<MoveId> {
@@ -95,7 +98,7 @@ export function heldMoves(kind: ControlKind, input: DriveInput, wheel: WheelStat
     const turning = Math.abs(wheel.steer) > TURNING;
     if (turning) on.add("steer");
     if (wheel.mode === "drive" && wheel.grip === "fists") on.add("go");
-    if (wheel.mode === "brake") on.add(turning ? "drift" : "brake");
+    if (wheel.mode === "brake") on.add(Math.abs(wheel.steer) > DRIFT_TURN ? "drift" : "brake");
     return on;
   }
   if (Math.abs(input.steer) > TURNING) on.add("steer");
