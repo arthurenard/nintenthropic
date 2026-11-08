@@ -37,8 +37,8 @@ async function withCamera(video: string, baseURL: string, use: (page: Page) => P
 }
 
 /** The practice flow for two on this camera, up to the wheel check. */
-async function toTheCheck(page: Page): Promise<void> {
-  await open(page);
+async function toTheCheck(page: Page, cut: "auto" | "worker"): Promise<void> {
+  await open(page, cut === "worker" ? "&cut=worker" : "");
   await page.getByRole("button", { name: "Practice" }).click();
   await expect(page.getByRole("heading", { name: /Driving/ })).toBeVisible();
   await page.getByLabel("Name", { exact: true }).fill("Tilly");
@@ -73,34 +73,38 @@ const cases: { camera: SeatsCamera; seats: [boolean, boolean] }[] = [
   { camera: "pair", seats: [true, true] },
 ];
 
+// Chrome cuts each column out of the frame as the page asks; `worker` makes the workers cut it themselves, the path Safari
+// takes (it ignores the page's cut), so both are driven here.
 for (const real of CLIPS ? [false, true] : [false]) {
-  for (const { camera, seats } of cases) {
-    const what = SEATS_CAMERAS[camera].map((on) => (on ? "a player" : "an empty seat")).join(" and ");
-    test(`${real ? "real hands, " : ""}${what} on the camera: each seat's wheel sees only its own column`, async ({ baseURL }) => {
-      await withCamera(real ? `${CLIPS}/${camera}.y4m` : seatsFixture(camera), baseURL!, async (page) => {
-        const errors: string[] = [];
-        page.on("pageerror", (error) => errors.push(error.message));
-        await toTheCheck(page);
-        // Let the tracker settle, then watch for several seconds.
-        await expect.poll(async () => (await state(page)).wheels.some((wheel) => wheel.hands > 0), { timeout: 60_000 }).toBe(true);
-        const seen = await watch(page, 8_000);
-        seats.forEach((player, seat) => {
-          if (!player) expect(seen.most[seat], `seat ${seat} saw a hand in an empty column`).toBe(0);
-          else expect(seen.most[seat], `seat ${seat} saw its player's hand`).toBeGreaterThanOrEqual(1);
+  for (const cut of ["auto", "worker"] as const) {
+    for (const { camera, seats } of cases) {
+      const what = SEATS_CAMERAS[camera].map((on) => (on ? "a player" : "an empty seat")).join(" and ");
+      test(`${real ? "real hands, " : ""}${cut === "worker" ? "columns cut in the workers, " : ""}${what} on the camera: each seat's wheel sees only its own column`, async ({ baseURL }) => {
+        await withCamera(real ? `${CLIPS}/${camera}.y4m` : seatsFixture(camera), baseURL!, async (page) => {
+          const errors: string[] = [];
+          page.on("pageerror", (error) => errors.push(error.message));
+          await toTheCheck(page, cut);
+          // Let the tracker settle, then watch for several seconds.
+          await expect.poll(async () => (await state(page)).wheels.some((wheel) => wheel.hands > 0), { timeout: 60_000 }).toBe(true);
+          const seen = await watch(page, 8_000);
+          seats.forEach((player, seat) => {
+            if (!player) expect(seen.most[seat], `seat ${seat} saw a hand in an empty column`).toBe(0);
+            else expect(seen.most[seat], `seat ${seat} saw its player's hand`).toBeGreaterThanOrEqual(1);
+          });
+          // Every hand a seat saw is in its own half of the mirrored picture.
+          seen.xs.forEach((xs, seat) => {
+            for (const x of xs) {
+              expect(x, `seat ${seat}'s hand at ${x}`).toBeGreaterThan(seat === 0 ? 0 : 0.5);
+              expect(x, `seat ${seat}'s hand at ${x}`).toBeLessThan(seat === 0 ? 0.5 : 1);
+            }
+          });
+          // The empty seat is never ticked: it is still asked to hold its wheel level.
+          const figures = page.locator("#check-pictures figure.check-picture");
+          await expect(figures).toHaveCount(2);
+          for (const [seat, player] of seats.entries()) if (!player) await expect(figures.nth(seat)).not.toHaveAttribute("data-step", "ready");
+          expect(errors).toEqual([]);
         });
-        // Every hand a seat saw is in its own half of the mirrored picture.
-        seen.xs.forEach((xs, seat) => {
-          for (const x of xs) {
-            expect(x, `seat ${seat}'s hand at ${x}`).toBeGreaterThan(seat === 0 ? 0 : 0.5);
-            expect(x, `seat ${seat}'s hand at ${x}`).toBeLessThan(seat === 0 ? 0.5 : 1);
-          }
-        });
-        // The empty seat is never ticked: it is still asked to hold its wheel level.
-        const figures = page.locator("#check-pictures figure.check-picture");
-        await expect(figures).toHaveCount(2);
-        for (const [seat, player] of seats.entries()) if (!player) await expect(figures.nth(seat)).not.toHaveAttribute("data-step", "ready");
-        expect(errors).toEqual([]);
       });
-    });
+    }
   }
 }
