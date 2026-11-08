@@ -357,9 +357,13 @@ The numbers (all in `sim/tuning.ts`):
   (over 10 m/s; 8 in the hop). In the hop the wheel thrown the other way (own ≤
   -0.5, `drift.flip`; not for bots) turns it round: the direction is the wheel's on landing. A
   power-slide: the way the
-  kart goes turns at 0.9 + 0.5 × own of a full turn (own: the wheel into the
-  drift 1, straight 0, against it -1: 0.4..1.4), and its nose swings out to
-  0.42 + 0.16 × own radians inside that (15°..33°), most of the way within the
+  kart goes turns at 0.58 + 0.42 × own of a full turn (own: the wheel into the
+  drift 1, straight 0, against it -1: 0.17..1), MarioKart.js's model (the wheel
+  plus a lean of 1.4 into the drift, over 2.4): at top speed about 60°/s with the
+  wheel straight, 100°/s into it (a full-lock turn, no tighter) and 17°/s against
+  it. A player's wheel is eased into the slide at 4/s (a hand's wobble does not
+  jerk it; bots steer smoothly themselves). Its nose swings out to 0.25 + 0.085 ×
+  own radians inside that (9°..19°), most of the way within the
   hop; it keeps 97% of the top speed; ice lets it slide on instead of coming
   round. Charge builds faster the tighter it turns: level 1 (blue) at 1.0 s,
   level 2 (orange) at 2.1 s, level 3 (the hottest) at 3.4 s of a middling

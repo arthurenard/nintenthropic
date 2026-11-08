@@ -204,7 +204,7 @@ export interface KartView {
   heading: number;
   /**
    * The way it is going, as a heading (the direction of its velocity; the heading
-   * itself when nearly still). In a drift the nose (`heading`) is 15-33° inside
+   * itself when nearly still). In a drift the nose (`heading`) is 9-19° inside
    * this, the tail swung out: a chase camera that follows this shows the slide.
    * Optional: absent, the heading.
    */

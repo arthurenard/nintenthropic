@@ -300,7 +300,7 @@ describe("hop and drift", () => {
     return (((((k.heading - (k.course ?? k.heading)) % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) * (180 / Math.PI);
   };
 
-  it("is a power-slide: the tail swings out within the hop and holds 15-33° by the wheel, and the speed is kept", () => {
+  it("is a power-slide: the tail swings out within the hop and holds 9-19° by the wheel (about MarioKart.js's), and the speed is kept", () => {
     const held: Record<string, number> = {};
     for (const [name, wheel] of [["into", 1], ["straight", 0], ["against", -0.6]] as const) {
       const r = arena();
@@ -308,20 +308,20 @@ describe("hop and drift", () => {
       // The hop takes the way the wheel is turned; only then does the wheel go where the test says.
       run(r, 16, () => drift(1));
       // Most of the way out within the quarter second of the hop.
-      expect(Math.abs(slip(r)), name).toBeGreaterThan(14);
+      expect(Math.abs(slip(r)), name).toBeGreaterThan(10);
       run(r, 60, () => drift(wheel));
       held[name] = -slip(r);
-      expect(held[name], name).toBeGreaterThan(16);
-      expect(held[name], name).toBeLessThan(36);
+      expect(held[name], name).toBeGreaterThan(8);
+      expect(held[name], name).toBeLessThan(21);
       // A drift is not a brake: nearly all of the speed is still there.
       expect(view(r).speed, name).toBeGreaterThan(Math.min(speed, 24) * 0.94);
     }
     // Into the drift the tail swings further; against it, less.
-    expect(held.into).toBeGreaterThan(held.straight! + 5);
-    expect(held.straight).toBeGreaterThan(held.against! + 5);
+    expect(held.into).toBeGreaterThan(held.straight! + 3);
+    expect(held.straight).toBeGreaterThan(held.against! + 2);
   });
 
-  it("comes round tighter with the wheel into the drift and wider against it, tighter than the grip alone at full lock", () => {
+  it("comes round tighter with the wheel into the drift and wider against it, and into it no tighter than full lock (MarioKart.js's drift)", () => {
     const turned = (wheel: number, drifting: boolean): number => {
       const r = arena();
       const course = (): number => view(r).course ?? view(r).heading;
@@ -343,8 +343,12 @@ describe("hop and drift", () => {
     expect(into).toBeGreaterThan(straight * 1.3);
     expect(straight).toBeGreaterThan(against * 1.4);
     // Still coming round the drift's way with the wheel well against it.
-    expect(against).toBeGreaterThan(0.4);
-    expect(into).toBeGreaterThan(turned(1, false) * 1.2);
+    expect(against).toBeGreaterThan(0.3);
+    // Held into the drift it comes round about as a full-lock turn does, not faster: a quarter turn takes about a second at
+    // top speed (it was 1.4 times full lock, a quarter turn in two thirds of a second, which players could not hold).
+    const lock = turned(1, false);
+    expect(into).toBeGreaterThan(lock * 0.8);
+    expect(into).toBeLessThan(lock * 1.1);
   });
 
   it("is never ended by the wheel: held hard against it for seconds the drift only widens, and the charge goes on", () => {
@@ -364,7 +368,7 @@ describe("hop and drift", () => {
     const r = arena();
     run(r, 1, () => drift(1));
     run(r, 60, () => drift(1));
-    expect(Math.abs(slip(r))).toBeGreaterThan(25);
+    expect(Math.abs(slip(r))).toBeGreaterThan(15);
     run(r, 30, () => input({ throttle: 1 }));
     expect(Math.abs(slip(r))).toBeLessThan(4);
   });
@@ -430,7 +434,8 @@ describe("hop and drift", () => {
     expect(view(r).boost).toBeLessThanOrEqual(0.7);
 
     const orange = arena();
-    run(orange, 100, () => drift(1));
+    // (The wheel eases into the slide over a quarter second, so the charge starts a little slower.)
+    run(orange, 110, () => drift(1));
     expect(view(orange).driftLevel).toBe(2);
     run(orange, 1, () => input({ throttle: 1, drift: false }));
     expect(view(orange).boost).toBeGreaterThan(1.25);

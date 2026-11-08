@@ -676,7 +676,9 @@ function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brak
     // The power-slide: the kart goes round the way it is going, faster into the drift and slower against it, while
     // its tail swings out until the nose is `slip` inside that. Slippery ground lets it slide on instead of coming round.
     const speed = Math.sqrt(k.vx * k.vx + k.vz * k.vz);
-    const own = clamp(steerIn * k.drift, -1, 1);
+    // A player's wheel is eased into the slide (DR.response), and the slide turns by the eased wheel; a bot's is its own.
+    k.steer += (steerIn - k.steer) * (1 - Math.exp(-(k.ai ? S.response : DR.response) * TICK));
+    const own = clamp((k.ai ? steerIn : k.steer) * k.drift, -1, 1);
     const turn = DR.steerBase + DR.steerRange * own;
     const bite = Math.min(1, ground.gripDrift / GROUND.road.gripDrift) * k.mods.grip;
     const was = courseOf(k);
@@ -685,8 +687,6 @@ function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brak
     k.heading = wrapAngle(k.heading + wrapAngle(course - was));
     const nose = course - k.drift * (DR.slip + DR.slipRange * own);
     k.heading = wrapAngle(k.heading + wrapAngle(nose - k.heading) * (1 - Math.exp(-DR.swing * TICK)));
-    // The front wheels show the wheel as held, which may be against the slide.
-    k.steer += (steerIn - k.steer) * (1 - Math.exp(-S.response * TICK));
     sin = Math.sin(course);
     cos = Math.cos(course);
     along = speed;

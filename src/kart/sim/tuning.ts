@@ -202,12 +202,22 @@ export const TUNING = {
    * further; against it (other way: -1) it runs wider with the tail tucked in.
    */
   drift: {
-    /** The way it goes turns at base + range * own of a full turn: 0.4..1.4. */
-    steerBase: 0.9,
-    steerRange: 0.5,
-    /** The nose is slip + slipRange * own inside the way it goes: 15°..33°. */
-    slip: 0.42,
-    slipRange: 0.16,
+    /**
+     * The way it goes turns at base + range * own of a full turn: 0.17..1. As in MarioKart.js, a drift is the wheel plus a
+     * lean of 1.4 into the drift, over 2.4: with the wheel straight it turns at 0.58 of full lock (about 60°/s at top
+     * speed), held into it at full lock (about 100°/s) and held against it at a sixth (about 17°/s), never the other way.
+     * (It was 0.4..1.4: 91°/s with the wheel straight and 141°/s into it, a quarter turn in two thirds of a second.)
+     */
+    steerBase: 1.4 / 2.4,
+    steerRange: 1 / 2.4,
+    /** The nose is slip + slipRange * own inside the way it goes: 9°..19°, about what MarioKart.js shows (it was 15°..33°). */
+    slip: 0.25,
+    slipRange: 0.085,
+    /**
+     * A player's wheel in a drift is eased at this rate (1/s), as MarioKart.js eases its turn: a hand's wobble on the camera
+     * does not jerk the slide about. (Bots steer smoothly by themselves.)
+     */
+    response: 4,
     /** The tail swings out to it at this rate (1/s): most of the way within the hop. */
     swing: 9,
     /** Of the top speed, a drift keeps this much. */
