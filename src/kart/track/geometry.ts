@@ -129,6 +129,8 @@ export interface HazardDef {
   dir?: 1 | -1;
   /** "crush": how high its underside hangs when it is up, metres (default 3.2 x radius + 2.5): a cave's icicle hangs lower than a quarry's block. */
   top?: number;
+  /** "slide": how much of the cycle its warning (lamp, foam, glow) is shown before it comes (default 0.22). */
+  lead?: number;
 }
 
 /** A set piece the picture builds beside the road (a giant teapot, a ferris wheel); the sim ignores it. */

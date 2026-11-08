@@ -12,6 +12,7 @@
  */
 import type { TrackDef } from "./geometry";
 import { crosser, pendulum, stomperRow, sweeper } from "./pieces";
+import { front, rockRain } from "./pieces2C";
 
 /** Seconds the flock takes to cross Meadow's road, once a beat; the farm gate's lamp blinks in the last fifth of it (picture/landmarks/meadow). */
 export const SHEEP_PERIOD = 7.2;
@@ -1011,12 +1012,14 @@ export const GLACIER_PASS: TrackDef = {
 };
 
 /**
- * Black rock and rivers of lava round a smoking volcano. Up its flank in switchbacks: a climbing leg, a banked
- * hairpin, another leg (boulders rolling down it at you), another hairpin the other way, past the hot spring where the
- * duck relaxes, and through an obsidian arch onto the ridge, twenty-two metres up, weaving between lava on the outside
- * of its bends with fireballs leaping from it. Then left off the ridge and straight down the mountain: over a brow to
- * fly (a boost pad on it for the brave), a jump over a lava gap, and a stone bridge across the lava lake with nothing
- * either side, a boost strip along its left half only (the quick way is the one beside the lava). About 1.2 km.
+ * Black rock and rivers of lava round a smoking volcano, and the lap is the eruption. Off the line and up the flank in
+ * switchbacks (boulders rolling down the first leg), a banked hairpin each way; on the second leg the geyser cannon fires
+ * a kart across a tongue of lava that has eaten the road. Round the second hairpin the road climbs onto the crater's rim,
+ * twenty-five metres up and banked hard, and the volcano erupts on the race clock: three rows of lava bombs fall on the
+ * way in (each one's shadow grows and reddens on the road before it lands), fireballs leap beside the lip beyond. The way
+ * round is the rim; the lava tube cuts under the lip (dark, narrow, two channels of lava along its walls, a strip of
+ * boost) and out onto the descent. Then the brow, a glide over the lava fields, the stone bridge across the lava lake
+ * where the lake swells up and runs across the deck in turn, and home. About 1.3 km.
  */
 export const VOLCANO_RUSH: TrackDef = {
   id: "volcano-rush",
@@ -1024,7 +1027,7 @@ export const VOLCANO_RUSH: TrackDef = {
   theme: "volcano",
   laps: 3,
   width: 14,
-  blurb: "Black rock and rivers of lava: switchback up the flank, get fired over a lava tongue by the geyser cannon, weave the erupting ridge, then glide off the brow and down the mountain to the stone bridge.",
+  blurb: "Black rock and rivers of lava, and the volcano is erupting: get fired over a lava tongue, dodge the bombs on the crater's rim or dive through the lava tube, then glide off the brow and race the swell across the stone bridge.",
   points: [
     // The start straight, then left onto the volcano's flank.
     { x: 0, z: 0 },
@@ -1055,20 +1058,16 @@ export const VOLCANO_RUSH: TrackDef = {
     { x: -8.8, z: 186.2, y: 20.7, bank: -0.32 },
     { x: 1.2, z: 196.3, y: 21, bank: -0.26 },
     { x: 15, z: 200, y: 21.3, bank: -0.1 },
-    // The ridge, weaving between rivers of lava, twenty-two metres up.
-    { x: 40, z: 200, y: 21.8, bank: 0.04 },
-    { x: 60.8, z: 204.5, y: 22.2, bank: -0.12 },
-    { x: 81.7, z: 200, y: 22.5, bank: 0.04 },
-    { x: 102.5, z: 195.5, y: 22.7, bank: 0.14 },
-    { x: 123.3, z: 200, y: 22.8, bank: -0.04 },
-    { x: 144.2, z: 204.5, y: 22.8, bank: -0.14 },
-    { x: 165, z: 200, y: 22.7 },
-    // Left off the ridge and straight down the mountain: over the brow, off the ramp, over the lava.
-    { x: 186, z: 197.5, y: 22.4, bank: -0.12 },
-    { x: 204, z: 189, y: 22, bank: -0.22 },
-    { x: 217, z: 175, y: 21.4, bank: -0.18 },
-    { x: 224, z: 157, y: 20.6, bank: -0.04 },
-    { x: 225, z: 137, y: 19.8 },
+    // The crater's rim: the road climbs round the lip of the cone, banked hard, twenty-five metres up, and the eruption rains on it.
+    { x: 40, z: 204, y: 22.2, bank: -0.02 },
+    { x: 68, z: 218, y: 23.8, bank: -0.14 },
+    { x: 100, z: 238, y: 25.2, bank: -0.28 },
+    { x: 136, z: 250, y: 25.8, bank: -0.34 },
+    { x: 170, z: 244, y: 25.6, bank: -0.34 },
+    { x: 198, z: 222, y: 24.7, bank: -0.34 },
+    { x: 214, z: 192, y: 23.4, bank: -0.22 },
+    { x: 221, z: 162, y: 22, bank: -0.08 },
+    { x: 224, z: 134, y: 20.6, bank: -0.04 },
     { x: 225, z: 120, y: 19.9 },
     { x: 225, z: 109, y: 19.3 },
     { x: 225, z: 97, y: 17 },
@@ -1092,68 +1091,98 @@ export const VOLCANO_RUSH: TrackDef = {
     { x: 3, z: -44, bank: -0.04 },
     { x: 0, z: -22 },
   ],
-  itemRows: [0.036, 0.141, 0.47, 0.805],
+  itemRows: [0.035, 0.1325, 0.4752, 0.8],
   boostPads: [
-    { at: 0.1207, offset: 2 },
-    { at: 0.2395, offset: 0 },
-    { at: 0.603, offset: 0 },
-    { at: 0.957, offset: 2 },
+    { at: 0.1166, offset: 2 },
+    { at: 0.2323, offset: 0 },
+    { at: 0.5817, offset: 0 },
+    { at: 0.9583, offset: 2 },
   ],
-  // The geyser cannon throws a kart over a gap in the road (a lava tongue) on the flank; the glide takes it off the
-  // brow and down the mountain over the open lava fields.
+  // The geyser cannon throws a kart over a gap in the road (a lava tongue) on the flank; the glide takes it off the brow and
+  // down the mountain over the open lava fields.
   air: [
-    { kind: "cannon", at: 0.251, length: 82, height: 8 },
-    { kind: "glide", at: 0.6211, length: 140, height: 11 },
+    { kind: "cannon", at: 0.2431, length: 82, height: 8 },
+    { kind: "glide", at: 0.6338, length: 140, height: 11 },
   ],
   drops: [
-    { from: 0.259, to: 0.3121, side: "both", gap: true },
-    { from: 0.6235, to: 0.7365, side: "both" },
-    { from: 0.4344, to: 0.4545, side: "right" },
-    { from: 0.469, to: 0.4883, side: "left" },
-    { from: 0.5036, to: 0.5229, side: "right" },
-    { from: 0.8158, to: 0.893, side: "both" },
+    { from: 0.2516, to: 0.3023, side: "both", gap: true },
+    // The rim's outside is open lava all the way round.
+    { from: 0.4372, to: 0.6, side: "right" },
+    { from: 0.6358, to: 0.7394, side: "both" },
+    { from: 0.822, to: 0.8968, side: "both" },
   ],
   surfaces: [
-    { from: 0.8215, to: 0.885, kind: "boost", offset: -3.5, width: 7 },
+    { from: 0.8274, to: 0.889, kind: "boost", offset: -3.5, width: 7 },
+  ],
+  routes: [
+    {
+      // The lava tube: out of the rim's first straight, across under the crater's lip (a dark tunnel through the rock, a
+      // channel of lava glowing along each wall, a strip of boost down the middle) and up onto the rim again as it turns for
+      // home. Shorter than the way round the lip, and out of the fireballs; the bombs fall on the road it leaves.
+      id: "lava-tube",
+      kind: "shortcut",
+      from: 0.417,
+      to: 0.621,
+      width: 9,
+      flare: 26,
+      appeal: 0.85,
+      points: [
+        { x: 72, z: 199, y: 22.1 },
+        { x: 104, z: 192, y: 21.2 },
+        { x: 136, z: 188, y: 20.4 },
+        { x: 166, z: 188, y: 20.8, bank: -0.1 },
+        { x: 194, z: 178, y: 21.4, bank: -0.1 },
+        { x: 211, z: 158, y: 21.5, bank: -0.06 },
+      ],
+      surfaces: [{ from: 0.3, to: 0.8, kind: "boost", offset: 0, width: 3 }],
+      landmarks: [{ kind: "lava-tube", at: 0.5, offset: 0, span: 56 }],
+    },
   ],
   hazards: [
-    // The eruption, on the race clock: a pair of lava bombs leaps from either side of the ridge every 7 s (the middle is
-    // clear), and the next pair, half a beat later, a little farther on.
-    { kind: "fireball", motion: "bob", period: 7, radius: 1.7, offset: 4.6, at: 0.452 },
-    { kind: "fireball", motion: "bob", period: 7, radius: 1.7, offset: -4.6, at: 0.452 },
-    { kind: "fireball", motion: "bob", period: 7, phase: 0.5, radius: 1.7, offset: 4.6, at: 0.4925 },
-    { kind: "fireball", motion: "bob", period: 7, phase: 0.5, radius: 1.7, offset: -4.6, at: 0.4925 },
-    { kind: "boulder", motion: "roll", period: 5.4, radius: 2.5, offset: -2.8, at: 0.145, span: 0.035 },
-    { kind: "boulder", motion: "roll", period: 5.4, phase: 0.5, radius: 2.5, offset: -2.8, at: 0.145, span: 0.035 },
-    { kind: "geyser", motion: "bob", period: 6.8, radius: 2.4, offset: 0, at: 0.7723 },
+    // The eruption, on the race clock: three rows of lava bombs come in from the crater, each row a beat behind the last
+    // and each leaving one lane clear (the outside, then the inside, then the middle). A bomb's shadow grows and reddens on the
+    // road for a second or more before it lands, lies a moment, and cools.
+    ...rockRain({ kind: "ember-rock", at: 0.427, step: 0.014, rows: [[-4.5, 0], [0, 4.5], [-4.5, 4.5]], period: 6.4, stagger: 0.15, radius: 2.1 }),
+    // Beyond it, on the lip itself, fireballs leap from the lava on either side in turn.
+    { kind: "fireball", motion: "bob", period: 7, radius: 1.7, offset: 4.6, at: 0.5064 },
+    { kind: "fireball", motion: "bob", period: 7, radius: 1.7, offset: -4.6, at: 0.5064 },
+    { kind: "fireball", motion: "bob", period: 7, phase: 0.5, radius: 1.7, offset: 4.6, at: 0.5376 },
+    { kind: "fireball", motion: "bob", period: 7, phase: 0.5, radius: 1.7, offset: -4.6, at: 0.5376 },
+    { kind: "boulder", motion: "roll", period: 5.4, radius: 2.5, offset: -2.8, at: 0.1402, span: 0.034 },
+    { kind: "boulder", motion: "roll", period: 5.4, phase: 0.5, radius: 2.5, offset: -2.8, at: 0.1402, span: 0.034 },
+    { kind: "geyser", motion: "bob", period: 6.8, radius: 2.4, offset: 0, at: 0.783 },
+    // The lava lake swells and runs across the stone bridge, once each way: it rises out of the lake beside the deck, then sweeps over it.
+    ...front({ kind: "lava-surge", at: 0.8454, count: 2, step: 0.0031, period: 7, reach: 9.5, radius: 1.8, lead: 0.36 }),
+    ...front({ kind: "lava-surge", at: 0.8776, count: 2, step: 0.0031, period: 7, phase: 0.45, reach: -9.5, radius: 1.8, lead: 0.36 }),
   ],
   landmarks: [
-    { kind: "volcano", at: 0.4827, offset: 252, scale: 1.7 },
-    { kind: "obsidian-arch", at: 0.4183, offset: 0, span: 14 },
-    { kind: "basalt-columns", at: 0.008, offset: 45 },
-    { kind: "lava-fall", at: 0.1368, offset: -45, scale: 1.2 },
-    { kind: "hot-spring", at: 0.3725, offset: 36 },
-    { kind: "lava-fall", at: 0.4586, offset: 45, scale: 1.4 },
-    { kind: "basalt-columns", at: 0.53, offset: 44, scale: 1.2 },
-    { kind: "lava-fall", at: 0.6758, offset: 46 },
-    { kind: "basalt-columns", at: 0.724, offset: -55, scale: 1.3 },
-    { kind: "basalt-columns", at: 0.7796, offset: 40 },
-    { kind: "stone-bridge", at: 0.8544, offset: 0, span: 96 },
-    { kind: "lava-fall", at: 0.853, offset: 44, scale: 1.2 },
-    { kind: "basalt-columns", at: 0.917, offset: -45 },
-    { kind: "basalt-columns", at: 0.62, offset: 40 },
+    { kind: "volcano", at: 0.4985, offset: 245, scale: 1.7 },
+    { kind: "obsidian-arch", at: 0.4137, offset: 0, span: 14 },
+    { kind: "basalt-columns", at: 0.0077, offset: 45 },
+    { kind: "lava-fall", at: 0.1325, offset: -45, scale: 1.2 },
+    { kind: "hot-spring", at: 0.3607, offset: 36 },
+    { kind: "lava-fall", at: 0.5454, offset: 52, scale: 1.4 },
+    { kind: "basalt-columns", at: 0.4752, offset: 44, scale: 1.2 },
+    { kind: "lava-fall", at: 0.6864, offset: 46 },
+    { kind: "basalt-columns", at: 0.7331, offset: -55, scale: 1.3 },
+    { kind: "basalt-columns", at: 0.787, offset: 40 },
+    { kind: "stone-bridge", at: 0.8594, offset: 0, span: 96 },
+    { kind: "lava-fall", at: 0.8578, offset: 44, scale: 1.2 },
+    { kind: "basalt-columns", at: 0.92, offset: -45 },
+    { kind: "basalt-columns", at: 0.6334, offset: 40 },
   ],
-  duck: { at: 0.3725, offset: 36, y: 0.4 },
+  duck: { at: 0.3607, offset: 36, y: 0.4 },
 };
 
 /**
- * The finale: a glowing ribbon of road high over a ringed planet, which turns under the middle of the lap. Off the
- * line it climbs into the twist, where the ribbon rolls one way and then the other (a boost strip up it, a comet
- * rolling down it at you); along the top, two crests to fly in a row with an asteroid circling the dip between them;
- * round the far end in a banked carousel that falls five metres; back along the lower ribbon, then straight down past
- * the planet (a boost strip on the way) to the long jump between two ribbons, and home. Almost no barriers (go over the
- * edge and the rescue drone brings you back), ring gates to drive through. The duck floats in an astronaut's helmet by
- * a satellite. About 1.2 km.
+ * The finale: a glowing ribbon of road high over a ringed planet, which turns under the middle of the lap. Off the line the ribbon
+ * splits: the aurora (the wide ribbon, a strip of boost, a comet rolling down it) or the comet trail, a narrower, lower ribbon swinging
+ * out and back where meteors strike in rows (each shows a growing shadow first). Then up into the twist, where the ribbon rolls one way
+ * and then the other; along the top, two crests with low-gravity lips and an asteroid circling the dip between them; round the far end
+ * in a banked carousel that falls nine metres under a meteor shower; back along the lower ribbon, past a plasma arm that turns across
+ * it, then straight down past the planet to the solar-sail glide and the cannon that fires a kart across the gap between two ribbons,
+ * and home. Almost no barriers (go over the edge and the rescue drone brings you back), ring gates to drive through. The duck floats in
+ * an astronaut's helmet by a satellite. About 1.2 km.
  */
 export const STARLIGHT_RIBBON: TrackDef = {
   id: "starlight-ribbon",
@@ -1161,22 +1190,22 @@ export const STARLIGHT_RIBBON: TrackDef = {
   theme: "space",
   laps: 3,
   width: 20,
-  blurb: "The finale, a ribbon of light over a ringed planet: roll through the twist, float over two crests, swing round the carousel under a meteor shower, glide down and get fired across the gap between two ribbons.",
-  bank: 8,
+  blurb: "The finale, a ribbon of light over a ringed planet: split between the aurora and the comet trail, roll through the twist, float over two crests, swing round the carousel under a meteor shower, glide down and get fired across the gap between two ribbons.",
   points: [
-    // Off the line and up into the twist: the ribbon rolls one way, then the other, as it climbs.
+    // Off the line and up into the twist: the ribbon swings out right, rolling hard, and back across to the left, as it climbs.
     { x: 0, z: 0 },
     { x: 0, z: 30, y: 0.4 },
     { x: 0, z: 60, y: 1.4 },
     { x: 0, z: 88, y: 3 },
-    { x: 0, z: 112, y: 5, bank: -0.32 },
+    { x: 0, z: 112, y: 5 },
     { x: 0, z: 136, y: 7.4 },
-    { x: 0, z: 160, y: 9.8, bank: 0.34 },
-    { x: 0, z: 184, y: 12 },
-    { x: 0, z: 206, y: 13.6, bank: -0.12 },
-    { x: -6, z: 230, y: 15, bank: 0.1 },
-    { x: -22, z: 250, y: 16 },
-    { x: -45, z: 262, y: 17 },
+    { x: 0, z: 160, y: 9.8 },
+    { x: 7, z: 178, y: 11.4, bank: -0.34 },
+    { x: 17, z: 196, y: 12.8, bank: -0.42 },
+    { x: 13, z: 214, y: 13.9, bank: -0.1 },
+    { x: -3, z: 228, y: 14.9, bank: 0.4 },
+    { x: -24, z: 241, y: 15.9, bank: 0.42 },
+    { x: -48, z: 257, y: 17, bank: 0.14 },
     // The rollercoaster: two crests to fly.
     { x: -75, z: 264, y: 20.4 },
     { x: -92, z: 264, y: 22 },
@@ -1189,97 +1218,133 @@ export const STARLIGHT_RIBBON: TrackDef = {
     { x: -200, z: 264, y: 20.6 },
     // The spiral: round the far end, banked hard and falling all the way.
     { x: -222, z: 265.5, y: 20.4, bank: 0.12 },
-    { x: -244, z: 265.3, y: 20.4, bank: 0.3 },
-    { x: -267.7, z: 263.2, y: 20.1, bank: 0.35 },
-    { x: -287.2, z: 249.6, y: 19.4, bank: 0.35 },
-    { x: -297.3, z: 228, y: 18.5, bank: 0.35 },
-    { x: -295.2, z: 204.3, y: 17.5, bank: 0.35 },
-    { x: -281.6, z: 184.8, y: 16.5, bank: 0.35 },
-    { x: -260, z: 174.7, y: 15.6, bank: 0.3 },
-    { x: -238, z: 174.5, y: 15, bank: 0.1 },
+    { x: -244, z: 265.3, y: 19.6, bank: 0.3 },
+    { x: -267.7, z: 263.2, y: 18.2, bank: 0.35 },
+    { x: -287.2, z: 249.6, y: 16.6, bank: 0.35 },
+    { x: -297.3, z: 228, y: 15, bank: 0.35 },
+    { x: -295.2, z: 204.3, y: 13.6, bank: 0.35 },
+    { x: -281.6, z: 184.8, y: 12.4, bank: 0.35 },
+    { x: -260, z: 174.7, y: 11.4, bank: 0.3 },
+    { x: -238, z: 174.5, y: 10.8, bank: 0.1 },
     // Back along the lower ribbon, and down past the planet to the long jump.
-    { x: -212, z: 175.5, y: 14.2 },
-    { x: -186, z: 176, y: 13.6 },
-    { x: -160, z: 176, y: 13.8 },
-    { x: -134, z: 175, y: 13 },
-    { x: -115, z: 168, y: 12.2, bank: -0.1 },
-    { x: -103, z: 152, y: 11.4, bank: -0.1 },
-    { x: -100, z: 130, y: 10.6 },
-    { x: -100, z: 105, y: 9.6 },
-    { x: -100, z: 80, y: 8.4 },
-    { x: -100, z: 55, y: 7.2 },
-    { x: -100, z: 25, y: 5.8 },
-    { x: -100, z: -5, y: 4.4 },
+    { x: -212, z: 176, y: 10.4 },
+    { x: -186, z: 170.5, y: 10.3, bank: -0.08 },
+    { x: -160, z: 181, y: 10.4, bank: 0.1 },
+    { x: -134, z: 175, y: 10 },
+    { x: -115, z: 168, y: 9.6, bank: -0.18 },
+    { x: -103, z: 152, y: 9, bank: -0.22 },
+    { x: -100, z: 130, y: 8.4 },
+    { x: -100, z: 105, y: 7.7 },
+    { x: -100, z: 80, y: 6.9 },
+    { x: -100, z: 55, y: 6 },
+    { x: -100, z: 25, y: 5.2 },
+    { x: -100, z: -5, y: 4.3 },
     { x: -100, z: -35, y: 3.2 },
-    { x: -98, z: -62, y: 2.6, bank: 0.06 },
-    { x: -86, z: -86, y: 2.2, bank: 0.1 },
-    { x: -65, z: -99, y: 1.8, bank: 0.06 },
-    { x: -38, z: -101, y: 1.4 },
-    { x: -16, z: -94, y: 1, bank: 0.06 },
-    { x: -3, z: -75, y: 0.6, bank: 0.06 },
+    { x: -98, z: -62, y: 2.6, bank: 0.12 },
+    { x: -86, z: -86, y: 2.2, bank: 0.22 },
+    { x: -65, z: -99, y: 1.8, bank: 0.22 },
+    { x: -38, z: -101, y: 1.4, bank: 0.1 },
+    { x: -16, z: -94, y: 1, bank: 0.22 },
+    { x: -3, z: -75, y: 0.6, bank: 0.18 },
     { x: 0, z: -50, y: 0.2 },
     { x: 0, z: -25 },
   ],
-  itemRows: [0.0372, 0.2234, 0.4633, 0.8257],
+  itemRows: [0.0365, 0.2247, 0.4624, 0.8288],
   boostPads: [
-    { at: 0.3078, offset: 4 },
-    { at: 0.5427, offset: -4 },
-    { at: 0.8993, offset: 0 },
+    { at: 0.3097, offset: 4 },
+    { at: 0.5412, offset: -4 },
+    { at: 0.9011, offset: 0 },
   ],
   // Low-gravity lips on the two crests (long floaty arcs, a trick boosts on landing), a solar-sail glide down the lower
   // ribbon to its landing mark, and the cannon that fires a kart across the gap between the two ribbons.
   air: [
-    { kind: "lip", at: 0.2482, length: 64, height: 5 },
-    { kind: "lip", at: 0.3159, length: 64, height: 5 },
-    { kind: "glide", at: 0.6718, length: 70, height: 7 },
-    { kind: "cannon", at: 0.7399, length: 88, height: 9 },
+    { kind: "lip", at: 0.2505, length: 64, height: 5 },
+    { kind: "lip", at: 0.3176, length: 64, height: 5 },
+    { kind: "glide", at: 0.6776, length: 70, height: 7 },
+    { kind: "cannon", at: 0.7445, length: 88, height: 9 },
   ],
   drops: [
-    { from: 0.7595, to: 0.8066, side: "both", gap: true },
-    { from: 0.0414, to: 0.7595, side: "both" },
-    { from: 0.7942, to: 0.9514, side: "both" },
+    { from: 0.7637, to: 0.81, side: "both", gap: true },
+    { from: 0.0407, to: 0.7637, side: "both" },
+    { from: 0.7978, to: 0.9523, side: "both" },
   ],
   surfaces: [
-    { from: 0.0951, to: 0.1365, kind: "boost" },
-    { from: 0.5543, to: 0.5957, kind: "boost" },
+    { from: 0.0934, to: 0.1344, kind: "boost" },
+    { from: 0.554, to: 0.5996, kind: "boost" },
+  ],
+  routes: [
+    {
+      // The ribbon splits above the planet: the aurora (the main ribbon, wide and lit, a strip of boost and a comet rolling down it)
+      // and the comet trail, a narrower, lower ribbon that swings out round the bend and back, where meteors strike in rows. About the
+      // same length; one is for the quick of hand.
+      id: "comet-trail",
+      kind: "split",
+      from: 0.0211,
+      to: 0.1301,
+      width: 14,
+      flare: 24,
+      appeal: 0.5,
+      points: [
+        { x: 0, z: 54, y: 1.2 },
+        { x: -4, z: 65, y: 1.3 },
+        { x: -12, z: 76, y: 1.2 },
+        { x: -20, z: 86, y: 1.0 },
+        { x: -24, z: 97, y: 1.5 },
+        { x: -20, z: 108, y: 2.8 },
+        { x: -12, z: 118, y: 4.5 },
+        { x: -4, z: 129, y: 6.4 },
+        { x: 0, z: 140, y: 7.8 },
+      ],
+      // Open to the void on both sides, like the ribbon it leaves.
+      drops: [{ from: 0.12, to: 0.9, side: "both" }],
+      hazards: [
+        ...rockRain({ kind: "meteor", at: 0.3, step: 0.16, rows: [[-4.5, 0], [0, 4.5], [-4.5, 4.5]], period: 6, stagger: 0.3, radius: 2.1 }),
+      ],
+      landmarks: [
+        { kind: "ring-gate", at: 0.2, offset: 0, span: 6 },
+        { kind: "asteroid", at: 0.5, offset: -34, scale: 1.3 },
+      ],
+    },
   ],
   hazards: [
-    { kind: "asteroid", motion: "orbit", period: 5.6, radius: 3, offset: 0, at: 0.425, span: 6.4 },
-    { kind: "asteroid", motion: "orbit", period: 6.4, phase: 0.4, radius: 3, offset: 0, at: 0.5791, span: 6.4 },
-    { kind: "asteroid", motion: "orbit", period: 5.9, phase: 0.7, radius: 3, offset: 0, at: 0.6991, span: 6.4 },
-    { kind: "comet", motion: "roll", period: 5.2, radius: 3, offset: -2, at: 0.1655, span: 0.0496 },
+    { kind: "asteroid", motion: "orbit", period: 5.6, radius: 3, offset: 0, at: 0.4248, span: 6.4 },
+    { kind: "asteroid", motion: "orbit", period: 5.9, phase: 0.7, radius: 3, offset: 0, at: 0.7044, span: 6.4 },
+    { kind: "comet", motion: "roll", period: 5.2, radius: 3, offset: -2, at: 0.1645, span: 0.0496 },
+    // A plasma arm turning on the lower ribbon, a hundred metres before the glide: wait for it to come round, or slip by on its far side.
+    ...sweeper({ kind: "plasma-orb", at: 0.6224, offset: 0, length: 8.4, from: 3.2, period: 6.2, radius: 1.4 }),
     // A meteor shower down the carousel's far side: two streaks, a beat apart, one each side of the ribbon.
-    { kind: "comet", motion: "roll", period: 5.5, radius: 2.0, offset: -5.5, at: 0.521, span: 0.04 },
-    { kind: "comet", motion: "roll", period: 5.5, phase: 0.5, radius: 2.0, offset: 5.5, at: 0.521, span: 0.04 },
+    { kind: "comet", motion: "roll", period: 5.5, radius: 2.0, offset: -5.5, at: 0.5191, span: 0.04 },
+    { kind: "comet", motion: "roll", period: 5.5, phase: 0.5, radius: 2.0, offset: 5.5, at: 0.5191, span: 0.04 },
   ],
   landmarks: [
-    { kind: "ringed-planet", at: 0.0662, offset: 50, scale: 3.2 },
-    { kind: "ring-gate", at: 0.0248, offset: 0, span: 6 },
-    { kind: "ring-gate", at: 0.1125, offset: 0, span: 6 },
-    { kind: "nebula", at: 0.1655, offset: -200, scale: 3 },
-    { kind: "asteroid", at: 0.211, offset: -60, scale: 1.4 },
-    { kind: "ring-gate", at: 0.3061, offset: 0, span: 6 },
-    { kind: "nebula", at: 0.3558, offset: -230, scale: 2.6 },
-    { kind: "satellite", at: 0.3971, offset: -56, scale: 1.1 },
-    { kind: "ring-gate", at: 0.5394, offset: 0, span: 6 },
-    { kind: "asteroid", at: 0.4633, offset: 44 },
-    { kind: "ring-gate", at: 0.5791, offset: 0, span: 6 },
-    { kind: "asteroid", at: 0.6122, offset: 64, scale: 1.8 },
-    { kind: "ring-gate", at: 0.7115, offset: 0, span: 6 },
-    { kind: "space-station", at: 0.7281, offset: -110, scale: 2 },
-    { kind: "nebula", at: 0.7942, offset: -180, scale: 2.8 },
-    { kind: "ring-gate", at: 0.8993, offset: 0, span: 6 },
-    { kind: "satellite", at: 0.9589, offset: -40, scale: 1.2 },
+    { kind: "ringed-planet", at: 0.065, offset: 50, scale: 3.2 },
+    { kind: "ring-gate", at: 0.0244, offset: 0, span: 6 },
+    { kind: "nebula", at: 0.1645, offset: -200, scale: 3 },
+    { kind: "asteroid", at: 0.2118, offset: -60, scale: 1.4 },
+    { kind: "ring-gate", at: 0.308, offset: 0, span: 6 },
+    { kind: "nebula", at: 0.3568, offset: -230, scale: 2.6 },
+    { kind: "satellite", at: 0.3974, offset: -56, scale: 1.1 },
+    { kind: "ring-gate", at: 0.5376, offset: 0, span: 6 },
+    { kind: "asteroid", at: 0.4624, offset: 44 },
+    { kind: "ring-gate", at: 0.5813, offset: 0, span: 6 },
+    { kind: "asteroid", at: 0.6178, offset: 64, scale: 1.8 },
+    { kind: "ring-gate", at: 0.7166, offset: 0, span: 6 },
+    { kind: "space-station", at: 0.7329, offset: -110, scale: 2 },
+    { kind: "nebula", at: 0.7978, offset: -180, scale: 2.8 },
+    { kind: "ring-gate", at: 0.9011, offset: 0, span: 6 },
+    { kind: "satellite", at: 0.9596, offset: -40, scale: 1.2 },
   ],
-  duck: { at: 0.9589, offset: -34, y: 6 },
+  duck: { at: 0.9596, offset: -34, y: 6 },
 };
 
 /**
- * Secret. An island shaped like an open hand, seen from above: the hand you play with. The road runs up and down every
- * finger (the fingertips are hairpins), round the thumb, and back along the wrist, where a giant wristwatch is the
- * start gantry. A ring to drive through on the long straight by the wrist (the fingers lie too close for anything to
- * stand between them), palm trees, beach huts, crabs and rolling coconuts. The minimap is a hand. The duck sunbathes in
- * sunglasses in the middle of the palm. The hand is tilted: every finger climbs to its tip and back. About 1.2 km.
+ * Secret. An island shaped like an open hand, seen from above: the hand you play with. The road runs up and down every finger
+ * (the fingertips are banked hairpins, and the hand is tilted: every finger climbs to its tip and back, the middle one highest), round
+ * the thumb, and back along the wrist, where a giant wristwatch is the start gantry. The palm trail leaves the road at the first valley
+ * and runs straight on across the palm, under the ring finger, through a tiki arch to the middle finger (nothing to climb, a coconut
+ * rolling down it); on the wrist the tide washes the beach road in sets of breakers. A ring to drive through on the long straight by the
+ * wrist (the fingers lie too close for anything to stand between them), palm trees, beach huts, crabs and rolling coconuts. The
+ * minimap is a hand. The duck sunbathes in sunglasses in the middle of the palm. About 1.2 km.
  */
 export const FIVE_FINGER_CIRCUIT: TrackDef = {
   id: "five-finger-circuit",
@@ -1287,7 +1352,7 @@ export const FIVE_FINGER_CIRCUIT: TrackDef = {
   theme: "palm",
   laps: 3,
   width: 13,
-  blurb: "An island shaped like an open hand: up and down every finger, a cannon off the wrist, and a glide from the thumb's tip down to the water.",
+  blurb: "An island shaped like an open hand: up and down every finger or across the palm by the tiki trail, a cannon off the wrist, the tide washing the beach road, and a glide from the thumb's tip down to the water.",
   secret: true,
   points: [
     { x: 0, z: 0 },
@@ -1298,69 +1363,71 @@ export const FIVE_FINGER_CIRCUIT: TrackDef = {
     { x: -52.7, z: 71 },
     { x: -60.3, z: 81.2 },
     { x: -63, z: 93.6 },
-    { x: -63, z: 125.3, y: 0.4 },
-    { x: -63, z: 157, y: 1.5 },
-    { x: -61.3, z: 163.5, y: 1.7 },
-    { x: -56.5, z: 168.3, y: 1.9 },
-    { x: -50, z: 170, y: 1.9 },
-    { x: -43.5, z: 168.3, y: 1.9 },
-    { x: -38.7, z: 163.5, y: 1.7 },
-    { x: -37, z: 157, y: 1.5 },
-    { x: -37, z: 138, y: 0.8 },
-    { x: -35.3, z: 131.5, y: 0.6 },
-    { x: -30.5, z: 126.7, y: 0.4 },
-    { x: -24, z: 125, y: 0.4 },
-    { x: -17.5, z: 126.7, y: 0.4 },
-    { x: -12.7, z: 131.5, y: 0.6 },
-    { x: -11, z: 138, y: 0.8 },
-    { x: -11, z: 175, y: 2.1 },
-    { x: -9.3, z: 181.5, y: 2.3 },
-    { x: -4.5, z: 186.3, y: 2.5 },
-    { x: 2, z: 188, y: 2.6 },
-    { x: 8.5, z: 186.3, y: 2.5 },
-    { x: 13.3, z: 181.5, y: 2.3 },
-    { x: 15, z: 175, y: 2.1 },
-    { x: 15, z: 138, y: 0.8 },
-    { x: 16.7, z: 131.5, y: 0.6 },
-    { x: 21.5, z: 126.7, y: 0.4 },
-    { x: 28, z: 125, y: 0.4 },
-    { x: 34.5, z: 126.7, y: 0.4 },
-    { x: 39.3, z: 131.5, y: 0.6 },
-    { x: 41, z: 138, y: 0.8 },
-    { x: 41, z: 183, y: 2.4 },
-    { x: 42.7, z: 189.5, y: 2.6 },
-    { x: 47.5, z: 194.3, y: 2.8 },
-    { x: 54, z: 196, y: 2.8 },
-    { x: 60.5, z: 194.3, y: 2.8 },
-    { x: 65.3, z: 189.5, y: 2.6 },
-    { x: 67, z: 183, y: 2.4 },
-    { x: 67, z: 138, y: 0.8 },
-    { x: 68.7, z: 131.5, y: 0.6 },
-    { x: 73.5, z: 126.7, y: 0.4 },
-    { x: 80, z: 125, y: 0.4 },
-    { x: 86.5, z: 126.7, y: 0.4 },
-    { x: 91.3, z: 131.5, y: 0.6 },
-    { x: 93, z: 138, y: 0.8 },
-    { x: 93, z: 173, y: 2 },
-    { x: 94.7, z: 179.5, y: 2.3 },
-    { x: 99.5, z: 184.3, y: 2.4 },
-    { x: 106, z: 186, y: 2.5 },
-    { x: 112.5, z: 184.3, y: 2.4 },
-    { x: 117.3, z: 179.5, y: 2.3 },
-    { x: 119, z: 173, y: 2 },
-    { x: 119, z: 142, y: 0.9 },
+    { x: -63, z: 125.3, y: 0.9 },
+    { x: -63, z: 157, y: 3.3 },
+    { x: -61.3, z: 163.5, y: 3.7, bank: -0.12 },
+    { x: -56.5, z: 168.3, y: 4.2, bank: -0.26 },
+    { x: -50, z: 170, y: 4.2, bank: -0.26 },
+    { x: -43.5, z: 168.3, y: 4.2, bank: -0.26 },
+    { x: -38.7, z: 163.5, y: 3.7, bank: -0.12 },
+    { x: -37, z: 157, y: 3.3 },
+    { x: -37, z: 138, y: 1.8 },
+    { x: -35.3, z: 131.5, y: 1.3 },
+    { x: -30.5, z: 126.7, y: 0.9 },
+    { x: -24, z: 125, y: 0.9 },
+    { x: -17.5, z: 126.7, y: 0.9 },
+    { x: -12.7, z: 131.5, y: 1.3 },
+    { x: -11, z: 138, y: 1.8 },
+    { x: -11, z: 175, y: 4.6 },
+    { x: -9.3, z: 181.5, y: 5.1, bank: -0.12 },
+    { x: -4.5, z: 186.3, y: 5.5, bank: -0.26 },
+    { x: 2, z: 188, y: 5.7, bank: -0.26 },
+    { x: 8.5, z: 186.3, y: 5.5, bank: -0.26 },
+    { x: 13.3, z: 181.5, y: 5.1, bank: -0.12 },
+    { x: 15, z: 175, y: 4.6 },
+    // The ring finger's knuckle on its way down, the index finger's the other way: a quick right-left after the tip.
+    { x: 15, z: 138, y: 1.8 },
+    { x: 16.7, z: 131.5, y: 1.3 },
+    { x: 21.5, z: 126.7, y: 0.9 },
+    { x: 28, z: 125, y: 0.9 },
+    { x: 34.5, z: 126.7, y: 0.9 },
+    { x: 39.3, z: 131.5, y: 1.3 },
+    { x: 41, z: 138, y: 1.8 },
+    { x: 41, z: 183, y: 5.3 },
+    { x: 42.7, z: 189.5, y: 5.7, bank: -0.12 },
+    { x: 47.5, z: 194.3, y: 6.2, bank: -0.26 },
+    { x: 54, z: 196, y: 6.2, bank: -0.26 },
+    { x: 60.5, z: 194.3, y: 6.2, bank: -0.26 },
+    { x: 65.3, z: 189.5, y: 5.7, bank: -0.12 },
+    { x: 67, z: 183, y: 5.3 },
+    { x: 67, z: 138, y: 1.8 },
+    { x: 68.7, z: 131.5, y: 1.3 },
+    { x: 73.5, z: 126.7, y: 0.9 },
+    { x: 80, z: 125, y: 0.9 },
+    { x: 86.5, z: 126.7, y: 0.9 },
+    { x: 91.3, z: 131.5, y: 1.3 },
+    { x: 93, z: 138, y: 1.8 },
+    { x: 93, z: 173, y: 4.4 },
+    { x: 94.7, z: 179.5, y: 5.1, bank: -0.12 },
+    { x: 99.5, z: 184.3, y: 5.3, bank: -0.26 },
+    { x: 106, z: 186, y: 5.5, bank: -0.26 },
+    { x: 112.5, z: 184.3, y: 5.3, bank: -0.26 },
+    { x: 117.3, z: 179.5, y: 5.1, bank: -0.12 },
+    { x: 119, z: 173, y: 4.4 },
+    // The index finger's, left-right.
+    { x: 119, z: 142, y: 2 },
     { x: 119, z: 111 },
     { x: 120.5, z: 105.5 },
     { x: 124.5, z: 101.5 },
     { x: 130, z: 100 },
     { x: 135.5, z: 101.5 },
     { x: 139.5, z: 105.5 },
-    { x: 147.5, z: 119.4, y: 0.2 },
-    { x: 152.3, z: 124.1, y: 0.3 },
-    { x: 158.8, z: 125.9, y: 0.4 },
-    { x: 165.2, z: 124.1, y: 0.3 },
-    { x: 165.3, z: 124.1, y: 0.3 },
-    { x: 169.1, z: 120.8, y: 0.2 },
+    { x: 147.5, z: 119.4, y: 0.4 },
+    { x: 152.3, z: 124.1, y: 0.7 },
+    { x: 158.8, z: 125.9, y: 0.9 },
+    { x: 165.2, z: 124.1, y: 0.7 },
+    { x: 165.3, z: 124.1, y: 0.7 },
+    { x: 169.1, z: 120.8, y: 0.4 },
     { x: 171.4, z: 116.2 },
     { x: 171.7, z: 111.1 },
     { x: 170.1, z: 106.3 },
@@ -1376,64 +1443,102 @@ export const FIVE_FINGER_CIRCUIT: TrackDef = {
     { x: 66.3, z: -1.8 },
     { x: 58.7, z: -12 },
     { x: 56, z: -24.5 },
-    { x: 56, z: -40 },
-    { x: 52.2, z: -54 },
-    { x: 42, z: -64.2 },
+    // The watch-strap buckle: the road swings out to the sea side and back in a wide S, then round the U onto the start straight.
+    { x: 60, z: -34, bank: 0.1 },
+    { x: 55, z: -48, bank: -0.1 },
+    { x: 45, z: -61 },
     { x: 28, z: -68 },
     { x: 14, z: -64.2 },
     { x: 3.8, z: -54 },
     { x: 0, z: -40 },
   ],
-  itemRows: [0.0324, 0.2466, 0.4545, 0.5977],
+  itemRows: [0.0324, 0.2463, 0.454, 0.607],
   boostPads: [
-    { at: 0.096, offset: 0 },
-    { at: 0.3914, offset: 1.5 },
-    { at: 0.6181, offset: -1.5 },
-    { at: 0.8845, offset: 0 },
+    { at: 0.0959, offset: 0 },
+    { at: 0.391, offset: 1.5 },
+    { at: 0.6174, offset: -1.5 },
+    { at: 0.8837, offset: 0 },
   ],
   // The wrist launcher fires a kart up the first diagonal; the fingertip lip hops the first finger; the thumb glide
   // takes a kart off the thumb's tip and down to the wrist over the sea, to a landing mark in the lagoon.
   air: [
-    { kind: "cannon", at: 0.0461, length: 36, height: 5 },
-    { kind: "lip", at: 0.1092, length: 34, height: 3.5 },
-    { kind: "glide", at: 0.7186, length: 95, height: 8 },
+    { kind: "cannon", at: 0.046, length: 36, height: 5 },
+    { kind: "lip", at: 0.1091, length: 34, height: 3.5 },
+    { kind: "glide", at: 0.7178, length: 95, height: 8 },
   ],
-  drops: [{ from: 0.7211, to: 0.798, side: "both" }],
+  routes: [
+    {
+      // The palm trail: leaves the pinky's side of the first valley, runs straight on across the sand of the palm under the ring finger
+      // (a tiki arch at its mouth, sand underfoot, a coconut rolling down it) and comes up onto the middle finger's long leg again.
+      // Narrower and a little shorter than going over the ring finger, and nothing to climb.
+      id: "palm-trail",
+      kind: "shortcut",
+      from: 0.1890,
+      to: 0.3928,
+      width: 10,
+      flare: 24,
+      appeal: 0.75,
+      points: [
+        { x: -37, z: 136, y: 1.8 },
+        { x: -37, z: 112, y: 1.2 },
+        { x: -32, z: 96, y: 0.9 },
+        { x: -20, z: 86, y: 0.9 },
+        { x: -2, z: 82, y: 0.9 },
+        { x: 18, z: 82, y: 0.9 },
+        { x: 32, z: 88, y: 1 },
+        { x: 39, z: 102, y: 1.2 },
+        { x: 41, z: 124, y: 1.6 },
+        { x: 41, z: 142, y: 2 },
+      ],
+      surfaces: [{ from: 0.2, to: 0.3, kind: "boost", offset: 0, width: 3 }],
+      // The palms lean over the trail and shake their coconuts down in a volley, each row a beat behind the last, one lane clear
+      // each time: the price of the quick way.
+      hazards: [...rockRain({ kind: "coconut-bunch", at: 0.55, step: 0.07, rows: [[-3.2, 0.2], [0.2, 3.4], [-3.2, 3.4]], period: 6, stagger: 0.17, radius: 1.7 })],
+      landmarks: [
+        { kind: "tiki-arch", at: 0.5, offset: 0, span: 12 },
+        { kind: "palm-tree", at: 0.3, offset: -14, scale: 1.1 },
+        { kind: "palm-tree", at: 0.7, offset: -15 },
+      ],
+    },
+  ],
+  drops: [{ from: 0.7203, to: 0.7971, side: "both" }],
   hazards: [
-    { kind: "crab", motion: "cross", period: 5.6, radius: 1.3, at: 0.093, span: 6 },
-    { kind: "coconut", motion: "roll", period: 4.6, radius: 1.5, offset: -2.6, at: 0.18, span: 0.03 },
-    { kind: "beach-ball", motion: "roll", period: 5, radius: 1.9, offset: 2.6, at: 0.653, span: 0.0478 },
-    { kind: "crab", motion: "cross", period: 6.2, phase: 0.4, radius: 1.3, at: 0.888, span: 6 },
+    { kind: "crab", motion: "cross", period: 5.6, radius: 1.3, at: 0.0929, span: 6 },
+    { kind: "coconut", motion: "roll", period: 4.6, radius: 1.5, offset: -2.6, at: 0.1798, span: 0.03 },
+    { kind: "beach-ball", motion: "roll", period: 5, radius: 1.9, offset: 2.6, at: 0.6523, span: 0.03 },
+    { kind: "crab", motion: "cross", period: 6.2, phase: 0.4, radius: 1.3, at: 0.9148, span: 6 },
+    // The tide: breakers wash up the beach road from the sea on the wrist, one set after another. Each rises out of the water at the
+    // road's edge (foam first) and runs across; the next comes half a beat later, a little way on, round the bend.
+    ...front({ kind: "tide-wave", at: 0.8332, count: 3, step: 0.0042, period: 6.4, reach: -9.2, radius: 2.5, lead: 0.36 }),
+    ...front({ kind: "tide-wave", at: 0.8798, count: 3, step: 0.0042, period: 6.4, phase: 0.5, reach: -9.2, radius: 2.5, lead: 0.36 }),
   ],
   landmarks: [
     { kind: "wristwatch", at: 0, offset: 0, span: 12 },
     { kind: "palm-tree", at: 0.9744, offset: -24 },
     { kind: "palm-tree", at: 0.9829, offset: 24, scale: 1.2 },
-    { kind: "beach-hut", at: 0.0537, offset: 30 },
-    { kind: "surfboard", at: 0.0656, offset: -26, turn: 0.4 },
-    { kind: "palm-tree", at: 0.1219, offset: 24 },
-    { kind: "palm-tree", at: 0.1441, offset: 28, scale: 1.3 },
-    { kind: "sandcastle", at: 0.1646, offset: 28 },
-    { kind: "beach-hut", at: 0.2194, offset: -22, turn: 3.1 },
-    { kind: "giant-ring", at: 0.853, offset: 0, span: 10 },
-    { kind: "palm-tree", at: 0.2364, offset: -18 },
-    { kind: "surfboard", at: 0.29, offset: 24 },
-    { kind: "palm-tree", at: 0.3658, offset: -24, scale: 1.2 },
-    { kind: "beach-hut", at: 0.4219, offset: 28 },
-    { kind: "sandcastle", at: 0.4989, offset: -27.5 },
-    { kind: "palm-tree", at: 0.4767, offset: 67.5 },
-    { kind: "beach-towel", at: 0.5653, offset: 22 },
-    { kind: "palm-tree", at: 0.6028, offset: 28 },
-    { kind: "surfboard", at: 0.6386, offset: -25, turn: 2.2 },
-    { kind: "beach-hut", at: 0.6442, offset: -26, turn: 1 },
-    { kind: "palm-tree", at: 0.7236, offset: 24 },
-    { kind: "sandcastle", at: 0.8281, offset: 30 },
-    { kind: "palm-tree", at: 0.8863, offset: -24 },
-    { kind: "palm-tree", at: 0.9088, offset: 30, scale: 1.3 },
-    { kind: "beach-towel", at: 0.9173, offset: -30 },
+    { kind: "beach-hut", at: 0.0536, offset: 30 },
+    { kind: "surfboard", at: 0.0655, offset: 26, turn: 0.4 },
+    { kind: "palm-tree", at: 0.1218, offset: 24 },
+    { kind: "palm-tree", at: 0.1439, offset: 28, scale: 1.3 },
+    { kind: "sandcastle", at: 0.1644, offset: 28 },
+    { kind: "giant-ring", at: 0.852, offset: 0, span: 10 },
+    { kind: "palm-tree", at: 0.2361, offset: -18 },
+    { kind: "surfboard", at: 0.2897, offset: 24 },
+    { kind: "palm-tree", at: 0.3654, offset: -24, scale: 1.2 },
+    { kind: "beach-hut", at: 0.4214, offset: 28 },
+    { kind: "palm-tree", at: 0.4762, offset: 67.5 },
+    { kind: "beach-towel", at: 0.5647, offset: 22 },
+    { kind: "palm-tree", at: 0.6021, offset: 28 },
+    { kind: "surfboard", at: 0.6379, offset: -25, turn: 2.2 },
+    { kind: "beach-hut", at: 0.6435, offset: -26, turn: 1 },
+    { kind: "palm-tree", at: 0.7228, offset: 24 },
+    { kind: "sandcastle", at: 0.8272, offset: 30 },
+    { kind: "palm-tree", at: 0.8855, offset: -24 },
+    { kind: "palm-tree", at: 0.9085, offset: 30, scale: 1.3 },
+    { kind: "beach-towel", at: 0.9171, offset: -30 },
     { kind: "surfboard", at: 0.9966, offset: 24, turn: 1.2 },
   ],
-  duck: { at: 0.0571, offset: -72, y: 0.2 },
+  duck: { at: 0.04, offset: -28, y: 0.2 },
 };
 
 /** Every track, in the order they are raced: the Acorn Cup, the Comet Cup, then the secret one. */

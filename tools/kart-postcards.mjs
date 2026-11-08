@@ -141,37 +141,37 @@ const POSES = {
     ],
   },
   "volcano-rush": {
-    // Rear view into the obsidian arch: the volcano erupting beside it, lava light on everything.
-    at: 0.0581,
+    // Under the lava bombs: the crater rim, the lava tube glowing at the right, a kart boosting ahead.
+    at: 0.4215,
     boxes: false,
     focus: 1,
-    time: 12,
-    eye: { d: -43, off: 2.5, up: 1.0 },
-    target: { d: 20, off: -4, up: 11 },
-    fov: 58,
+    time: 3.4,
+    eye: { d: -22, off: 2.5, up: 2.2 },
+    target: { d: 22, off: -1, up: 6 },
+    fov: 62,
     roll: 2,
     karts: [
-      { id: 1, d: -35, off: -0.5, boost: 1.2 },
-      { id: 0, d: -29.5, off: 3.4 },
-      { id: 3, d: -24, off: -3.4 },
-      { id: 2, d: -18, off: 1.4 },
+      { id: 1, d: -8, off: -0.5, boost: 1.2 },
+      { id: 0, d: -3, off: 3.4 },
+      { id: 3, d: 2, off: -3.4 },
+      { id: 2, d: 7, off: 1.4 },
     ],
   },
   "starlight-ribbon": {
-    // Through a ring gate on a boost strip, the nebula behind, the ribbon glowing; the karts head for the gate with their
-    // backs to us (a yaw of about pi), so the glow is a tail flame, not a headlight blob.
-    at: 0.1722,
+    // The ribbon at the fork: the comet trail splitting off beside the aurora, meteors on the horizon.
+    at: 0.082,
     boxes: false,
     focus: 3,
-    eye: { d: 30, off: -3.5, up: 0.7 },
-    target: { d: 0, off: -1, up: 6.5 },
-    fov: 60,
-    roll: 3,
+    time: 2.0,
+    eye: { d: -22, off: 2.5, up: 2.4 },
+    target: { d: 26, off: -5, up: 4 },
+    fov: 62,
+    roll: 2,
     karts: [
-      { id: 3, d: 21, off: 1.0, boost: 1.2, yaw: 3.3 },
-      { id: 0, d: 15, off: -4.0, yaw: 3.0 },
-      { id: 1, d: 10, off: 4.0, yaw: 3.2 },
-      { id: 5, d: 4, off: -1.2, yaw: 3.1 },
+      { id: 3, d: -8, off: 1.0, boost: 1.2 },
+      { id: 0, d: -3, off: -4.0 },
+      { id: 1, d: 2, off: 4.0 },
+      { id: 5, d: 6, off: -1.2 },
     ],
   },
   "five-finger-circuit": {
