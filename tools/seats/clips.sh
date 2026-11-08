@@ -21,8 +21,9 @@ person="crop=iw/3*1.5:ih:iw/4:0,scale=540:720"
 wall="color=c=0xc9a98a:s=640x720:r=20"
 # One column: the person centred on a 640-wide stretch of wall.
 column() { echo "[$1:v]fps=20,$person[p$2];[p$2]pad=640:720:50:0:0xc9a98a[c$2]"; }
-common="-v error -y -pix_fmt yuv420p -t 5"
-ffmpeg $common -i "$src" -f lavfi -i "$wall" -filter_complex "$(column 0 a);[1:v]null[w];[w][ca]hstack[out]" -map "[out]" "$out/alone-right.y4m"
-ffmpeg $common -i "$src" -f lavfi -i "$wall" -filter_complex "$(column 0 a);[ca][1:v]hstack[out]" -map "[out]" "$out/alone-left.y4m"
-ffmpeg $common -i "$src" -ss 3 -i "$src" -filter_complex "$(column 0 a);$(column 1 b);[ca][cb]hstack[out]" -map "[out]" "$out/pair.y4m"
+quiet="-v error -y"
+format="-pix_fmt yuv420p -t 5"
+ffmpeg $quiet -i "$src" -f lavfi -i "$wall" -filter_complex "$(column 0 a);[1:v]null[w];[w][ca]hstack[out]" -map "[out]" $format "$out/alone-right.y4m"
+ffmpeg $quiet -i "$src" -f lavfi -i "$wall" -filter_complex "$(column 0 a);[ca][1:v]hstack[out]" -map "[out]" $format "$out/alone-left.y4m"
+ffmpeg $quiet -i "$src" -ss 3 -i "$src" -filter_complex "$(column 0 a);$(column 1 b);[ca][cb]hstack[out]" -map "[out]" $format "$out/pair.y4m"
 ls -la "$out"
