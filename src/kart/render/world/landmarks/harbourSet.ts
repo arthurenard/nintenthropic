@@ -1,6 +1,6 @@
 /**
  * Harbour Lights' second pass: the drawbridge. Its leaf is the road itself (it cannot be drawn to move, a kart is on it),
- * so what moves is everything that tells you where it is in its cycle: two stone gate towers with a footbridge between
+ * so two steel leaves either side of the road rise with the clock, and everything else tells you where it is in its cycle: two stone gate towers with a footbridge between
  * them, three signal lamps hung over the middle of the road (red while the leaf is down, amber and a bell before it goes
  * up, green while it is raised and the pad ahead launches a kart) and a counterweight on each tower that drops as the leaf
  * rises. All of it keeps the race clock, the sim's own (track/tracks.ts, DRAWBRIDGE: sim/air.ts, `arcLive`).
@@ -117,6 +117,25 @@ const drawbridge: LandmarkSpec = {
       pivot: [0, 0, -16],
       update(_t, part, race = 0) {
         part.position.y = 15 - 9.5 * leafRaised(race);
+      },
+    });
+    // The leaves: a steel deck either side of the road, hinged at the towers, that rises with the clock (flat while the bridge is
+    // down, tilted high exactly while the lip ahead is live). With Reduce Motion they snap between the two.
+    const leaves = new MeshBuilder();
+    for (const s of [-1, 1]) {
+      const lx = s * 12.6;
+      leaves.box(lx, 0.22, -9, 6.2, 0.44, 12, { bottom: scaleRgb(IRON, 1.2), top: scaleRgb(STONE_D, 1.1) });
+      leaves.box(lx - s * 2.9, 0.62, -9, 0.4, 0.5, 12, GOLD);
+      leaves.box(lx + s * 2.9, 0.62, -9, 0.4, 0.5, 12, GOLD);
+      for (let z = -13; z < -3; z += 3.2) leaves.box(lx, 0.5, z, 5.4, 0.12, 0.3, IRON);
+    }
+    parts.push({
+      lit: leaves,
+      pivot: [0, 0.2, -15],
+      update(_t, part, race = 0) {
+        const calm = typeof document !== "undefined" && document.documentElement.hasAttribute("data-reduce-motion");
+        const up = leafRaised(race);
+        part.rotation.x = -(calm ? (up > 0.5 ? 1 : 0) : up) * 1.0;
       },
     });
     return { lit, glow, moving: parts };

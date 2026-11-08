@@ -32,6 +32,8 @@ export interface TrackStats {
   offroad: number;
   /** Where each fall happened, as fractions of the lap. */
   fallAt: number[];
+  /** Each jump: where along the lap (a fraction) and when in the race (seconds), to see which pad it left. */
+  jumpAt: { at: number; time: number }[];
 }
 
 export function botField(count = 8): RacerSetup[] {
@@ -58,6 +60,7 @@ export function trackStats(track: TrackDef, options: { seed?: number; laps?: num
   let bestLap = Infinity;
   let worstLap = 0;
   const fallAt: number[] = [];
+  const jumpAt: { at: number; time: number }[] = [];
   const limit = GO_TICK + 60 * 360;
   while (r.tick < limit && r.view().phase !== "finished") {
     r.step(new Map());
@@ -73,7 +76,10 @@ export function trackStats(track: TrackDef, options: { seed?: number; laps?: num
         const key = `${e.kind}@${(Math.round(v.karts[e.kart]!.lapProgress * 100) / 100).toFixed(2)}`;
         hitsBy[key] = (hitsBy[key] ?? 0) + 1;
       }
-      else if (e.type === "jump") jumps++;
+      else if (e.type === "jump") {
+        jumps++;
+        jumpAt.push({ at: v.karts[e.kart]!.lapProgress % 1, time: (e.tick - GO_TICK) / 60 });
+      }
       else if (e.type === "trick") tricks++;
       else if (e.type === "land" && e.boost) tricked++;
       else if (e.type === "wall") walls++;
@@ -118,5 +124,6 @@ export function trackStats(track: TrackDef, options: { seed?: number; laps?: num
     stuck,
     offroad: racing > 0 ? offroad / racing : 0,
     fallAt,
+    jumpAt,
   };
 }

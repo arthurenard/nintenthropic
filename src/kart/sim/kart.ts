@@ -841,13 +841,12 @@ function launchOffArcs(w: World, k: KartState, prevS: number, emit: Emit): void 
   if (arcs.length === 0 || k.spin > 0) return;
   const half = w.geo.at(k.s).width / 2;
   if (Math.abs(k.offset) > half) return;
-  const time = Math.max(0, (k.t - GO_TICK) / TICK_HZ);
   for (let i = 0; i < arcs.length; i++) {
     const site = arcs[i]!;
     const before = w.geo.delta(prevS, site.s);
     const after = w.geo.delta(k.s, site.s);
     if (before <= 0 || after > 0 || before > 8 || k.offset < site.lo || k.offset > site.hi) continue;
-    if (site.timed && !arcLive(site, time)) continue;
+    if (site.timed && !arcLive(site, Math.max(0, (k.t - GO_TICK) / TICK_HZ))) continue;
     launchArc(w, k, site, emit);
     return;
   }

@@ -1519,6 +1519,9 @@ models at all); a cap on the pixels of a huge window (a 5K display at 2x draws 1
 merging the track's road, kerb and verge meshes beyond 150 m; the race giving up shadows or bloom before pixels when the
 tracker is short of the GPU (`handsFirst.ts` only knows the resolution).
 
+
+**The second-pass Meadow, Kitchen and Harbour tracks, four views, high tier** (2026-11-08, `tools/perf/bench.mjs --rounds 3` alternating the first-pass checkout and this one; draw calls vary by 25% from one frame to the next as the pack moves, so the single-frame `calls.mjs` figures were averaged over frames at 6, 12, 20 and 32 s). Frame time: Meadow 8.42 to 8.43 ms, Kitchen 7.51 to 7.34, Harbour 6.57 to 7.13 (+9%, CPU +11%: one more moving landmark, three lamps, the leaves, counterweights, and the extra swinging containers). Draw calls by the bench frame: Meadow 658 to 624, Kitchen 758 to 936 (+23%: the whisk, toast, orange and drip pieces and the mixer's and cooker's burners, all drawn per view; frame time did not move), Harbour 600 to 639; by the average of four frames: Meadow +12%, Kitchen +4%, Harbour +15%. Over the 10% budget on Harbour's frame time and calls and on Kitchen's calls: each new set piece is one more instanced draw per view, and cutting them would cut the set pieces. Time to first frame is +6% (Meadow, Kitchen) and +40% on Harbour (more landmark geometry to bake), and Kitchen's worst start-up frame is 72 ms against 15 (a one-off shader hitch before the lights); both are before the green light.
+
 ## App (`race.html`, `src/kart/app/`, `src/kart/main.ts`)
 
 Screens, in DESIGN.md's voice and style (frosted glass over one sky, big
@@ -1852,7 +1855,7 @@ front of them (or a laptop), and the TV is the host's screen.
   cycle (seconds over `period`, plus `phase`) is in [from, to). It is a pure function of the clock, like a hazard,
   so every device agrees and nothing is sent; outside the window the pad is plain road and a kart drives over it
   (`arcLive` in sim/air.ts, asked by the sim's launch and the bots' plan). Harbour Lights' drawbridge is one
-  (`DRAWBRIDGE` in track/tracks.ts: ten seconds, live from 70% to 95%); the picture's signals, bell and counterweights
+  (`DRAWBRIDGE` in track/tracks.ts: ten seconds, live from 70% to 95%); the picture's two steel leaves either side of the road (tilting up, flat while it is down; they snap between the two with Reduce Motion), signals, bell and counterweights
   keep the same clock (landmarks/harbourSet.ts), which is why a landmark's moving part now gets the race clock as a
   third argument (`update(t, part, race)`, 0 before the start). The sim's racecraft, item and driving tests ran on the old Harbour Lights; its first-pass
   layout (a long flat start, a flat bend) is kept as `sim/quayFixture.ts` for them, and `level()` in sim/testing.ts takes a
@@ -2068,10 +2071,10 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    across the quay.
    *Design note (second pass; 1.2 km, a bot lap of 48 to 50 s).* **Start:** along
    the quay to the **drawbridge**: two stone gate towers and a footbridge across the road,
-   signal lamps over its middle, a bell, a counterweight on each tower. It keeps the
+   signal lamps over its middle, a bell, a counterweight on each tower, and a steel leaf either side of the road that stands up while it is raised. It keeps the
    race clock: red while the leaf is down (the road is just road), amber blinking and
    the bell for the second and a half before it goes up, green while it is raised (a
-   quarter of every ten seconds), and then the lip ahead is live and a kart that takes
+   quarter of every ten seconds), and then the leaves are up, the lip ahead is live and a kart that takes
    it flies the dock. Time it and you gain ground, miss it and you drive over: nothing is
    lost. Then a left-hander up onto the sea wall and the **lighthouse hairpin** with open
    water on its outside (the duck), and a chicane past the warehouses. **Signature piece

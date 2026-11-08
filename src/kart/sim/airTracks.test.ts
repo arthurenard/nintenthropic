@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { TrackGeometry } from "../track/geometry";
 import { mirrorTrack } from "../track/mirror";
 import { trackById } from "../track/tracks";
+import { arcLive } from "./air";
 import { trackStats } from "./trackStats";
 
 const IDS = ["volcano-rush", "starlight-ribbon", "five-finger-circuit", "meadow-loop", "kitchen-rally", "harbour-lights"];
@@ -58,5 +59,24 @@ describe.each(IDS)("%s air sections", (id) => {
       expect(stats.fallRate, where).toBeLessThan(0.15);
       expect(stats.worstLap, where).toBeLessThanOrEqual(85);
     }
+  });
+});
+
+describe("Harbour Lights drawbridge lip", () => {
+  const track = trackById("harbour-lights")!;
+  const bridge = track.air!.find((a) => a.timed)!;
+  it.each([false, true])("is flown by the bots only while the leaf is up, mirror %s", { timeout: 90000 }, (mirror) => {
+    const t = mirror ? mirrorTrack(track) : track;
+    let flown = 0;
+    for (const seed of [1, 2, 3]) {
+      for (const j of trackStats(t, { seed }).jumpAt) {
+        if (Math.abs(j.at - bridge.at) > 0.03) continue;
+        flown++;
+        // The jump event can come a tick or two after the pad, so allow a little slack at the cycle's edge.
+        const live = arcLive({ timed: bridge.timed } as never, j.time) || arcLive({ timed: bridge.timed } as never, j.time - 0.1);
+        expect(live, `jump at ${j.time.toFixed(2)} s`).toBe(true);
+      }
+    }
+    expect(flown, "bots that flew the drawbridge").toBeGreaterThan(0);
   });
 });
