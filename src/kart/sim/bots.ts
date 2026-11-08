@@ -678,7 +678,7 @@ export function botInput(world: World, k: KartState): DriveInput {
   steer = clamp(steer + wobble(w, k, style, calm), -1, 1);
 
   if (k.drift !== 0) {
-    // In a drift the wheel is remapped to 0.4..1.4 of a full turn into it, and against it the turn only widens. A bend gentler
+    // In a drift the wheel is remapped to 0.17..1 of a full turn into it, and against it the turn only widens. A bend gentler
     // than that, or one that has turned the other way, is a wheel against the drift: held for a moment, it lets the drift go.
     const own = clamp((Math.abs(steer) - DR.steerBase) / DR.steerRange, -1, 1);
     const given = Math.sign(steer) === k.drift ? own * k.drift : -k.drift;
