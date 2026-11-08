@@ -9,7 +9,7 @@ import { RAIL_GAP } from "../track/edges";
 import { mirrorTrack } from "../track/mirror";
 import { TRACKS } from "../track/tracks";
 import { planFor } from "./plan";
-import { barrierDistance, isOpen } from "./terrain";
+import { barrierDistance, isOpen, junctionGates } from "./terrain";
 import { weave } from "./weave";
 
 describe("the rails over a drop", () => {
@@ -19,6 +19,7 @@ describe("the rails over a drop", () => {
         const plan = planFor(def);
         let drops = 0;
         for (const [r, terrain] of [plan.terrain, ...plan.routes.map((route) => route.terrain)].entries()) {
+          const gates = junctionGates(r === 0 ? plan.geo : plan.routes[r - 1]!.geo);
           for (let i = 0; i < terrain.openLeft.length; i++) {
             const s = (terrain.open ? terrain.origin : 0) + i * terrain.spacing;
             for (const side of [-1, 1] as const) {
@@ -30,7 +31,9 @@ describe("the rails over a drop", () => {
               // Only a gap in the road leaves nothing to stop a kart.
               if (isOpen(terrain, s, side)) expect(terrain.gaps.length, where).toBeGreaterThan(0);
               // Well inside the drop the barrier is the rail.
-              if (rail >= 0.999) expect(barrierDistance(terrain, s, side), where).toBeLessThanOrEqual(RAIL_GAP + 0.01);
+              // (Where the road is open to another's the barrier stands out of the way and the rail yields, and eases back over a few metres.)
+              const gate = (side < 0 ? gates.left : gates.right).slice(Math.max(0, i - 12), i + 13).some((g) => g > 0);
+              if (rail >= 0.999 && !gate) expect(barrierDistance(terrain, s, side), where).toBeLessThanOrEqual(RAIL_GAP + 0.01);
             }
           }
         }

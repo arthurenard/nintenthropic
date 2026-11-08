@@ -583,7 +583,10 @@ export class TrackGeometry {
       }
     }
     const sample = this.at(bestS);
-    const offset = (x - sample.x) * -sample.tz + (z - sample.z) * sample.tx;
+    let offset = (x - sample.x) * -sample.tz + (z - sample.z) * sample.tx;
+    // Past an end of the road (its nearest point is the end itself) the lateral offset says nothing: the point may lie straight on along
+    // the road's line, thirty metres out, lateral to nothing. It is as far from the road as it is from its end.
+    if (best > offset * offset + 1e-6 && (bestS <= this.origin + 1e-6 || bestS >= this.samples[n - 1]!.s - 1e-6)) offset = Math.sign(offset || 1) * Math.sqrt(best);
     return { route: this.route, s: sample.s, offset, sample };
   }
 

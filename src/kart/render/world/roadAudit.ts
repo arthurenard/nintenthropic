@@ -59,10 +59,14 @@ export interface RoadAudit {
   /** Spots a kart can stand on the road (inside its width) with no surface drawn under them. */
   roadHoles: number;
   roadHole: Defect | null;
+  /** Where those holes are: road, side, metre along, offset (capped). */
+  holeList: string[];
+  /** The longest stretch of the road, metres, that has verge holes all along it: a hole a sample or two long is a gap's or a verge's end. */
+  vergeRun: number;
   /** Spots a kart can stand on beyond the road's edge, out to the barrier, with no surface drawn under them. */
   vergeHoles: number;
   vergeHole: Defect | null;
-  /** Spots on the road's top where two roads' surfaces lie over one another at different heights (over 3 cm). */
+  /** Spots on the road's top where two roads' surfaces lie over one another at different heights (over 8 cm). */
   steps: number;
   step: Defect | null;
   /** Spots of road drawn in a gap of the sim's, and the farthest a drawn road's end lies from the sim's gap end, metres. */
@@ -85,10 +89,15 @@ export interface RoadAudit {
   dropSpots: number;
   railsInSim: number;
   railsDrawn: number;
+  /** How many of them were looked for (every third sample). */
+  railsChecked: number;
   railMissing: Defect | null;
   /** Samples where the sim leaves an edge with nothing to stop a kart outside a gap (must be none). */
   openEdgeSpots: number;
 }
+
+/** Two road surfaces over one another closer in height than this are not a step the eye finds (metres). */
+const STEP = 0.08;
 
 const CELL = 2;
 
@@ -148,18 +157,18 @@ class VertexGrid {
 
 const IDENTITY = new Matrix4();
 
-function collect(grid: TriGrid, geometry: BufferGeometry, road: number, kind: Tri["kind"], corners?: VertexGrid): void {
+function collect(grid: TriGrid, geometry: BufferGeometry, road: number, kind: Tri["kind"], corners?: VertexGrid, twoSided = false): void {
   eachTriangle(geometry, IDENTITY, (a, b, c) => {
     corners?.add(a.x, a.y, a.z);
     corners?.add(b.x, b.y, b.z);
     corners?.add(c.x, c.y, c.z);
-    // Faces up only: the cliffs, walls and undersides are not a surface a kart can stand on. (The light of the space road has
-    // no winding to speak of: both ways count.)
+    // Faces up only: the cliffs, walls and undersides are not a surface a kart can stand on. (The light of the space road is drawn
+    // both ways round: it counts either way.)
     const nx = (b.y - a.y) * (c.z - a.z) - (b.z - a.z) * (c.y - a.y);
     const ny = (b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z);
     const nz = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
     const len = Math.hypot(nx, ny, nz);
-    if (len < 1e-9 || Math.abs(ny) / len < 0.5) return;
+    if (len < 1e-9 || (twoSided ? Math.abs(ny) : ny) / len < 0.5) return;
     grid.add({ road, kind, ax: a.x, ay: a.y, az: a.z, bx: b.x, by: b.y, bz: b.z, cx: c.x, cy: c.y, cz: c.z });
   });
 }
@@ -175,7 +184,8 @@ function build(def: TrackDef, tier: Tier) {
   const built: TrackMeshes[] = roads.map((road, r) => buildTrackMeshes(road, style, terrain, quality, 64, r === 0 ? undefined : terrain.routeFeatures[r - 1]));
   built.forEach((m, r) => {
     for (const g of m.road) collect(grid, g, r, "road");
-    for (const g of [...m.verge, ...m.deco, ...(m.additive ? [m.additive] : [])]) collect(grid, g, r, "other");
+    for (const g of [...m.verge, ...m.deco]) collect(grid, g, r, "other");
+    if (m.additive) collect(grid, m.additive, r, "other", undefined, true);
     for (const g of m.deco) {
       eachTriangle(g, IDENTITY, (a, b, c) => {
         for (const p of [a, b, c]) corners.add(p.x, p.y, p.z);
@@ -209,6 +219,8 @@ export function auditRoads(def: TrackDef, tier: Tier = "high"): RoadAudit {
     roadHoles: 0,
     roadHole: null,
     vergeHoles: 0,
+    holeList: [],
+    vergeRun: 0,
     vergeHole: null,
     steps: 0,
     step: null,
@@ -225,10 +237,12 @@ export function auditRoads(def: TrackDef, tier: Tier = "high"): RoadAudit {
     dropSpots: 0,
     railsInSim: 0,
     railsDrawn: 0,
+    railsChecked: 0,
     railMissing: null,
     openEdgeSpots: 0,
   };
 
+  const holeColumns = new Set<string>();
   roads.forEach((road, r) => {
     const sim = sims[r]!;
     const bank = banks[r]!;
@@ -262,7 +276,7 @@ export function auditRoads(def: TrackDef, tier: Tier = "high"): RoadAudit {
     const drawn = (x: number, z: number, y: number): boolean => {
       let found = false;
       grid.at(x, z, (t, yy) => {
-        if (t.road === r && t.kind === "road" && Math.abs(yy - y) < 0.35) found = true;
+        if (t.kind === "road" && Math.abs(yy - y) < 0.35) found = true;
       });
       return found;
     };
@@ -305,6 +319,9 @@ export function auditRoads(def: TrackDef, tier: Tier = "high"): RoadAudit {
           const x = c.x - c.tz * lat;
           const z = c.z + c.tx * lat;
           const onRoad = o <= half - 0.05;
+          // Where another road is nearer (a branch beside the loop, where their barriers open to one another) the sim holds a kart by that
+          // road, and its surface is the one under it.
+          if (roads.length > 1 && o > half && geo.project(x, z, undefined, r).route !== r) continue;
           const want = c.y + bank.lift(c.s, lat);
           let covered = false;
           let top = -Infinity;
@@ -328,6 +345,8 @@ export function auditRoads(def: TrackDef, tier: Tier = "high"): RoadAudit {
             } else {
               out.vergeHoles++;
               out.vergeHole = worse(out.vergeHole, d);
+              if (out.holeList.length < 400) out.holeList.push(`${r}:${c.s.toFixed(0)}:${lat.toFixed(1)}`);
+              holeColumns.add(`${r}:${side}:${i}`);
             }
           }
           if (!onRoad) continue;
@@ -341,7 +360,7 @@ export function auditRoads(def: TrackDef, tier: Tier = "high"): RoadAudit {
           }
           let spread = 0;
           for (const p of ys) for (const q of ys) if (p.road !== q.road) spread = Math.max(spread, Math.abs(p.y - q.y));
-          if (spread > 0.03) {
+          if (spread > STEP) {
             out.steps++;
             out.step = worse(out.step, { ...d, size: spread });
           }
@@ -352,16 +371,14 @@ export function auditRoads(def: TrackDef, tier: Tier = "high"): RoadAudit {
         if (drop && rail >= 0.99) {
           out.dropSpots++;
           if (wall <= RAIL_GAP + 0.01) out.railsInSim++;
-          // Drawn: some part of the barrier stands a metre either side of the rail's line, a little above the deck.
-          // (A rail where another road lies across the way is left to that road's own barrier: it is not drawn.)
-          if (i % 3 !== 0 || features.hiddenLeft[i] || features.hiddenRight[i]) {
-            out.railsDrawn += 0;
-          }
-          const lat = side * (half + wall + 0.5);
-          const x = c.x - c.tz * lat;
-          const z = c.z + c.tx * lat;
-          const y = c.y + bank.liftAt(i, side * half);
-          if (i % 3 === 0) {
+          // Drawn: some part of the barrier stands within a metre or two of the rail's line, a little above the deck. (A rail where
+          // another road lies across the way is left to that road's own barrier.)
+          if (i % 3 === 0 && !features.hiddenLeft[i] && !features.hiddenRight[i]) {
+            const lat = side * (half + wall + 0.5);
+            const x = c.x - c.tz * lat;
+            const z = c.z + c.tx * lat;
+            const y = c.y + bank.liftAt(i, side * half);
+            out.railsChecked++;
             if (corners.near(x, z, 1.6, y - 0.4, y + 3)) out.railsDrawn++;
             else out.railMissing = worse(out.railMissing, { road: r, s: c.s, offset: lat, x, z, size: 1 });
           }
@@ -369,16 +386,24 @@ export function auditRoads(def: TrackDef, tier: Tier = "high"): RoadAudit {
       }
     }
   });
+  // The longest run of consecutive samples with a hole in them, on one side of one road.
+  for (const key of holeColumns) {
+    const [r, side, i] = key.split(":");
+    if (holeColumns.has(`${r}:${side}:${Number(i) - 1}`)) continue;
+    let run = 1;
+    while (holeColumns.has(`${r}:${side}:${Number(i) + run}`)) run++;
+    out.vergeRun = Math.max(out.vergeRun, run);
+  }
   return out;
 }
 
 export function summarise(a: RoadAudit): string {
   const at = (d: Defect | null) => (d ? `road${d.road} s=${d.s.toFixed(0)} off=${d.offset.toFixed(1)} (${d.x.toFixed(0)},${d.z.toFixed(0)}) ${d.size.toFixed(2)}` : "-");
   return [
-    `${a.id}: roadHoles ${a.roadHoles} [${at(a.roadHole)}] vergeHoles ${a.vergeHoles} [${at(a.vergeHole)}]`,
+    `${a.id}: roadHoles ${a.roadHoles} [${at(a.roadHole)}] vergeHoles ${a.vergeHoles} (longest run ${a.vergeRun} m) [${at(a.vergeHole)}]`,
     `   steps ${a.steps} [${at(a.step)}] groundMiss ${a.groundMiss} [${at(a.groundMisses)}] edgeStep [${at(a.edgeStep)}]`,
     `   phantoms ${a.phantoms} [${at(a.phantom)}] gapEnd [${at(a.gapEnd)}] gaps sim ${a.gapSim} picture ${a.gapPicture}`,
     `   pinch [${at(a.pinch)}] folds ${a.folds} openEdges ${a.openEdgeSpots}`,
-    `   rails: drop spots ${a.dropSpots} in sim ${a.railsInSim} drawn ${a.railsDrawn} (of ${Math.ceil(a.dropSpots / 3)} checked) missing [${at(a.railMissing)}]`,
+    `   rails: drop spots ${a.dropSpots} in sim ${a.railsInSim} drawn ${a.railsDrawn} (of ${a.railsChecked} checked) missing [${at(a.railMissing)}]`,
   ].join("\n");
 }

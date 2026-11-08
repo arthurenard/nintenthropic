@@ -19,8 +19,8 @@ import { hash1, type TrackBuild } from "./trackContext";
 const UP: V3 = [0, 1, 0];
 const SIDES = [-1, 1] as const;
 
-/** Metres of shelf beyond a rail's inner face: the rail's own thickness and a hand of margin. */
-const SHELF_BEYOND = 2.2;
+/** Metres of deck beyond a rail's inner face (over a drop the verge runs this far past the wall, as far as the cliff): the rail's own thickness and a hand of margin. */
+export const SHELF_BEYOND = 2.2;
 
 // ─── Open edges ──────────────────────────────────────────────────────────────
 
@@ -90,7 +90,7 @@ function cliffColour(theme: string, down: number, total: number, i: number, s: n
   }
 }
 
-/** The shelf beyond an open edge, the wall that falls from it, and the fittings on the wall. */
+/** The wall that falls from the deck beyond a drop, and the fittings on the wall. */
 export function buildOpenEdges(b: TrackBuild): void {
   if (!b.features.anyDrop) return;
   const theme = b.style.id;
@@ -106,16 +106,10 @@ export function buildOpenEdges(b: TrackBuild): void {
       const a = b.S(i);
       const c = b.S(i + 1);
       const bld = b.deco[b.chunkOf(i)]!;
-      const e0 = side * (a.width / 2 - 0.05);
-      const e1 = side * (c.width / 2 - 0.05);
-      // The shelf runs out under the rail and a little past it (the rail stands on it, and a kart's wheels are on it up to it).
-      const s0 = side * (a.width / 2 + Math.max(sh.width, b.wall(i, side) + SHELF_BEYOND));
-      const s1 = side * (c.width / 2 + Math.max(sh.width, b.wall(i + 1, side) + SHELF_BEYOND));
-      const shade = scaleRgb(sh.colour, 0.94);
-      // The shelf: level with the road, the same stuff as the world's own edge.
-      const q = [b.P(i, e0, -0.03), b.P(i, s0, -0.03), b.P(i + 1, s1, -0.03), b.P(i + 1, e1, -0.03)] as const;
-      if (side > 0) bld.quad(q[0], q[1], q[2], q[3], sh.colour, shade, shade, sh.colour, UP);
-      else bld.quad(q[1], q[0], q[3], q[2], shade, sh.colour, sh.colour, shade, UP);
+      // The cliff falls from where the deck ends: out under the rail and a little past it.
+      const s0 = side * (a.width / 2 + b.wall(i, side) + SHELF_BEYOND);
+      const s1 = side * (c.width / 2 + b.wall(i + 1, side) + SHELF_BEYOND);
+      // (The deck out to the cliff's top is the verge's, drawn with the road: see track.ts.)
       // The wall, in horizontal bands so the colour can change down it.
       const top0 = b.P(i, s0, -0.03);
       const top1 = b.P(i + 1, s1, -0.03);
@@ -570,8 +564,9 @@ export function buildSpaceEdges(b: TrackBuild): void {
       const lo: Rgb = [0.02, 0.14, 0.3];
       if (side > 0) b.additive.quad([top0[0], top0[1] - down, top0[2]], top0, top1, [top1[0], top1[1] - down, top1[2]], lo, mid, mid, lo);
       else b.additive.quad(top0, [top0[0], top0[1] - down, top0[2]], [top1[0], top1[1] - down, top1[2]], top1, mid, lo, lo, mid);
-      // Shoulder: faint light across the strip between the road and the rail (not where the edge is open).
-      if (open < 0.5) {
+      // Shoulder: faint light across the strip between the road and the rail (a rail over a drop stands close, and where the road
+      // is open to another's the strip is as wide as the way across).
+      {
         const w0 = b.wall(i, side as -1 | 1);
         const w1 = b.wall(i + 1, side as -1 | 1);
         const q = [p(i, hw0, 0.2, 0.03), p(i, hw0, w0, 0.03), p(i + 1, hw1, w1, 0.03), p(i + 1, hw1, 0.2, 0.03)] as const;

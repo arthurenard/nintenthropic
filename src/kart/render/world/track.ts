@@ -24,7 +24,7 @@ import type { ThemeStyle } from "./themes";
 import { ROAD_TILE } from "./textures";
 import type { Glow, TrackBuild } from "./trackContext";
 import { buildAirPads } from "./airPads";
-import { buildFestoons, buildGapEnds, buildOpenEdges, buildPads, buildPatches, buildRamps, buildSpaceEdges, type PatchGeometry } from "./trackFeatures";
+import { buildFestoons, buildGapEnds, buildOpenEdges, buildPads, buildPatches, buildRamps, buildSpaceEdges, SHELF_BEYOND, type PatchGeometry } from "./trackFeatures";
 
 /** Samples per chunk (about metres: the geometry samples every metre). */
 const CHUNK = 48;
@@ -261,8 +261,10 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     const a = S(i);
     const b = S(i + 2);
     for (const side of [-1, 1] as const) {
-      // An open edge has its shelf and cliff instead; a gap has no road to flank.
-      if (ctx.open(i, side) > 0.02 || ctx.open(i + 2, side) > 0.02 || ctx.gap(i) || ctx.gap(i + 2)) continue;
+      // A gap has no road to flank.
+      if (ctx.gap(i) || ctx.gap(i + 2)) continue;
+      // Over a drop the deck runs out under the rail and a little past it, and a cliff falls from its edge (trackFeatures.ts) in place of the verge's slope.
+      const over = ctx.open(i, side) > 0.02 || ctx.open(i + 2, side) > 0.02;
       const w0 = ctx.wall(i, side);
       const w1 = ctx.wall(i + 2, side);
       const kind = (side < 0 ? features.vergeLeft : features.vergeRight)[wrapI(i)];
@@ -274,8 +276,8 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       const vergeOuter1 = w1 + 3.4;
       const h0 = a.width / 2 - 0.05;
       const h1 = b.width / 2 - 0.05;
-      const flat0 = a.width / 2 + w0 + 0.4;
-      const flat1 = b.width / 2 + w1 + 0.4;
+      const flat0 = a.width / 2 + w0 + (over ? SHELF_BEYOND : 0.4);
+      const flat1 = b.width / 2 + w1 + (over ? SHELF_BEYOND : 0.4);
       const out0 = a.width / 2 + vergeOuter0;
       const out1 = b.width / 2 + vergeOuter1;
       // Inner strip, flat just under the road's surface.
@@ -308,6 +310,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       const outerA = groundAt(side > 0 ? slope[1]! : slope[0]!);
       const outerB = groundAt(side > 0 ? slope[2]! : slope[3]!);
       const slopeUv = groundUv(slope[0]!, slope[1]!, slope[2]!, slope[3]!);
+      if (over) continue;
       if (side > 0) dc.quad(slope[0]!, slope[1]!, slope[2]!, slope[3]!, shade, outerA, outerB, shadeNext, UP, slopeUv);
       else dc.quad(slope[0]!, slope[1]!, slope[2]!, slope[3]!, outerA, shade, shadeNext, outerB, UP, slopeUv);
     }

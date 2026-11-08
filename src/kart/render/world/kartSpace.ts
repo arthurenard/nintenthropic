@@ -131,7 +131,11 @@ export class KartSpace {
     }
     if (bestK < 0) return null;
     const c = geo.at(samples[bestK]!.s + bestF * geo.spacing);
-    const offset = (x - c.x) * -c.tz + (z - c.z) * c.tx;
+    let offset = (x - c.x) * -c.tz + (z - c.z) * c.tx;
+    // Beyond the far end of a branch road (its nearest point is the end itself) the lateral offset says nothing: the point may be
+    // straight on along the road's line, thirty metres out, and lateral to nothing. It is as far from the road as it is from its end.
+    if (geo.open && ((bestK >= n - 2 && bestF === 1))) offset = Math.sign(offset || 1) * Math.max(Math.abs(offset), Math.sqrt(best));
+    // (Only the far end: behind a branch's start the main road's own gate is what stands there, and its barrier is the main road's.)
     const side = offset > 0 ? 1 : -1;
     // Over a drop the rail stands at the road's edge: a kart is at the edge, and what is beyond is the fall.
     const open = isDrop(sim, c.s, side);
