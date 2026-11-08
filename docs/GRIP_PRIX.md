@@ -48,8 +48,8 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   A cannon takes any kart over 2 m/s and throws it at 21 m/s along the road; a glide takes one over 5 m/s, a lip one over
   9 m/s. In flight the wheel turns the course (0.45 rad/s a cannon or lip, 1.1 a glide; a jump is 0.55) while an
   autopilot swings the course toward the road's direction ahead (2.4/s, at most 1.2 rad/s) so a bend under the flight
-  does not carry a kart that lets go into the scenery; steer past an open edge by more than the edge's metre and a half
-  and the kart falls (the drone) as on the ground. The trick button is a trick in a cannon or lip flight (a boost
+  does not carry a kart that lets go into the scenery; steer out of the road across a gap (`drops` with `gap: true`) and
+  the kart falls (the drone) as on the ground. The trick button is a trick in a cannon or lip flight (a boost
   on landing), not in a glide; a glide that lands within 3 m of the road's middle (the rings painted there) boosts 0.7 s.
   `jump` events carry `arc` ("cannon" | "glide" | "lip"); `KartView.glide` is 1 under the parasol. Bots (`bots.ts`)
   steer a planned flight toward a lane (a glide: the middle, each bot a little off it by its number) and trick in a
@@ -2065,7 +2065,7 @@ front of them (or a laptop), and the TV is the host's screen.
   a **glide** lifts the kart off a brow to `height` m and floats it down the next `length` m under a striped parasol
   (target rings are painted where it lands: the middle of the road, the boost); a **lip** is a short, steep arc at
   one side of the road (`offset`, `width`) for a trick. Put the landing on a stretch the kart can drive (a long gap
-  in the road under a cannon needs `drops` with `gap: true`, an open edge under a glide `drops` without), give a
+  in the road under a cannon needs `drops` with `gap: true`, a bridge, quay or trestle under a glide `drops` without: a drop without `gap` is edged with a rail, 1.8 m out, drawn and solid in the sim and the picture, so a kart scrapes it and cannot fall, and only `gap` leaves the road missing; `track/edges.ts` is the one place both read it, and `render/world/roadAudit.ts` with `roads.test.ts` hold every track, mirror and branch to one continuous surface, the picture's gaps where the sim's are, and a rail at every drop; a branch eases up from the road's own surface at its junctions without a step), give a
   cannon 20 m of road after its landing before a hard bend, and keep hazards out of the landing (a kart in the air is
   above them: they are met when it comes down). The picture is `render/world/airPads.ts` (flat light, and posts
   beyond the barrier and the camera's margin, like the start gantry's legs) and `render/parasol.ts`; the map draws
