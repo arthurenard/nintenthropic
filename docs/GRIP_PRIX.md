@@ -2119,7 +2119,8 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    carousel turns slowly enough to read (6.5 s). The top straight is the
    coaster's: it rolls up and down (up 3 m, down to -2 m) and from it a
    **split** climbs the coaster's own trestle, higher (to 11.5 m) and longer
-   (about 240 m against 195), no barrier, so a fall costs you, to plunge down
+   (about 240 m against 195), no barrier (a low red and cream kerb with lights marks each edge, and a fall costs you the
+   drone's fetch), to plunge down
    the far side and rejoin the midway at a shallow angle, with a line of boost
    at the bottom of the drop: the risk and the reward. The wow moments are the
    flight over the arch, the **Ferris wheel you drive under** (a wheel fifty

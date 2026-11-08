@@ -8,7 +8,7 @@
  */
 import { lathe, MeshBuilder, mixRgb, ramp, rgb, scaleRgb, shapes, stripes, torus, xf, type V3 } from "../kit";
 import type { Halo, LandmarkSpec, MovingPart } from "../types";
-import { bulb, bulbLine, CANDY, CREAM, DARK, G_GOLD, G_PINK, G_RED, G_WARM, G_WHITE, GOLD, lightAt, NAVY, PINK, RED, STEEL, stripedRod, TAU, TEAL, WHITE, YELLOW } from "./common";
+import { bulb, bulbLine, CANDY, CREAM, DARK, G_GOLD, G_PINK, G_RED, G_WHITE, GOLD, lightAt, NAVY, PINK, RED, STEEL, stripedRod, TAU, TEAL, WHITE, YELLOW } from "./common";
 
 // ─── The Ferris wheel gate ───────────────────────────────────────────────────
 
@@ -112,7 +112,6 @@ export const ferrisGate: LandmarkSpec = {
       const py = HUB + R * Math.sin(a);
       const colour = CANDY[(k * 3) % CANDY.length]!;
       const l = new MeshBuilder();
-      const g = new MeshBuilder();
       l.box(px, py, 0, 0.45, 0.45, 2 * ZS + 0.3, STEEL);
       for (const s of [-1, 1]) l.rod([px, py, s * ZS], [px, py - 1.6, s * 1.1], 0.28, STEEL);
       l.spire(px, py - 1.6, 0, 2.1, 1.3, ramp(scaleRgb(colour, 0.8), mixRgb(colour, WHITE, 0.25)), 8);
@@ -120,12 +119,11 @@ export const ferrisGate: LandmarkSpec = {
       l.post(px, py - 4.25, 0, 1.8, 0.3, CREAM, 8);
       for (let w = 0; w < 4; w++) {
         const th = Math.PI / 8 + (w * Math.PI) / 2;
-        g.box(px + Math.sin(th) * 1.52, py - 2.7, Math.cos(th) * 1.52, 0.85, 0.9, 0.14, G_WARM, th);
+        // Windows are painted bright on the lit mesh: one draw per car instead of two.
+        l.box(px + Math.sin(th) * 1.52, py - 2.7, Math.cos(th) * 1.52, 0.85, 0.9, 0.14, rgb("#fff0b8"), th);
       }
-      bulb(g, px, py - 0.2, 0, 0.42, lightAt(k));
       parts.push({
         lit: l,
-        glow: g,
         pivot: [px, py, 0],
         update(t, part) {
           const phi = a + W * t;
@@ -168,8 +166,12 @@ export const coasterTrestle: LandmarkSpec = {
     const rail = rgb("#9aa0b8");
     for (let z = -half; z < half; z += 1.2) lit.box(0, 0.0, z + 0.6, 3.6, 0.1, 0.5, Math.round(z / 1.2) % 2 ? RED : CREAM);
     for (const x of [-1.8, 1.8]) lit.box(x, 0.1, 0, 0.22, 0.2, L, rail);
-    // Lights along both edges.
-    for (const s of [-1, 1]) for (let z = -half + 1; z < half; z += 3) bulb(glow, s * 3.0, 0.1, z, 0.28, lightAt(Math.round(z / 3)));
+    // A low red and cream kerb along both edges (under 0.45 m, so it is a warning to the eye, not a wall), with a light on top
+    // of every other block: the trestle has no barrier, and the edge is the first thing you see.
+    for (const s of [-1, 1]) {
+      for (let z = -half; z < half - 1; z += 2.4) lit.box(s * (hw - 0.45), 0.14, z + 1.2, 0.7, 0.3, 2.2, Math.round(z / 2.4) % 2 ? RED : CREAM);
+      for (let z = -half + 1; z < half; z += 4.8) bulb(glow, s * (hw - 0.45), 0.42, z, 0.26, lightAt(Math.round(z / 4.8)));
+    }
     // Bents: two legs, a girder under the road, X braces.
     let n = 0;
     for (let z = -half + 3; z < half; z += 7) {

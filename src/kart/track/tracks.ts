@@ -713,7 +713,6 @@ export const FUN_FAIR: TrackDef = {
     { kind: "balloon-stand", at: 0.4757, offset: 26 },
     { kind: "fireworks", at: 0.583, offset: 40 },
     { kind: "food-stall", at: 0.6447, offset: 32 },
-    { kind: "ferris-wheel", at: 0.6993, offset: -64, scale: 0.9 },
     { kind: "helter-skelter", at: 0.7558, offset: 36, scale: 1.2 },
     { kind: "balloon-stand", at: 0.7212, offset: 28 },
     { kind: "fireworks", at: 0.8982, offset: 34 },

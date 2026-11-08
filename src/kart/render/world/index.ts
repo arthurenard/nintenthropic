@@ -256,9 +256,11 @@ export async function createWorld(
     own(moving);
     group.add(moving.group);
     // The branch's timed set pieces (a mine's carts, a cave's icicles) are drawn as the main road's are.
-    const routePieces = buildPieces(routeEnv, routeHazards, mats, shadowTex);
-    own(routePieces);
-    group.add(routePieces.group);
+    const routePieces = routeHazards.some(isPiece) ? buildPieces(routeEnv, routeHazards, mats, shadowTex) : null;
+    if (routePieces) {
+      own(routePieces);
+      group.add(routePieces.group);
+    }
     return { layer, moving, pieces: routePieces };
   });
 
@@ -446,7 +448,7 @@ export async function createWorld(
       for (const r of routeLayers) {
         r.layer.update(time);
         r.moving.update(raceTime, dt);
-        r.pieces.update(raceTime, dt);
+        r.pieces?.update(raceTime, dt);
       }
     },
     install(scene) {
