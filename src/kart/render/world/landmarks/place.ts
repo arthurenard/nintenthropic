@@ -468,7 +468,9 @@ export function buildLandmarks(env: PlaceEnv, list: readonly PlacedLandmark[], m
 
     if (spec.span) {
       // Its legs and walls stand beyond the barrier and the camera's margin, wherever the barrier is along its span.
-      const reach: [number, number] = env.wall ? [0, 0] : [WALL_DISTANCE, WALL_DISTANCE];
+      // (The usual six metres at least: over a drop the barrier is a rail at the road's edge, and a bridge's posts and a trestle's
+      // arches still stand where they always did, clear of the deck.)
+      const reach: [number, number] = [WALL_DISTANCE, WALL_DISTANCE];
       const dip: [number, number] = [0, 0];
       let wide = c.width / 2;
       for (let d = -span / 2; d <= span / 2; d += 2) {

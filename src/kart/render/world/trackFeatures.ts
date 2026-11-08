@@ -19,6 +19,9 @@ import { hash1, type TrackBuild } from "./trackContext";
 const UP: V3 = [0, 1, 0];
 const SIDES = [-1, 1] as const;
 
+/** Metres of shelf beyond a rail's inner face: the rail's own thickness and a hand of margin. */
+const SHELF_BEYOND = 2.2;
+
 // ─── Open edges ──────────────────────────────────────────────────────────────
 
 /** Where the ground stops at an open edge: the metres of level ground beyond the road's edge, and what colour it is. */
@@ -105,8 +108,9 @@ export function buildOpenEdges(b: TrackBuild): void {
       const bld = b.deco[b.chunkOf(i)]!;
       const e0 = side * (a.width / 2 - 0.05);
       const e1 = side * (c.width / 2 - 0.05);
-      const s0 = side * (a.width / 2 + sh.width);
-      const s1 = side * (c.width / 2 + sh.width);
+      // The shelf runs out under the rail and a little past it (the rail stands on it, and a kart's wheels are on it up to it).
+      const s0 = side * (a.width / 2 + Math.max(sh.width, b.wall(i, side) + SHELF_BEYOND));
+      const s1 = side * (c.width / 2 + Math.max(sh.width, b.wall(i + 1, side) + SHELF_BEYOND));
       const shade = scaleRgb(sh.colour, 0.94);
       // The shelf: level with the road, the same stuff as the world's own edge.
       const q = [b.P(i, e0, -0.03), b.P(i, s0, -0.03), b.P(i + 1, s1, -0.03), b.P(i + 1, e1, -0.03)] as const;
@@ -157,7 +161,7 @@ export function buildOpenEdges(b: TrackBuild): void {
         const prevU = ((((a.s - b.spacing) / 14) % 1) + 1) % 1;
         if (!(prevU < 0.5 && u >= 0.5)) continue;
         const bld = b.deco[b.chunkOf(i)]!;
-        const p = b.P(i, side * (a.width / 2 + sh.width + 0.2), -0.03);
+        const p = b.P(i, side * (a.width / 2 + Math.max(sh.width, b.wall(i, side) + SHELF_BEYOND) + 0.2), -0.03);
         const steel = rgb("#d6dbe4");
         const dx = a.tx;
         const dz = a.tz;

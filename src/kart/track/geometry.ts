@@ -640,7 +640,26 @@ function relax(xs: number[], zs: number[], widths: number[]): void {
       zs[i] = zs[i]! + ((zs[a]! + zs[c]!) / 2 - zs[i]!) * 0.5;
       moved = true;
     }
-    if (!moved) return;
+    if (!moved) break;
+  }
+  evenly(xs, zs);
+}
+
+/** Puts the samples of a polyline an equal distance apart along it again (the ends stay), as relaxing it left them uneven. */
+function evenly(xs: number[], zs: number[]): void {
+  const n = xs.length;
+  const at = [0];
+  for (let i = 1; i < n; i++) at.push(at[i - 1]! + Math.hypot(xs[i]! - xs[i - 1]!, zs[i]! - zs[i - 1]!));
+  const total = at[n - 1]!;
+  const ox = xs.slice();
+  const oz = zs.slice();
+  let j = 0;
+  for (let i = 1; i < n - 1; i++) {
+    const want = (total * i) / (n - 1);
+    while (j < n - 2 && at[j + 1]! < want) j++;
+    const f = at[j + 1]! > at[j]! ? (want - at[j]!) / (at[j + 1]! - at[j]!) : 0;
+    xs[i] = ox[j]! + (ox[j + 1]! - ox[j]!) * f;
+    zs[i] = oz[j]! + (oz[j + 1]! - oz[j]!) * f;
   }
 }
 

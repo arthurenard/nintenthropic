@@ -262,7 +262,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     const b = S(i + 2);
     for (const side of [-1, 1] as const) {
       // An open edge has its shelf and cliff instead; a gap has no road to flank.
-      if (ctx.open(i, side) > 0.3 || ctx.open(i + 2, side) > 0.3 || ctx.gap(i) || ctx.gap(i + 2)) continue;
+      if (ctx.open(i, side) > 0.02 || ctx.open(i + 2, side) > 0.02 || ctx.gap(i) || ctx.gap(i + 2)) continue;
       const w0 = ctx.wall(i, side);
       const w1 = ctx.wall(i + 2, side);
       const kind = (side < 0 ? features.vergeLeft : features.vergeRight)[wrapI(i)];

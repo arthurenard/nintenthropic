@@ -79,7 +79,7 @@ describe("the track's meshes", () => {
     });
   }
 
-  it("puts the barriers 6 m beyond the road's edge: nothing solid stands closer", { timeout: 30_000 }, () => {
+  it("puts the barriers 6 m beyond the road's edge (a rail at it over a drop): nothing solid stands closer", { timeout: 30_000 }, () => {
     // The kerbs and verge are flat; look at what stands tall near the road: every vertex of the decoration
     // more than 0.45 m above the road must be at least WALL_MIN out.
     const style = styleFor("meadow");
@@ -96,7 +96,11 @@ describe("the track's meshes", () => {
         const lateral = Math.abs(proj.offset) - proj.sample.width / 2;
         // Skip 5 m either side of the start line (the gantry and its banner): tall things only.
         if (proj.s > geometry.length - 5 || proj.s < 5) continue;
-        if (y - (proj.sample.y + bank.lift(proj.s, proj.offset)) > 0.45 && lateral < WALL_MIN) nearTall++;
+        // (Over a drop the barrier is a rail at the road's edge, easing in over the ten metres before it: its own wall there, and as
+        // the wall moves along the road a lump of it stands a few centimetres nearer than the sample it is nearest.)
+        const k = Math.round(proj.s / geometry.spacing) % geometry.samples.length;
+        const wall = (proj.offset < 0 ? meshes.features.wallLeft : meshes.features.wallRight)[k]!;
+        if (y - (proj.sample.y + bank.lift(proj.s, proj.offset)) > 0.45 && lateral < Math.min(WALL_MIN, wall - 0.4)) nearTall++;
       }
     }
     expect(nearTall).toBe(0);

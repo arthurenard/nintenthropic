@@ -4,7 +4,7 @@
  * stretch's barrier on that side (or, at an open edge, to where it falls). Nothing here is the picture's own measure, so a
  * test can hold the picture to it. For tests only.
  */
-import { barrierDistance, buildTerrain, isOpen, type Terrain as SimTerrain } from "../../sim/terrain";
+import { barrierDistance, buildTerrain, isDrop, tableAt, type Terrain as SimTerrain } from "../../sim/terrain";
 import { TUNING } from "../../sim/tuning";
 import type { TrackDef, TrackGeometry } from "../../track/geometry";
 
@@ -18,7 +18,7 @@ export interface Place {
   offset: number;
   /** Metres beyond the limit of where a kart can be: the barrier's face, or the fall at an open edge (negative inside). */
   past: number;
-  /** True where the limit is a barrier (a camera's margin beyond it must be clear too). */
+  /** True where the limit is a barrier (a camera's margin beyond it must be clear too); not over a drop (or where the edge is closing in to one), where the rail stands at the road's edge and the camera may swing out. */
   walled: boolean;
   /** The road's height at the nearest point of the centre line. */
   roadY: number;
@@ -133,8 +133,9 @@ export class KartSpace {
     const c = geo.at(samples[bestK]!.s + bestF * geo.spacing);
     const offset = (x - c.x) * -c.tz + (z - c.z) * c.tx;
     const side = offset > 0 ? 1 : -1;
-    const open = isOpen(sim, c.s, side);
+    // Over a drop the rail stands at the road's edge: a kart is at the edge, and what is beyond is the fall.
+    const open = isDrop(sim, c.s, side);
     const limitOut = open ? TUNING.fall.edge + 0.5 : barrierDistance(sim, c.s, side);
-    return { d2: best, place: { s: c.s, offset, past: Math.abs(offset) - c.width / 2 - limitOut, walled: !open, roadY: c.y, route: geo.route } };
+    return { d2: best, place: { s: c.s, offset, past: Math.abs(offset) - c.width / 2 - limitOut, walled: !open && tableAt(sim, side > 0 ? sim.railRight : sim.railLeft, c.s) < 0.02, roadY: c.y, route: geo.route } };
   }
 }

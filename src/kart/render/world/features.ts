@@ -5,11 +5,12 @@
  * gap), how far out the barrier stands (verges), and the height of every
  * ramp. Pure maths, no three.js.
  *
- * A "gap" is a drop on both sides, short, right after a ramp: the road is not
+ * A "gap" is a drop on both sides that the track marks `gap`: the road is not
  * there under the flight (docs/GRIP_PRIX.md: "Jumps can cross a gap: a drop
  * under the flight"). The sim decides what a kart does; this decides what the
- * picture shows.
+ * picture shows, from the same data.
  */
+import { edgesOf, railWall } from "../../track/edges";
 import { inStretch, type Surface, type TrackGeometry, type TrackTheme } from "../../track/geometry";
 import { junctionGates } from "../../sim/terrain";
 
@@ -102,24 +103,9 @@ function fractionOf(track: TrackGeometry, i: number): number {
   return track.samples[i]!.s / track.length;
 }
 
-/** Box-blurs a cyclic array over `reach` samples either side. */
-function blur(a: Float32Array, reach: number, open = false): Float32Array {
-  const n = a.length;
-  const out = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    let sum = 0;
-    for (let k = -reach; k <= reach; k++) sum += a[open ? Math.max(0, Math.min(n - 1, i + k)) : (i + k + n) % n]!;
-    out[i] = sum / (reach * 2 + 1);
-  }
-  return out;
-}
-
 export function analyseFeatures(track: TrackGeometry): Features {
   const n = track.samples.length;
   const def = track.def;
-  const dropLeft = new Float32Array(n);
-  const dropRight = new Float32Array(n);
-  const gap = new Uint8Array(n);
   const wallLeft = new Float32Array(n).fill(WALL_DISTANCE);
   const wallRight = new Float32Array(n).fill(WALL_DISTANCE);
   const vergeLeft: (Surface | null)[] = new Array(n).fill(null);
@@ -130,27 +116,12 @@ export function analyseFeatures(track: TrackGeometry): Features {
     return { lip: r.at * track.length, length: RAMP_LENGTH, height: (RAMP_HEIGHT * lift) / 7, trick: r.trick !== false };
   });
 
-  for (const d of def.drops ?? []) {
-    const lengthM = (((d.to - d.from) % 1) + 1) % 1 * track.length;
-    // A short drop on both sides right behind a ramp's lip is a gap under the jump.
-    const isGap =
-      d.side === "both" &&
-      lengthM < 70 &&
-      (def.ramps ?? []).some((r) => {
-        const behind = (((d.from - r.at) % 1) + 1) % 1;
-        return behind * track.length < 48;
-      });
-    for (let i = 0; i < n; i++) {
-      if (!inStretch(fractionOf(track, i), d)) continue;
-      if (d.side !== "right") dropLeft[i] = 1;
-      if (d.side !== "left") dropRight[i] = 1;
-      if (isGap) gap[i] = 1;
-    }
-  }
+  // The drops, the road missing in a gap, and how far the rail over a drop has closed in: the sim's own (track/edges.ts).
+  const edges = edgesOf(track);
+  const gap = edges.gap;
   // The edge opens and closes over about ten metres, not in one step.
-  const reach = Math.max(1, Math.round(5 / track.spacing));
-  const left = blur(dropLeft, reach, track.open);
-  const right = blur(dropRight, reach, track.open);
+  const left = edges.railLeft;
+  const right = edges.railRight;
   let anyDrop = false;
   for (let i = 0; i < n; i++) if (left[i]! > 0.01 || right[i]! > 0.01) anyDrop = true;
 
@@ -168,15 +139,19 @@ export function analyseFeatures(track: TrackGeometry): Features {
   // Where a branch leaves or joins the road there is no barrier between the two: a kart goes from one to the other.
   const gates = junctionGates(track);
   for (let i = 0; i < n; i++) {
-    // The wall eases out as the other road comes near, and is not drawn once it has more than a share of the way (see junctionGates).
-    if (gates.left[i]) {
-      wallLeft[i] = Math.max(wallLeft[i]!, gates.left[i]!);
-      if (gates.left[i]! > WALL_DISTANCE + 0.2) hiddenLeft[i] = 1;
-    }
-    if (gates.right[i]) {
-      wallRight[i] = Math.max(wallRight[i]!, gates.right[i]!);
-      if (gates.right[i]! > WALL_DISTANCE + 0.2) hiddenRight[i] = 1;
-    }
+    // The wall eases out as the other road comes near.
+    if (gates.left[i]) wallLeft[i] = Math.max(wallLeft[i]!, gates.left[i]!);
+    if (gates.right[i]) wallRight[i] = Math.max(wallRight[i]!, gates.right[i]!);
+  }
+  // Over a drop the barrier is a rail at the road's edge, closing in as the drop begins (as in the sim's terrain).
+  for (let i = 0; i < n; i++) {
+    wallLeft[i] = railWall(wallLeft[i]!, left[i]!);
+    wallRight[i] = railWall(wallRight[i]!, right[i]!);
+  }
+  // The wall is not drawn once it has more than a share of the way to the other road (see junctionGates).
+  for (let i = 0; i < n; i++) {
+    if (gates.left[i] && wallLeft[i]! > WALL_DISTANCE + 0.2) hiddenLeft[i] = 1;
+    if (gates.right[i] && wallRight[i]! > WALL_DISTANCE + 0.2) hiddenRight[i] = 1;
   }
   // A branch lying on the road it leaves (or joins) has no barrier of its own there: the road's stands for it.
   if (track.open) {

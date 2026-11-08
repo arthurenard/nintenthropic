@@ -4,7 +4,7 @@
  * corridor.art.test.ts assert on it.
  */
 import { Group, Matrix4, Mesh, MeshLambertMaterial, Vector3, type BufferGeometry, type InstancedMesh, type Object3D } from "three";
-import { barrierDistance, buildTerrain as buildSimTerrain, gapAt, isOpen, type Terrain as SimTerrain } from "../../sim/terrain";
+import { barrierDistance, buildTerrain as buildSimTerrain, gapAt, isDrop, type Terrain as SimTerrain } from "../../sim/terrain";
 import { TUNING } from "../../sim/tuning";
 import { TrackGeometry, type Landmark, type TrackDef } from "../../track/geometry";
 import { QUALITY, type Tier } from "../quality";
@@ -66,7 +66,7 @@ export function drivableSpots(def: TrackDef, geo: TrackGeometry, bank: Bank, gro
       const c = road.samples[i]!;
       const half = c.width / 2;
       for (const side of [-1, 1] as const) {
-        const open = isOpen(sim, c.s, side);
+        const open = isDrop(sim, c.s, side);
         const wall = open ? TUNING.fall.edge + 0.5 : barrierDistance(sim, c.s, side);
         for (let o = side > 0 ? 0 : across; o <= half + wall + (open ? 0 : SOLID_MARGIN); o += across) {
           const lat = side * o;
@@ -75,7 +75,7 @@ export function drivableSpots(def: TrackDef, geo: TrackGeometry, bank: Bank, gro
           const p = geo.project(x, z);
           const pSim = sims[p.route]!;
           const pSide = p.offset > 0 ? 1 : -1;
-          const pOpen = isOpen(pSim, p.s, pSide);
+          const pOpen = isDrop(pSim, p.s, pSide);
           const pWall = pOpen ? TUNING.fall.edge + 0.5 : barrierDistance(pSim, p.s, pSide);
           const beyond = Math.abs(p.offset) - p.sample.width / 2;
           const reach = pWall + (pOpen ? 0 : SOLID_MARGIN);
@@ -403,7 +403,7 @@ export function measureTrack(def: TrackDef, { tier = "high", things = true }: Me
     for (let i = 0; i < own.samples.length; i += 2) {
       const c = own.samples[i]!;
       for (const side of [-1, 1] as const) {
-        if (isOpen(sims[r]!, c.s, side) || gapAt(sims[r]!, c.s)) continue;
+        if (isDrop(sims[r]!, c.s, side) || gapAt(sims[r]!, c.s)) continue;
         for (let e = 0; e < 200; e += 1) {
           const lat = side * (c.width / 2 + e);
           const x = c.x - c.tz * lat;
@@ -412,7 +412,7 @@ export function measureTrack(def: TrackDef, { tier = "high", things = true }: Me
           const pSim = sims[p.route]!;
           const pSide = p.offset > 0 ? 1 : -1;
           const past = Math.abs(p.offset) - p.sample.width / 2 - barrierDistance(pSim, p.s, pSide);
-          if (past < 0 || isOpen(pSim, p.s, pSide)) continue;
+          if (past < 0 || isDrop(pSim, p.s, pSide)) continue;
           // Measured from the road's edge there (lift holds the edge's height beyond it): on a banked bend it is not the centre line's.
           const road = p.sample.y + (p.route === 0 ? probe.bank : Bank.of(geo.routes[p.route - 1]!)).lift(p.s, p.offset);
           if (terrain.heightAt(x, z) - road > 2) {

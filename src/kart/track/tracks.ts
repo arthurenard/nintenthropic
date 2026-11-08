@@ -341,7 +341,7 @@ export const KITCHEN_RALLY: TrackDef = {
       hazards: [{ kind: "pea", at: 0.36, motion: "cross", period: 4.4, radius: 1.5, span: 3.2 }],
       landmarks: [
         { kind: "drawer", at: 0.5, offset: 0, span: 78 },
-        { kind: "salt-shaker", at: 0.16, offset: 20, scale: 0.8 },
+        { kind: "salt-shaker", at: 0.16, offset: 27, scale: 0.8 },
       ],
     },
   ],

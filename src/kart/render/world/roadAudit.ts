@@ -1,18 +1,23 @@
 /**
  * Measures the drawn road against itself and against what the sim lets a kart drive on, for roads.test.ts. It builds a
- * track's meshes the way the world does (the loop and every branch road), then walks the triangles of the road ribbon, the
- * verge and the track's decoration:
+ * track's meshes the way the world does (the loop and every branch road), then looks at the triangles of the road ribbon, the
+ * verge, the shelves, rails and ramps (the track's decoration) and the space road's light:
  *
- * - holes: a place a kart can stand (the road, and the verge out to the barrier) that has no drawn surface under it;
- * - steps: a place two drawn road surfaces lie over one another at different heights (a branch that leaves or joins the road
- *   a little above or below it, a quad that folds back over its neighbour), which shows as a crack, a step or flicker;
- * - phantoms: drawn road where the sim has a gap in the road;
- * - ground: a drawn road surface that sits higher or lower than the height the sim puts a kart at there.
+ * - holes: a place a kart can stand (the road, and out to the barrier over the verge or the shelf) that has no drawn surface
+ *   under it, and cracks in the road's top along its own length, at a gap's ends and between two roads;
+ * - steps: a place two drawn road surfaces lie over one another at different heights (a branch that leaves or joins the road a
+ *   little above or below it), which shows as a ledge or as two textures fighting;
+ * - phantoms: road drawn where the sim has a gap in the road, and gap ends that lie more than a metre from the sim's;
+ * - ground: a drawn road surface that is not at the height the sim's road and the banking put a kart at;
+ * - folds: a bend tighter than the road is wide, whose inside edge crosses back over the road;
+ * - rails: where the sim has a drop beside the road it has a rail at the edge (its barrier), and the picture draws one there.
  *
- * Everything is sampled every metre along each road and half a metre across it.
+ * Each is sampled every half metre across the road and every metre along it (a quarter metre along at a gap's ends).
  */
-import type { BufferGeometry } from "three";
+import { Matrix4, type BufferGeometry } from "three";
 import { barrierDistance, buildTerrain, gapAt, isOpen, type Terrain as SimTerrain } from "../../sim/terrain";
+import { TUNING } from "../../sim/tuning";
+import { RAIL_GAP } from "../../track/edges";
 import { TrackGeometry, type TrackDef } from "../../track/geometry";
 import { QUALITY, type Tier } from "../quality";
 import { Bank } from "./bank";
@@ -20,12 +25,11 @@ import { eachTriangle } from "./corridorProbe";
 import { Terrain } from "./terrain";
 import { styleFor } from "./themes";
 import { buildTrackMeshes, type TrackMeshes } from "./track";
-import { Matrix4 } from "three";
 
 /** One drawn triangle that faces up, with the road it was drawn for. */
 interface Tri {
   road: number;
-  kind: "road" | "verge" | "deco";
+  kind: "road" | "other";
   ax: number;
   ay: number;
   az: number;
@@ -44,7 +48,7 @@ export interface Defect {
   offset: number;
   x: number;
   z: number;
-  /** How bad, metres (a step's height, a mismatch). */
+  /** How bad, metres (a step's height, a mismatch), or 1 for a hole. */
   size: number;
 }
 
@@ -52,37 +56,37 @@ const worse = (a: Defect | null, b: Defect): Defect => (a && a.size >= b.size ? 
 
 export interface RoadAudit {
   id: string;
-  /** Spots a kart can stand on road (inside the road's own width) with nothing drawn within reach under them. */
+  /** Spots a kart can stand on the road (inside its width) with no surface drawn under them. */
   roadHoles: number;
   roadHole: Defect | null;
-  /** Spots on the verge, between the road's edge and the barrier (or the open edge's shelf), with nothing drawn there. */
+  /** Spots a kart can stand on beyond the road's edge, out to the barrier, with no surface drawn under them. */
   vergeHoles: number;
   vergeHole: Defect | null;
-  /** Road spots where two road surfaces overlap at different heights (by more than 3 cm): ... */
+  /** Spots on the road's top where two roads' surfaces lie over one another at different heights (over 3 cm). */
   steps: number;
-  /** Road spots where one road lies over its own inside edge (a bend tighter than its half width) at a different height. */
-  selfOverlaps: number;
-  stepsBy: Record<string, { n: number; worst: Defect | null }>;
-  /** Overlap spots by how big the step is: over 10 cm, over 25 cm, over 50 cm. */
-  stepSizes: [number, number, number];
-  /** The tightest bend against the road's width: the worst of |curvature| x half width over the samples (1 or more: the inside edge folds). */
-  pinch: Defect | null;
-  /** ...the worst of them. */
   step: Defect | null;
-  /** Road triangles drawn where the sim has a gap in the road. */
+  /** Spots of road drawn in a gap of the sim's, and the farthest a drawn road's end lies from the sim's gap end, metres. */
   phantoms: number;
   phantom: Defect | null;
-  /** Spots in the sim's gaps that the road is drawn under, in the road's own ribbon. */
-  /** The drawn road's height against the sim's (centre line plus the bank's lift), at road spots with no ramp wedge. */
+  gapEnd: Defect | null;
+  /** Samples the sim says are in a gap, and the picture says are. */
+  gapSim: number;
+  gapPicture: number;
+  /** Spots where the drawn road is not at the sim's height plus the banking's lift (over 12 cm). */
   groundMiss: number;
   groundMisses: Defect | null;
-  /** Between consecutive samples of one road: the biggest jump of an edge's height over a metre (a crack's lip). */
+  /** The biggest jump of a road's edge height between consecutive sections (metres over about one metre). */
   edgeStep: Defect | null;
-  /** The road's sections that fold: consecutive samples whose tangents turn back (more than 90 degrees). */
+  /** The tightest bend against the road's width: |curvature| x half the width (1 or more: the inside edge folds back). */
+  pinch: Defect | null;
+  /** Consecutive sections whose directions turn back on one another. */
   folds: number;
-  /** Sample spots over a sim gap that the picture also leaves open, and the ones it does not (should be 0). */
-  gapAgreement: { sim: number; picture: number };
-  /** Kart-reachable edge spots (inside the barrier's reach) on a side that the sim leaves with no barrier at all. */
+  /** Samples with a drop beside the road, a rail over it in the sim (its barrier within the rail's gap), and one drawn there. */
+  dropSpots: number;
+  railsInSim: number;
+  railsDrawn: number;
+  railMissing: Defect | null;
+  /** Samples where the sim leaves an edge with nothing to stop a kart outside a gap (must be none). */
   openEdgeSpots: number;
 }
 
@@ -122,10 +126,35 @@ class TriGrid {
   }
 }
 
-function collect(grid: TriGrid, geometry: BufferGeometry, road: number, kind: Tri["kind"]): void {
-  const id = new Matrix4();
-  eachTriangle(geometry, id, (a, b, c) => {
-    // Faces up only: the cliffs, walls and undersides are not a surface a kart can stand on.
+/** A hash of the corners of every triangle (of any facing), to find what stands near a point. */
+class VertexGrid {
+  private readonly cells = new Map<number, [number, number, number][]>();
+  add(x: number, y: number, z: number): void {
+    const k = Math.floor(x / CELL) * 100003 + Math.floor(z / CELL);
+    const list = this.cells.get(k);
+    if (list) list.push([x, y, z]);
+    else this.cells.set(k, [[x, y, z]]);
+  }
+  /** Is there a corner within `radius` metres of (x, z) (plan) between heights `lo` and `hi`? */
+  near(x: number, z: number, radius: number, lo: number, hi: number): boolean {
+    for (let i = Math.floor((x - radius) / CELL); i <= Math.floor((x + radius) / CELL); i++) {
+      for (let j = Math.floor((z - radius) / CELL); j <= Math.floor((z + radius) / CELL); j++) {
+        for (const p of this.cells.get(i * 100003 + j) ?? []) if (Math.hypot(p[0] - x, p[2] - z) <= radius && p[1] >= lo && p[1] <= hi) return true;
+      }
+    }
+    return false;
+  }
+}
+
+const IDENTITY = new Matrix4();
+
+function collect(grid: TriGrid, geometry: BufferGeometry, road: number, kind: Tri["kind"], corners?: VertexGrid): void {
+  eachTriangle(geometry, IDENTITY, (a, b, c) => {
+    corners?.add(a.x, a.y, a.z);
+    corners?.add(b.x, b.y, b.z);
+    corners?.add(c.x, c.y, c.z);
+    // Faces up only: the cliffs, walls and undersides are not a surface a kart can stand on. (The light of the space road has
+    // no winding to speak of: both ways count.)
     const nx = (b.y - a.y) * (c.z - a.z) - (b.z - a.z) * (c.y - a.y);
     const ny = (b.z - a.z) * (c.x - a.x) - (b.x - a.x) * (c.z - a.z);
     const nz = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
@@ -135,16 +164,35 @@ function collect(grid: TriGrid, geometry: BufferGeometry, road: number, kind: Tr
   });
 }
 
-/** Reads a road's own mesh groups into the grid. */
-function load(grid: TriGrid, meshes: TrackMeshes, road: number): void {
-  for (const g of meshes.road) collect(grid, g, road, "road");
-  for (const g of meshes.verge) collect(grid, g, road, "verge");
-  for (const g of meshes.deco) collect(grid, g, road, "deco");
+function build(def: TrackDef, tier: Tier) {
+  const geo = TrackGeometry.build(def);
+  const style = styleFor(def.theme);
+  const quality = QUALITY[tier];
+  const terrain = Terrain.build(geo, style, quality.cell);
+  const roads: TrackGeometry[] = [geo, ...geo.routes];
+  const grid = new TriGrid();
+  const corners = new VertexGrid();
+  const built: TrackMeshes[] = roads.map((road, r) => buildTrackMeshes(road, style, terrain, quality, 64, r === 0 ? undefined : terrain.routeFeatures[r - 1]));
+  built.forEach((m, r) => {
+    for (const g of m.road) collect(grid, g, r, "road");
+    for (const g of [...m.verge, ...m.deco, ...(m.additive ? [m.additive] : [])]) collect(grid, g, r, "other");
+    for (const g of m.deco) {
+      eachTriangle(g, IDENTITY, (a, b, c) => {
+        for (const p of [a, b, c]) corners.add(p.x, p.y, p.z);
+      });
+    }
+    for (const g of m.additive ? [m.additive] : []) {
+      eachTriangle(g, IDENTITY, (a, b, c) => {
+        for (const p of [a, b, c]) corners.add(p.x, p.y, p.z);
+      });
+    }
+  });
+  return { geo, style, quality, terrain, roads, grid, corners, built };
 }
 
-/** Every drawn up-facing surface over (x, z) (for looking into a defect). */
+/** Every drawn up-facing surface over (x, z), for looking into a defect. */
 export function surfacesAt(def: TrackDef, points: [number, number][], tier: Tier = "high"): string[] {
-  const { grid } = buildGrid(def, tier);
+  const { grid } = build(def, tier);
   return points.map(([x, z]) => {
     const found: string[] = [];
     grid.at(x, z, (t, y) => found.push(`${t.kind}${t.road}@${y.toFixed(2)}`));
@@ -152,23 +200,10 @@ export function surfacesAt(def: TrackDef, points: [number, number][], tier: Tier
   });
 }
 
-function buildGrid(def: TrackDef, tier: Tier) {
-  const geo = TrackGeometry.build(def);
-  const style = styleFor(def.theme);
-  const quality = QUALITY[tier];
-  const terrain = Terrain.build(geo, style, quality.cell);
-  const roads: TrackGeometry[] = [geo, ...geo.routes];
-  const grid = new TriGrid();
-  const built = roads.map((road, r) => buildTrackMeshes(road, style, terrain, quality, 64, r === 0 ? undefined : terrain.routeFeatures[r - 1]));
-  built.forEach((m, r) => load(grid, m, r));
-  return { geo, style, quality, terrain, roads, grid, built };
-}
-
 export function auditRoads(def: TrackDef, tier: Tier = "high"): RoadAudit {
-  const { geo, roads, grid, built } = buildGrid(def, tier);
+  const { geo, roads, grid, corners, built } = build(def, tier);
   const sims: SimTerrain[] = roads.map((road) => buildTerrain(road === geo ? def : road.def, road));
   const banks = roads.map((road) => Bank.of(road));
-
   const out: RoadAudit = {
     id: def.id,
     roadHoles: 0,
@@ -176,27 +211,31 @@ export function auditRoads(def: TrackDef, tier: Tier = "high"): RoadAudit {
     vergeHoles: 0,
     vergeHole: null,
     steps: 0,
-    stepsBy: {},
-    selfOverlaps: 0,
-    pinch: null,
-    stepSizes: [0, 0, 0],
     step: null,
     phantoms: 0,
     phantom: null,
+    gapEnd: null,
+    gapSim: 0,
+    gapPicture: 0,
     groundMiss: 0,
     groundMisses: null,
     edgeStep: null,
+    pinch: null,
     folds: 0,
-    gapAgreement: { sim: 0, picture: 0 },
+    dropSpots: 0,
+    railsInSim: 0,
+    railsDrawn: 0,
+    railMissing: null,
     openEdgeSpots: 0,
   };
 
   roads.forEach((road, r) => {
     const sim = sims[r]!;
     const bank = banks[r]!;
-    const n = road.samples.length;
     const features = built[r]!.features;
-    // Each sample of the road and the next: the ribbon's edges must run on without a jump.
+    const n = road.samples.length;
+
+    // Section by section: the ribbon must run on without a jump, a fold or a kink.
     for (let i = 0; i + 1 < n; i++) {
       const a = road.samples[i]!;
       const b = road.samples[i + 1]!;
@@ -204,56 +243,81 @@ export function auditRoads(def: TrackDef, tier: Tier = "high"): RoadAudit {
       out.pinch = worse(out.pinch, { road: r, s: a.s, offset: 0, x: a.x, z: a.z, size: Math.abs(a.curvature) * (a.width / 2) });
       if (features.gap[i] || features.gap[i + 1]) continue;
       for (const side of [-1, 1]) {
-        const ya = a.y + bank.liftAt(i, side * a.width / 2);
-        const yb = b.y + bank.liftAt(i + 1, side * b.width / 2);
-        const d: Defect = { road: r, s: a.s, offset: (side * a.width) / 2, x: a.x, z: a.z, size: Math.abs(yb - ya) };
-        out.edgeStep = worse(out.edgeStep, d);
+        const ya = a.y + bank.liftAt(i, (side * a.width) / 2);
+        const yb = b.y + bank.liftAt(i + 1, (side * b.width) / 2);
+        out.edgeStep = worse(out.edgeStep, { road: r, s: a.s, offset: (side * a.width) / 2, x: a.x, z: a.z, size: Math.abs(yb - ya) });
       }
     }
 
     for (let i = 0; i < n; i++) {
       const c = road.samples[i]!;
+      if (gapAt(sim, c.s) !== null) out.gapSim++;
+      if (features.gap[i] === 1) out.gapPicture++;
+    }
+
+    // Where the road is drawn along its middle, a quarter metre at a time: the cracks in its top, and where it ends at a gap.
+    const first = road.open ? road.origin : 0;
+    const span = road.open ? (road as unknown as { span: number }).span : road.length;
+    const along = (s: number): number => (road.open ? s : road.wrap(s));
+    const drawn = (x: number, z: number, y: number): boolean => {
+      let found = false;
+      grid.at(x, z, (t, yy) => {
+        if (t.road === r && t.kind === "road" && Math.abs(yy - y) < 0.35) found = true;
+      });
+      return found;
+    };
+    let lastDrawn: boolean | null = null;
+    let lastS = 0;
+    for (let d = 0; d <= span; d += 0.25) {
+      const s = along(first + d);
+      const c = road.at(s);
+      const here = drawn(c.x, c.z, c.y + bank.lift(s, 0));
+      const inGap = gapAt(sim, s) !== null;
+      if (inGap && here) {
+        out.phantoms++;
+        out.phantom = worse(out.phantom, { road: r, s, offset: 0, x: c.x, z: c.z, size: 1 });
+      }
+      if (lastDrawn !== null && here !== lastDrawn) {
+        // The drawn road starts or stops here: it must be where the sim's gap starts or stops (to a metre), and only there.
+        const edge = (s + lastS) / 2;
+        const gaps = sim.gaps.map((g) => Math.min(Math.abs(road.delta(edge, g.from)), Math.abs(road.delta(edge, g.to))));
+        const off = gaps.length ? Math.min(...gaps) : Infinity;
+        if (off > 1) out.gapEnd = worse(out.gapEnd, { road: r, s: edge, offset: 0, x: c.x, z: c.z, size: off });
+      }
+      lastDrawn = here;
+      lastS = s;
+    }
+
+    // Across the road and out to the barrier, every metre along it.
+    for (let i = 0; i < n; i++) {
+      const c = road.samples[i]!;
       const half = c.width / 2;
       const inGap = gapAt(sim, c.s) !== null;
-      // The picture's gap and the sim's must be the same stretch.
-      const pictureGap = features.gap[i] === 1;
-      if (inGap) out.gapAgreement.sim++;
-      if (pictureGap) out.gapAgreement.picture++;
       for (const side of [-1, 1] as const) {
         const open = isOpen(sim, c.s, side);
-        const wall = open ? 0 : barrierDistance(sim, c.s, side);
-        if (open) out.openEdgeSpots++;
-        // Out across the road, and the verge to the barrier (or an open edge's: 0.8 m of shelf only).
-        const reach = half + (open ? 0.8 : wall - 0.8);
+        if (open && !inGap) out.openEdgeSpots++;
+        const wall = barrierDistance(sim, c.s, side);
+        // A kart's centre can be out to the barrier's face less its inset; at a gap there is no road to stand on.
+        const reach = half + Math.max(0, wall - TUNING.barrierInset);
+        if (inGap) continue;
         for (let o = side > 0 ? 0 : 0.5; o <= reach; o += 0.5) {
           const lat = side * o;
           const x = c.x - c.tz * lat;
           const z = c.z + c.tx * lat;
           const onRoad = o <= half - 0.05;
           const want = c.y + bank.lift(c.s, lat);
-          if (inGap) {
-            // Only the road's own ribbon counts: another road may lie across a gap.
-            if (o > half || o < 0.5) continue;
-            if (i < 1 || i > n - 2 || gapAt(sim, road.samples[i - 1]!.s) === null || gapAt(sim, road.samples[i + 1]!.s) === null) continue;
-            grid.at(x, z, (t, y) => {
-              if (t.kind !== "road" || t.road !== r) return;
-              out.phantoms++;
-              out.phantom = worse(out.phantom, { road: r, s: c.s, offset: lat, x, z, size: Math.abs(y - want) });
-            });
-            continue;
-          }
           let covered = false;
-          let road0 = 0;
-          let lowest = Infinity;
           let top = -Infinity;
+          let lowest = Infinity;
+          const ys: { y: number; road: number }[] = [];
           grid.at(x, z, (t, y) => {
-            // A surface the kart could stand on: at its height, or up a ramp's wedge, or a hair under it.
+            // A surface a kart could stand on: at its height, or up a ramp's wedge.
             if (y < want - 0.35 || y > want + 3.2) return;
             covered = true;
             if (t.kind === "road") {
-              road0++;
-              lowest = Math.min(lowest, y);
               top = Math.max(top, y);
+              lowest = Math.min(lowest, y);
+              if (y > want - 1.5 && y < want + 1.5) ys.push({ y, road: t.road });
             }
           });
           const d: Defect = { road: r, s: c.s, offset: lat, x, z, size: 1 };
@@ -266,39 +330,40 @@ export function auditRoads(def: TrackDef, tier: Tier = "high"): RoadAudit {
               out.vergeHole = worse(out.vergeHole, d);
             }
           }
-          if (onRoad && road0 > 0) {
-            // How the drawn road differs from where the sim stands a kart (a ramp's wedge rises: only a lower surface counts).
+          if (!onRoad) continue;
+          if (top > -Infinity) {
+            // The drawn road against the sim's height and the banking (a ramp's wedge only raises it).
             const miss = Math.max(0, want - top, lowest - want > 0.3 ? lowest - want : 0);
             if (miss > 0.12) {
               out.groundMiss++;
               out.groundMisses = worse(out.groundMisses, { ...d, size: miss });
             }
           }
-          if (onRoad) {
-            // Two road surfaces at once that differ in height: a step, or flicker.
-            const ys: { y: number; road: number }[] = [];
-            grid.at(x, z, (t, y) => {
-              if (t.kind === "road" && y > want - 1.5 && y < want + 1.5) ys.push({ y, road: t.road });
-            });
-            // Between two roads only: a road folding over its own inside edge in a bend tighter than its width is the pinch's.
-            let spread = 0;
-            for (const p of ys) for (const q of ys) if (p.road !== q.road) spread = Math.max(spread, Math.abs(p.y - q.y));
-            let own = 0;
-            for (const p of ys) for (const q of ys) if (p.road === q.road) own = Math.max(own, Math.abs(p.y - q.y));
-            if (own > 0.03) out.selfOverlaps++;
-            if (spread > 0.03) {
-              out.steps++;
-              if (spread > 0.1) out.stepSizes[0]++;
-              if (spread > 0.25) out.stepSizes[1]++;
-              if (spread > 0.5) out.stepSizes[2]++;
-              out.step = worse(out.step, { ...d, size: spread });
-              const kinds = [...new Set(ys.map((p) => p.road))].sort().join("+");
-              const bucket = `${r}:${kinds}`;
-              const cur = out.stepsBy[bucket] ?? { n: 0, worst: null };
-              cur.n++;
-              cur.worst = worse(cur.worst, { ...d, size: spread });
-              out.stepsBy[bucket] = cur;
-            }
+          let spread = 0;
+          for (const p of ys) for (const q of ys) if (p.road !== q.road) spread = Math.max(spread, Math.abs(p.y - q.y));
+          if (spread > 0.03) {
+            out.steps++;
+            out.step = worse(out.step, { ...d, size: spread });
+          }
+        }
+        // A drop beside the road has a rail at its edge, in the sim and in the picture.
+        const drop = (side < 0 ? sim.openLeft : sim.openRight)[i] === 1;
+        const rail = (side < 0 ? sim.railLeft : sim.railRight)[i]!;
+        if (drop && rail >= 0.99) {
+          out.dropSpots++;
+          if (wall <= RAIL_GAP + 0.01) out.railsInSim++;
+          // Drawn: some part of the barrier stands a metre either side of the rail's line, a little above the deck.
+          // (A rail where another road lies across the way is left to that road's own barrier: it is not drawn.)
+          if (i % 3 !== 0 || features.hiddenLeft[i] || features.hiddenRight[i]) {
+            out.railsDrawn += 0;
+          }
+          const lat = side * (half + wall + 0.5);
+          const x = c.x - c.tz * lat;
+          const z = c.z + c.tx * lat;
+          const y = c.y + bank.liftAt(i, side * half);
+          if (i % 3 === 0) {
+            if (corners.near(x, z, 1.6, y - 0.4, y + 3)) out.railsDrawn++;
+            else out.railMissing = worse(out.railMissing, { road: r, s: c.s, offset: lat, x, z, size: 1 });
           }
         }
       }
@@ -308,17 +373,12 @@ export function auditRoads(def: TrackDef, tier: Tier = "high"): RoadAudit {
 }
 
 export function summarise(a: RoadAudit): string {
-  const at = (d: Defect | null) => (d ? `road${d.road} s=${d.s.toFixed(0)} off=${d.offset.toFixed(1)} (${d.x.toFixed(0)},${d.z.toFixed(0)}) ${d.size.toFixed(2)}m` : "-");
+  const at = (d: Defect | null) => (d ? `road${d.road} s=${d.s.toFixed(0)} off=${d.offset.toFixed(1)} (${d.x.toFixed(0)},${d.z.toFixed(0)}) ${d.size.toFixed(2)}` : "-");
   return [
-    `${a.id}: roadHoles ${a.roadHoles} [${at(a.roadHole)}]`,
-    `vergeHoles ${a.vergeHoles} [${at(a.vergeHole)}]`,
-    `steps ${a.steps} >10cm ${a.stepSizes[0]} >25cm ${a.stepSizes[1]} >50cm ${a.stepSizes[2]} [${at(a.step)}]`,
-    ...Object.entries(a.stepsBy).map(([k, v]) => `  steps ${k}: ${v.n} worst ${at(v.worst)}`),
-    `phantoms ${a.phantoms} [${at(a.phantom)}]`,
-    `groundMiss ${a.groundMiss} [${at(a.groundMisses)}]`,
-    `edgeStep [${at(a.edgeStep)}]`,
-    `folds ${a.folds} selfOverlaps ${a.selfOverlaps} pinch [${at(a.pinch)}]`,
-    `gaps sim ${a.gapAgreement.sim} picture ${a.gapAgreement.picture}`,
-    `openEdge ${a.openEdgeSpots}`,
-  ].join("\n   ");
+    `${a.id}: roadHoles ${a.roadHoles} [${at(a.roadHole)}] vergeHoles ${a.vergeHoles} [${at(a.vergeHole)}]`,
+    `   steps ${a.steps} [${at(a.step)}] groundMiss ${a.groundMiss} [${at(a.groundMisses)}] edgeStep [${at(a.edgeStep)}]`,
+    `   phantoms ${a.phantoms} [${at(a.phantom)}] gapEnd [${at(a.gapEnd)}] gaps sim ${a.gapSim} picture ${a.gapPicture}`,
+    `   pinch [${at(a.pinch)}] folds ${a.folds} openEdges ${a.openEdgeSpots}`,
+    `   rails: drop spots ${a.dropSpots} in sim ${a.railsInSim} drawn ${a.railsDrawn} (of ${Math.ceil(a.dropSpots / 3)} checked) missing [${at(a.railMissing)}]`,
+  ].join("\n");
 }
