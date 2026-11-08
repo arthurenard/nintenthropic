@@ -237,7 +237,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     const v0 = (i * realStep) / ROAD_TILE;
     const v1 = ((i + 1) * realStep) / ROAD_TILE;
     // Four strips across, so a banked road is not a single tilted plane through its middle.
-    const cols = bank.any ? 4 : 1;
+    const cols = bank.any ? (open ? 8 : 4) : 1;
     for (let k = 0; k < cols; k++) {
       const u0 = k / cols;
       const u1 = (k + 1) / cols;
@@ -245,6 +245,8 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       const l1 = -hw0 + u1 * hw0 * 2;
       const m0 = -hw1 + u0 * hw1 * 2;
       const m1 = -hw1 + u1 * hw1 * 2;
+      // A branch lying wholly on the road it leaves is the road's own surface there (see Bank): drawn once, so no two textures fight.
+      if (open && bank.onMain(i, l0) && bank.onMain(i, l1) && bank.onMain(i + 1, m0) && bank.onMain(i + 1, m1)) continue;
       road[chunkOf(i)]!.quad(P(i, l0), P(i, l1), P(i + 1, m1), P(i + 1, m0), WHITE, WHITE, WHITE, WHITE, up, [u0, v0, u1, v0, u1, v1, u0, v1]);
     }
   }
