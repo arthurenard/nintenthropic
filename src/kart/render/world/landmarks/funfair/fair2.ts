@@ -21,11 +21,11 @@ export const ferrisGate: LandmarkSpec = {
   footprint: 0,
   build() {
     const R = 19;
-    const HUB = 29;
+    const HUB = 31;
     const N = 8;
     const ZS = 2.2;
     const W = 0.16;
-    const FOOT = 25;
+    const FOOT = 20;
     const frame = new MeshBuilder();
     const fGlow = new MeshBuilder();
     const wheelLit = new MeshBuilder();
@@ -166,24 +166,24 @@ export const coasterTrestle: LandmarkSpec = {
     const lx = hw + 2.2;
     // Sleepers and rails on the road itself (under 0.45 m, so they may lie on it).
     const rail = rgb("#9aa0b8");
-    for (let z = -half; z < half; z += 1.2) lit.box(0, 0.09, z + 0.6, 4.4, 0.1, 0.5, Math.round(z / 1.2) % 2 ? RED : CREAM);
-    for (const x of [-1.8, 1.8]) lit.box(x, 0.24, 0, 0.22, 0.2, L, rail);
+    for (let z = -half; z < half; z += 1.2) lit.box(0, 0.0, z + 0.6, 3.6, 0.1, 0.5, Math.round(z / 1.2) % 2 ? RED : CREAM);
+    for (const x of [-1.8, 1.8]) lit.box(x, 0.1, 0, 0.22, 0.2, L, rail);
     // Lights along both edges.
-    for (const s of [-1, 1]) for (let z = -half + 1; z < half; z += 3) bulb(glow, s * (hw - 0.3), 0.2, z, 0.28, lightAt(Math.round(z / 3)));
+    for (const s of [-1, 1]) for (let z = -half + 1; z < half; z += 3) bulb(glow, s * 3.0, 0.1, z, 0.28, lightAt(Math.round(z / 3)));
     // Bents: two legs, a girder under the road, X braces.
     let n = 0;
     for (let z = -half + 3; z < half; z += 7) {
       const colour = n % 2 ? CREAM : RED;
       for (const s of [-1, 1]) {
-        stripedRod(lit, [s * lx, -0.4, z], [s * lx, -16, z], 1.1, 8, RED, CREAM);
-        lit.rod([s * lx, -2.5, z], [-s * lx, -9.5, z], 0.34, STEEL);
+        stripedRod(lit, [s * lx, -1.4, z], [s * lx, -16, z], 1.1, 8, RED, CREAM);
+        lit.rod([s * lx, -3.5, z], [-s * lx, -9.5, z], 0.34, STEEL);
       }
-      lit.box(0, -0.7, z, 2 * lx, 0.8, 0.9, ramp(scaleRgb(colour, 0.6), colour));
+      lit.box(0, -1.7, z, 2 * lx, 0.8, 0.9, ramp(scaleRgb(colour, 0.6), colour));
       n++;
     }
     // Arches of lights over the road: two posts at the legs, a beam across at 7 m with a row of bulbs, and a gold star.
     for (let z = -half + 10; z < half - 4; z += 21) {
-      for (const s of [-1, 1]) lit.box(s * lx, 3.6, z, 0.8, 7.4, 0.8, ramp(DARK, rgb("#5b4aa0")));
+      for (const s of [-1, 1]) lit.box(s * lx, 3.1, z, 0.8, 8.4, 0.8, ramp(DARK, rgb("#5b4aa0")));
       lit.box(0, 7.4, z, 2 * lx + 0.8, 0.9, 0.9, ramp(NAVY, rgb("#4b3a8c")));
       for (let k = 0; k < 11; k++) bulb(glow, -lx + (k / 10) * 2 * lx, 6.8, z, 0.46, lightAt(k));
       glow.rod([-1.2, 8.5, z], [1.2, 8.5, z], 0.5, G_GOLD);

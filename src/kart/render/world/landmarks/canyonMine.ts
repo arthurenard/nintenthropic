@@ -67,7 +67,7 @@ export const mineTunnel: LandmarkSpec = {
     const legs = 4.6;
     const half = ctx.span / 2;
     const lip = 2.4;
-    const thick = (t: number, zt: number) => (6.5 + 7 * Math.sin(Math.PI * t)) * (0.55 + 0.45 * Math.pow(Math.sin(Math.PI * zt), 0.5));
+    const thick = (t: number, zt: number) => (6 + 6 * Math.sin(Math.PI * t)) * (0.55 + 0.45 * Math.pow(Math.sin(Math.PI * zt), 0.5));
     const body = { halfIn: hw, topIn: top, legs, thick, steps: Math.max(6, Math.round(ctx.span / 3)), arcSteps: 14, rough: 0.55, seed: 11, skirt: 3 };
     noisyArch(lit, { ...body, z0: -half + lip, z1: half - lip, inner: rockShade(2, 0.62), outer: rockShade(7, 1.0, 2.8) });
     // The mouths: fatter, paler rock either end, and a hill of rubble on top, so it reads as a mesa with a hole through it.
@@ -80,8 +80,8 @@ export const mineTunnel: LandmarkSpec = {
     for (let k = 0; k < 14; k++) {
       const s = k % 2 === 0 ? -1 : 1;
       const z = -half * 0.95 + (Math.floor(k / 2) / 6) * half * 1.9;
-      const r = 5.5 + hash(k, 8) * 4.5;
-      const x = s * (hw + 5.5 + hash(k, 7) * 7);
+      const r = 5 + hash(k, 8) * 3.5;
+      const x = s * (hw + 4 + hash(k, 7) * 4);
       rockBlob(lit, x, 0, z, r * 1.15, r * (1.6 + 0.6 * hash(k, 3)), r, rockShade(40 + k, 0.95 + 0.1 * hash(k, 5), 2.2), k + 3, { detail: 1, roughness: 0.3, flatBase: true });
     }
     for (let k = 0; k < 8; k++) {
