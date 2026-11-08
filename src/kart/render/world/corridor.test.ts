@@ -23,7 +23,7 @@ import { analyseFeatures, WALL_DISTANCE } from "./features";
 /** Set CORRIDOR_REPORT=1 to print what the test finds. */
 const REPORT = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.CORRIDOR_REPORT;
 
-const fmt = (o: Offender | null) => (o ? `${o.height.toFixed(2)} m at s=${o.s.toFixed(0)}, ${o.beyond.toFixed(1)} m beyond the edge` : "none");
+const fmt = (o: Offender | null) => (o ? `${o.height.toFixed(2)} m at (${o.at?.map((v) => v.toFixed(0)).join(", ")}) s=${o.s.toFixed(0)} on ${o.what},${o.beyond.toFixed(1)} m beyond the edge` : "none");
 
 describe("the drivable area", () => {
   for (const base of TRACKS) {

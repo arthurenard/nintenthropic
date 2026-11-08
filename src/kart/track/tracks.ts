@@ -61,34 +61,34 @@ export const MEADOW_LOOP: TrackDef = {
     { x: 94, z: -24, y: 3.2 },
     { x: 82, z: 12, y: 4, bank: 0.14 },
     { x: 50, z: 26, y: 3, bank: 0.14 },
-    { x: 34, z: 2, y: 1.6 },
+    { x: 46, z: 4, y: 1.6 },
     // Down by the pond and round the banked hairpin.
-    { x: 28, z: -38, y: 0.2 },
-    { x: 24, z: -62, y: -0.3, bank: -0.2 },
-    { x: 8, z: -74, y: -0.2, bank: -0.24 },
-    { x: -6, z: -62, y: -0.1, bank: -0.2 },
+    { x: 44, z: -38, y: 0.2 },
+    { x: 36, z: -66, y: -0.3, bank: -0.2 },
+    { x: 14, z: -80, y: -0.2, bank: -0.24 },
+    { x: -6, z: -64, y: -0.1, bank: -0.2 },
     { x: 0, z: -44 },
     { x: 0, z: -24 },
   ],
-  itemRows: [0.1959, 0.5975, 0.8326],
+  itemRows: [0.1934, 0.5898, 0.8219],
   boostPads: [
-    { at: 0.6269, offset: 0 },
-    { at: 0.8522, offset: 2 },
+    { at: 0.6188, offset: 0 },
+    { at: 0.8412, offset: 2 },
   ],
   // The inside line of the windmill's left-hander is a strip of boost for whoever hugs it.
-  surfaces: [{ from: 0.1959, to: 0.2743, kind: "boost", offset: -4, width: 3 }],
+  surfaces: [{ from: 0.1934, to: 0.2708, kind: "boost", offset: -4, width: 3 }],
   // A lip on the outside of the climb for a hop, and the glide off the brow down the hill over the pond.
   air: [
-    { kind: "lip", at: 0.2860, length: 32, height: 3, offset: 3, width: 6 },
-    { kind: "glide", at: 0.4305, length: 76, height: 8 },
+    { kind: "lip", at: 0.2823, length: 32, height: 3, offset: 3, width: 6 },
+    { kind: "glide", at: 0.4249, length: 76, height: 8 },
   ],
-  drops: [{ from: 0.4325, to: 0.4955, side: "both" }],
+  drops: [{ from: 0.4269, to: 0.4891, side: "both" }],
   hazards: [
     // Round hay bales roll down the climb at whoever goes up.
-    { kind: "hay-roll", at: 0.2057, motion: "roll", period: 6.2, radius: 1.35, offset: -3, span: 0.0607 },
-    { kind: "hay-roll", at: 0.2057, motion: "roll", period: 6.2, phase: 0.5, radius: 1.35, offset: 3, span: 0.0607 },
+    { kind: "hay-roll", at: 0.2030, motion: "roll", period: 6.2, radius: 1.35, offset: -3, span: 0.0599 },
+    { kind: "hay-roll", at: 0.2030, motion: "roll", period: 6.2, phase: 0.5, radius: 1.35, offset: 3, span: 0.0599 },
     // The flock crosses once every beat, once the gate's lamp has blinked.
-    { kind: "sheep-flock", at: 0.6406, motion: "slide", period: 7.2, radius: 2.2, span: 12 },
+    { kind: "sheep-flock", at: 0.6323, motion: "slide", period: 7.2, radius: 2.2, span: 12 },
   ],
   routes: [
     {
@@ -97,18 +97,18 @@ export const MEADOW_LOOP: TrackDef = {
       // on its way down from the crest. The hill road is the high one, faster and longer; the creek road is shorter but slow.
       id: "creek-road",
       kind: "split",
-      from: 0.0786,
-      to: 0.4040,
+      from: 0.0776,
+      to: 0.3988,
       width: 11,
       appeal: 0.55,
       points: [
         { x: 26, z: 118, y: 0.4, bank: 0.1 },
         { x: 56, z: 90, y: -0.8, bank: -0.1 },
         { x: 92, z: 80, y: -1.6, bank: 0.1 },
-        { x: 128, z: 100, y: -1.4, bank: 0.1 },
-        { x: 152, z: 132, y: 1.5, bank: -0.1 },
-        { x: 168, z: 150, y: 4.5 },
-        { x: 182, z: 130, y: 8 },
+        { x: 128, z: 100, y: 0.8, bank: 0.1 },
+        { x: 152, z: 128, y: 6.2, bank: -0.1 },
+        { x: 170, z: 142, y: 9.6 },
+        { x: 186, z: 134, y: 11 },
       ],
       surfaces: [{ from: 0.28, to: 0.46, kind: "ice", offset: 0, width: 9 }],
       hazards: [
@@ -120,7 +120,7 @@ export const MEADOW_LOOP: TrackDef = {
         { kind: "oak", at: 0.7, offset: -13 },
         { kind: "oak", at: 0.7, offset: 13, turn: 3.14 },
         { kind: "pond", at: 0.38, offset: 30, scale: 0.8 },
-        { kind: "hay-bales", at: 0.15, offset: -26 },
+        { kind: "hay-bales", at: 0.35, offset: 32 },
         { kind: "flower-field", at: 0.5, offset: -36 },
       ],
     },
@@ -129,8 +129,8 @@ export const MEADOW_LOOP: TrackDef = {
       // door of the barn and out of the other onto a strip of boost. Narrow, and a fall costs more than it saves.
       id: "barn-cut",
       kind: "shortcut",
-      from: 0.5731,
-      to: 0.7430,
+      from: 0.5657,
+      to: 0.7334,
       width: 9,
       flare: 30,
       appeal: 0.85,
@@ -145,27 +145,27 @@ export const MEADOW_LOOP: TrackDef = {
       surfaces: [
         { from: 0.84, to: 0.9, kind: "boost", width: 3 },
       ],
-      landmarks: [{ kind: "barn-run", at: 0.66, offset: 0, span: 30 }],
+      landmarks: [{ kind: "barn-run", at: 0.6, offset: 0, span: 26 }],
     },
   ],
   landmarks: [
-    { kind: "windmill", at: 0.2690, offset: -52, scale: 1.6 },
-    { kind: "barn", at: 0.0521, offset: -36, turn: 0.3 },
-    { kind: "hay-bales", at: 0.0284, offset: 17.5 },
-    { kind: "sheep", at: 0.1327, offset: 30 },
-    { kind: "hot-air-balloon", at: 0.1943, offset: 55, scale: 1.5 },
-    { kind: "flower-field", at: 0.2608, offset: 42 },
-    { kind: "flower-field", at: 0.3840, offset: 42, scale: 1.2 },
-    { kind: "pond", at: 0.4653, offset: -34, scale: 1 },
-    { kind: "pond", at: 0.4702, offset: 34, scale: 1 },
-    { kind: "farm-gate", at: 0.6406, offset: -17.5 },
-    { kind: "farm-gate", at: 0.6406, offset: 17.5, turn: 3.14 },
-    { kind: "sheep", at: 0.6068, offset: 30 },
-    { kind: "hot-air-balloon", at: 0.6874, offset: 65, scale: 1.3 },
-    { kind: "hay-bales", at: 0.8248, offset: -17.5 },
-    { kind: "pond", at: 0.9250, offset: -38, scale: 0.9 },
+    { kind: "windmill", at: 0.2655, offset: -52, scale: 1.6 },
+    { kind: "barn", at: 0.0514, offset: -36, turn: 0.3 },
+    { kind: "hay-bales", at: 0.0280, offset: 17.5 },
+    { kind: "sheep", at: 0.1310, offset: 30 },
+    { kind: "hot-air-balloon", at: 0.1918, offset: 55, scale: 1.5 },
+    { kind: "flower-field", at: 0.2574, offset: 42 },
+    { kind: "flower-field", at: 0.3790, offset: 42, scale: 1.2 },
+    { kind: "pond", at: 0.4593, offset: -34, scale: 1 },
+    { kind: "pond", at: 0.4641, offset: 34, scale: 1 },
+    { kind: "farm-gate", at: 0.6323, offset: -17.5 },
+    { kind: "farm-gate", at: 0.6323, offset: 17.5, turn: 3.14 },
+    { kind: "sheep", at: 0.5990, offset: 30 },
+    { kind: "hot-air-balloon", at: 0.6785, offset: 65, scale: 1.3 },
+    { kind: "hay-bales", at: 0.8142, offset: -17.5 },
+    { kind: "pond", at: 0.9250, offset: 40, scale: 0.9 },
   ],
-  duck: { at: 0.9250, offset: -36 },
+  duck: { at: 0.9250, offset: 38 },
 };
 
 /**
@@ -214,22 +214,22 @@ export const KITCHEN_RALLY: TrackDef = {
     { x: -269.0, z: 155.2 },  // s 418
     { x: -284.8, z: 152.2, bank: 0.01 },  // s 434
     { x: -300.2, z: 147.7, width: 16.6, bank: 0.09 },  // s 451
-    { x: -314.9, z: 141.1, width: 17.9, bank: 0.12 },  // s 467
-    { x: -328.6, z: 132.8, width: 18, bank: 0.15 },  // s 483
-    { x: -341.2, z: 122.8, width: 18, bank: 0.16 },  // s 499
-    { x: -352.4, z: 111.2, width: 18, bank: 0.16 },  // s 515
-    { x: -362.0, z: 98.3, width: 18, bank: 0.16 },  // s 531
-    { x: -369.8, z: 84.3, width: 18, bank: 0.16 },  // s 547
-    { x: -375.8, z: 69.4, width: 18, bank: 0.16 },  // s 563
-    { x: -379.9, z: 53.8, width: 18, bank: 0.16 },  // s 579
-    { x: -381.8, z: 37.8, width: 18, bank: 0.16 },  // s 595
-    { x: -381.8, z: 21.8, width: 18, bank: 0.16 },  // s 611
-    { x: -379.6, z: 5.8, width: 18, bank: 0.16 },  // s 628
-    { x: -375.5, z: -9.7, width: 18, bank: 0.16 },  // s 644
-    { x: -369.4, z: -24.6, width: 18, bank: 0.16 },  // s 660
-    { x: -361.4, z: -38.5, width: 18, bank: 0.16 },  // s 676
-    { x: -351.7, z: -51.4, width: 18, bank: 0.16 },  // s 692
-    { x: -340.4, z: -62.8, width: 17.8, bank: 0.13 },  // s 708
+    { x: -314.9, z: 141.1, width: 17.9, bank: 0.09 },  // s 467
+    { x: -328.6, z: 132.8, width: 18, bank: 0.10 },  // s 483
+    { x: -341.2, z: 122.8, width: 18, bank: 0.10 },  // s 499
+    { x: -352.4, z: 111.2, width: 18, bank: 0.10 },  // s 515
+    { x: -362.0, z: 98.3, width: 18, bank: 0.10 },  // s 531
+    { x: -369.8, z: 84.3, width: 18, bank: 0.10 },  // s 547
+    { x: -375.8, z: 69.4, width: 18, bank: 0.10 },  // s 563
+    { x: -379.9, z: 53.8, width: 18, bank: 0.10 },  // s 579
+    { x: -381.8, z: 37.8, width: 18, bank: 0.10 },  // s 595
+    { x: -381.8, z: 21.8, width: 18, bank: 0.10 },  // s 611
+    { x: -379.6, z: 5.8, width: 18, bank: 0.10 },  // s 628
+    { x: -375.5, z: -9.7, width: 18, bank: 0.10 },  // s 644
+    { x: -369.4, z: -24.6, width: 18, bank: 0.10 },  // s 660
+    { x: -361.4, z: -38.5, width: 18, bank: 0.10 },  // s 676
+    { x: -351.7, z: -51.4, width: 18, bank: 0.10 },  // s 692
+    { x: -340.4, z: -62.8, width: 17.8, bank: 0.09 },  // s 708
     { x: -327.8, z: -72.8, width: 16.3, bank: 0.10 },  // s 724
     { x: -314.0, z: -81.0, bank: 0.01 },  // s 740
     { x: -299.4, z: -87.9, y: 0.31, width: 19 },  // s 756
@@ -248,10 +248,10 @@ export const KITCHEN_RALLY: TrackDef = {
     { x: -117.1, z: -187.3, y: 4.03 },  // s 965
     { x: -102.5, z: -194.1, y: 3.23 },  // s 981
     { x: -87.4, z: -199.3, y: 2.09, bank: 0.11 },  // s 998
-    { x: -71.3, z: -199.7, y: 0.96, bank: 0.15 },  // s 1014
-    { x: -56.0, z: -195.2, y: 0.17, bank: 0.15 },  // s 1030
-    { x: -42.7, z: -186.2, bank: 0.15 },  // s 1046
-    { x: -32.8, z: -173.6, bank: 0.15 },  // s 1062
+    { x: -71.3, z: -199.7, y: 0.96, bank: 0.10 },  // s 1014
+    { x: -56.0, z: -195.2, y: 0.17, bank: 0.10 },  // s 1030
+    { x: -42.7, z: -186.2, bank: 0.10 },  // s 1046
+    { x: -32.8, z: -173.6, bank: 0.10 },  // s 1062
     { x: -27.2, z: -158.5 },  // s 1078
     { x: -24.4, z: -142.7 },  // s 1094
     { x: -21.6, z: -126.9 },  // s 1110
@@ -355,9 +355,9 @@ export const KITCHEN_RALLY: TrackDef = {
     { kind: "pepper-mill", at: 0.2260, offset: 31.5 },
     { kind: "wall-clock", at: 0.2696, offset: -90, scale: 1.4 },
     { kind: "cookbook", at: 0.2954, offset: -30, turn: 0.2 },
-    { kind: "cookbook", at: 0.3551, offset: 34, scale: 1.2, turn: -0.4 },
+    { kind: "cookbook", at: 0.3551, offset: -46, scale: 1.2, turn: -0.4 },
     { kind: "sink", at: 0.3334, offset: 0 },
-    { kind: "window", at: 0.3955, offset: -100, scale: 2 },
+    { kind: "window", at: 0.05, offset: -100, scale: 2 },
     { kind: "cereal-box", at: 0.2421, offset: 48, scale: 1.2 },
     { kind: "fork-arch", at: 0.4197, offset: 0, span: 10 },
     { kind: "mug", at: 0.2276, offset: -48 },
@@ -366,7 +366,7 @@ export const KITCHEN_RALLY: TrackDef = {
     { kind: "spatula", at: 0.7305, offset: 16, turn: 1.57 },
     { kind: "toaster", at: 0.8879, offset: -42, turn: 1.57 },
     { kind: "grater", at: 0.9766, offset: 0, span: 30 },
-    { kind: "cereal-box", at: 0.8394, offset: 38, turn: 0.4 },
+    { kind: "cereal-box", at: 0.8394, offset: 46, turn: 0.4 },
     { kind: "mug", at: 0.9282, offset: 40, scale: 1.1 },
   ],
   duck: { at: 0.3334, offset: 4, y: 2.9 },
@@ -503,11 +503,11 @@ export const HARBOUR_LIGHTS: TrackDef = {
       flare: 26,
       appeal: 0.3,
       points: [
-        { x: -108.8, z: 174.7 },
-        { x: -96.6, z: 137.3 },
-        { x: -100.1, z: 83.3 },
-        { x: -107.8, z: 27.8 },
-        { x: -131.5, z: -7.8 },
+        { x: -108.8, z: 174.7, y: 0.6 },
+        { x: -90, z: 137.3, y: 1.3 },
+        { x: -92, z: 83.3, y: 1.2 },
+        { x: -100, z: 27.8, y: 0.9 },
+        { x: -131.5, z: -7.8, y: 0.1 },
       ],
       hazards: [
         { kind: "crab", at: 0.3, motion: "cross", period: 5.2, radius: 1.3 },
@@ -532,14 +532,14 @@ export const HARBOUR_LIGHTS: TrackDef = {
     { kind: "lighthouse", at: 0.2727, offset: 52, scale: 1.2 },
     { kind: "buoy", at: 0.3002, offset: -36 },
     { kind: "warehouse", at: 0.3919, offset: -45, scale: 1.4 },
-    { kind: "warehouse", at: 0.4169, offset: 46 },
+    { kind: "warehouse", at: 0.4169, offset: 62 },
     { kind: "ship", at: 0.5170, offset: -118, scale: 2.2 },
     { kind: "ship-deck", at: 0.5170, offset: 0, span: 56 },
-    { kind: "crane", at: 0.5837, offset: 36, scale: 1.2 },
-    { kind: "containers", at: 0.6504, offset: -34, scale: 1.1 },
+    { kind: "crane", at: 0.5837, offset: -40, scale: 1.2 },
+    { kind: "containers", at: 0.6504, offset: -52, scale: 1.1 },
     { kind: "crane", at: 0.6971, offset: -36, scale: 1.3 },
     { kind: "crane", at: 0.7237, offset: 36, scale: 1.1 },
-    { kind: "warehouse", at: 0.7754, offset: 48, scale: 1.3 },
+    { kind: "warehouse", at: 0.7754, offset: -54, scale: 1.3 },
     { kind: "buoy", at: 0.8088, offset: -34 },
     { kind: "containers", at: 0.8672, offset: 33 },
     { kind: "crane", at: 0.9172, offset: -30, scale: 1.2 },

@@ -394,7 +394,7 @@ export function measureTrack(def: TrackDef, { tier = "high", things = true }: Me
   for (const p of spots) {
     if (p.margin) continue;
     const dy = terrain.heightAt(p.x, p.z) - p.y;
-    if (!rise || dy > rise.height) rise = { what: "ground", s: p.s, beyond: p.beyond, height: dy, depth: 0 };
+    if (!rise || dy > rise.height) rise = { what: `ground (road ${p.route})`, at: [p.x, p.z], s: p.s, beyond: p.beyond, height: dy, depth: 0 };
   }
 
   // Going out from the road across the drivable area and past the barrier: where is the first ground 2 m above the road there?
@@ -416,7 +416,7 @@ export function measureTrack(def: TrackDef, { tier = "high", things = true }: Me
           // Measured from the road's edge there (lift holds the edge's height beyond it): on a banked bend it is not the centre line's.
           const road = p.sample.y + (p.route === 0 ? probe.bank : Bank.of(geo.routes[p.route - 1]!)).lift(p.s, p.offset);
           if (terrain.heightAt(x, z) - road > 2) {
-            if (!flank || past < flank.beyond) flank = { what: "first flank", s: p.s, beyond: past, height: terrain.heightAt(x, z) - road, depth: -past };
+            if (!flank || past < flank.beyond) flank = { what: "first flank", at: [x, z], s: p.s, beyond: past, height: terrain.heightAt(x, z) - road, depth: -past };
             break;
           }
         }
