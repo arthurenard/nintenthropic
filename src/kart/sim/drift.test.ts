@@ -43,6 +43,40 @@ function turned(r: ReturnType<typeof race>, ticks: number, script: () => DriveIn
   return total;
 }
 
+describe("how fast a drift turns (MarioKart.js's rates)", () => {
+  // Degrees a second the way the kart goes turns over the second after the hop, at speed.
+  const rate = (script: () => DriveInput, then: () => DriveInput): number => {
+    const r = arena();
+    run(r, 16, script);
+    return (turned(r, 60, then) * 180) / Math.PI;
+  };
+
+  it("with the wheel straight, about 60°/s: a quarter turn takes a second and a half, not two thirds of one", () => {
+    const keys = rate(() => key(1, true), () => key(0, true));
+    expect(keys).toBeGreaterThan(40);
+    expect(keys).toBeLessThan(70);
+    const hands = rate(() => open(0.6), () => open(0));
+    expect(hands).toBeGreaterThan(40);
+    expect(hands).toBeLessThan(70);
+  });
+
+  it("held into the drift about 100°/s at most, as a full-lock turn; held against it, still the drift's way, gently", () => {
+    const into = rate(() => key(1, true), () => key(1, true));
+    expect(into).toBeLessThan(110);
+    expect(into).toBeGreaterThan(75);
+    const against = rate(() => key(1, true), () => key(-1, true));
+    expect(against).toBeGreaterThan(5);
+    expect(against).toBeLessThan(35);
+  });
+
+  it("follows a player's wheel smoothly: a jerk of the wheel for a tick barely changes the turn", () => {
+    const steady = rate(() => open(0.6), () => open(0.5));
+    let tick = 0;
+    const jerky = rate(() => open(0.6), () => open(tick++ % 6 === 0 ? 1 : 0.5));
+    expect(Math.abs(jerky - steady)).toBeLessThan(12);
+  });
+});
+
 describe("the keys and the pad: Mario Kart's model", () => {
   it("hops on the press with the wheel straight, and is no drift yet: the direction is not chosen", () => {
     const r = arena();
