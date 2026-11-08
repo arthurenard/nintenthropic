@@ -29,7 +29,7 @@ import { buildTrackMeshes, type TrackMeshes } from "./track";
 /** One drawn triangle that faces up, with the road it was drawn for. */
 interface Tri {
   road: number;
-  kind: "road" | "other";
+  kind: "road" | "verge" | "other";
   ax: number;
   ay: number;
   az: number;
@@ -66,6 +66,9 @@ export interface RoadAudit {
   /** Spots a kart can stand on beyond the road's edge, out to the barrier, with no surface drawn under them. */
   vergeHoles: number;
   vergeHole: Defect | null;
+  /** Spots on a road where a verge (its grass or deck) is drawn above the road's top, hiding it: a patch of grass on the road. */
+  buried: number;
+  buriedAt: Defect | null;
   /** Spots on the road's top where two roads' surfaces lie over one another at different heights (over 8 cm). */
   steps: number;
   step: Defect | null;
@@ -184,7 +187,8 @@ function build(def: TrackDef, tier: Tier) {
   const built: TrackMeshes[] = roads.map((road, r) => buildTrackMeshes(road, style, terrain, quality, 64, r === 0 ? undefined : terrain.routeFeatures[r - 1]));
   built.forEach((m, r) => {
     for (const g of m.road) collect(grid, g, r, "road");
-    for (const g of [...m.verge, ...m.deco]) collect(grid, g, r, "other");
+    for (const g of m.verge) collect(grid, g, r, "verge");
+    for (const g of m.deco) collect(grid, g, r, "other");
     if (m.additive) collect(grid, m.additive, r, "other", undefined, true);
     for (const g of m.deco) {
       eachTriangle(g, IDENTITY, (a, b, c) => {
@@ -222,6 +226,8 @@ export function auditRoads(def: TrackDef, tier: Tier = "high"): RoadAudit {
     holeList: [],
     vergeRun: 0,
     vergeHole: null,
+    buried: 0,
+    buriedAt: null,
     steps: 0,
     step: null,
     phantoms: 0,
@@ -326,11 +332,13 @@ export function auditRoads(def: TrackDef, tier: Tier = "high"): RoadAudit {
           let covered = false;
           let top = -Infinity;
           let lowest = Infinity;
+          let verge = -Infinity;
           const ys: { y: number; road: number }[] = [];
           grid.at(x, z, (t, y) => {
             // A surface a kart could stand on: at its height, or up a ramp's wedge.
             if (y < want - 0.35 || y > want + 3.2) return;
             covered = true;
+            if (t.kind === "verge") verge = Math.max(verge, y);
             if (t.kind === "road") {
               top = Math.max(top, y);
               lowest = Math.min(lowest, y);
@@ -350,6 +358,10 @@ export function auditRoads(def: TrackDef, tier: Tier = "high"): RoadAudit {
             }
           }
           if (!onRoad) continue;
+          if (top > -Infinity && verge > top + 0.02) {
+            out.buried++;
+            out.buriedAt = worse(out.buriedAt, { ...d, size: verge - top });
+          }
           if (top > -Infinity) {
             // The drawn road against the sim's height and the banking (a ramp's wedge only raises it).
             const miss = Math.max(0, want - top, lowest - want > 0.3 ? lowest - want : 0);

@@ -217,13 +217,21 @@ function hills(geo: TrackGeometry): Pick<Terrain, "grade" | "crest" | "fallBehin
   const stretch = geo.stretch;
   const grade = new Float32Array(n);
   const crest = new Float32Array(n);
+  // Near a branch road's ends only the road there is read (the span either side cut short to what there is): read as far as
+  // a clamped end, a sloping branch had half its grade at its first metre and a crest beside it that was not in the road.
   for (let i = 0; i < n; i++) {
     const s = geo.samples[i]!.s;
-    grade[i] = (y(s + span) - y(s - span)) / (2 * span * stretch);
+    const ahead = geo.open ? Math.min(span, (n - 1 - i) * spacing) : span;
+    const behind = geo.open ? Math.min(span, i * spacing) : span;
+    grade[i] = ahead + behind > 0 ? (y(s + ahead) - y(s - behind)) / ((ahead + behind) * stretch) : 0;
   }
   // The bow over a crest is how fast the grade falls away, read over the same span.
   const reach = Math.max(1, Math.round(span / spacing));
-  for (let i = 0; i < n; i++) crest[i] = -(grade[idx(i + reach)]! - grade[idx(i - reach)]!) / (2 * reach * spacing * stretch);
+  for (let i = 0; i < n; i++) {
+    const hi = geo.open ? Math.min(n - 1, i + reach) : i + reach;
+    const lo = geo.open ? Math.max(0, i - reach) : i - reach;
+    crest[i] = hi > lo ? -(grade[idx(hi)]! - grade[idx(lo)]!) / ((hi - lo) * spacing * stretch) : 0;
+  }
   const back = Math.max(1, Math.round(TUNING.slope.carry / spacing));
   const fallBehind = new Float32Array(n);
   const fallAhead = new Float32Array(n);

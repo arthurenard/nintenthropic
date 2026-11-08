@@ -1,7 +1,7 @@
 /**
  * A top-down picture of a track as an SVG, for designing and checking it:
  * the road with its width, kerbs on the tight bends, the start line, ramps,
- * open edges (red), gaps (the road missing), verges, patches of ice, mud and
+ * drops beside the road (blue: a rail stands over each), gaps (red: the road missing), verges, patches of ice, mud and
  * boost strip, hazards (with their paths), item rows, boost pads, landmarks
  * by name, and the duck; under it, the road's height along the lap (steep
  * stretches in red, crests sharp enough to fly over marked) and its lean.
@@ -12,6 +12,9 @@
  */
 import { TrackGeometry, type Landmark, type Surface, type TrackDef } from "./geometry";
 import { hazardAt } from "./hazards";
+
+/** A drop beside the road: railed, so not a fall, but high over nothing. */
+const DROP = "#3d7bd9";
 
 export interface MapOptions {
   /** Width and height of the picture in pixels (default 1100). */
@@ -148,7 +151,7 @@ export function trackMapSvg(def: TrackDef, options: MapOptions = {}): string {
     const to = d.to * geo.length;
     for (const sign of [-1, 1]) {
       if ((sign < 0 && d.side === "right") || (sign > 0 && d.side === "left")) continue;
-      push(`<polygon points="${band(from, to, (s) => sign * half(s), (s) => sign * (half(s) + 7))}" fill="#e5334b" opacity="0.28"/>`);
+      push(`<polygon points="${band(from, to, (s) => sign * half(s), (s) => sign * (half(s) + 7))}" fill="${DROP}" opacity="0.35"/>`);
     }
   }
 
@@ -239,7 +242,7 @@ export function trackMapSvg(def: TrackDef, options: MapOptions = {}): string {
     for (const d of rr.def.drops ?? []) {
       for (const sign of [-1, 1]) {
         if (d.gap || (sign < 0 && d.side === "right") || (sign > 0 && d.side === "left")) continue;
-        push(`<polygon points="${rband(d.from * geo.length, d.to * geo.length, (s) => sign * rhalf(s), (s) => sign * (rhalf(s) + 6))}" fill="#e5334b" opacity="0.28"/>`);
+        push(`<polygon points="${rband(d.from * geo.length, d.to * geo.length, (s) => sign * rhalf(s), (s) => sign * (rhalf(s) + 6))}" fill="${DROP}" opacity="0.35"/>`);
       }
     }
     {
@@ -355,7 +358,8 @@ export function trackMapSvg(def: TrackDef, options: MapOptions = {}): string {
   push(`<text x="${margin}" y="76" font-size="12" fill="${ink}" opacity="0.8">${esc(def.blurb ?? "")}</text>`);
   // Legend.
   const legend: [string, string][] = [
-    ["#e5334b", "open edge / gap"],
+    [DROP, "drop (railed)"],
+    ["#e5334b", "gap"],
     ["#e8890c", "verge barrier"],
     ["#ffd60a", "ramp (* trick)"],
     ["#00b7d4", "cannon / glide / lip"],
