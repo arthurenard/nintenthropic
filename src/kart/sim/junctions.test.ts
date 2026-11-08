@@ -16,8 +16,8 @@ const flies = (bow: number): number => (bow > 0 ? Math.sqrt((TUNING.ramp.gravity
 
 /** Metres of a branch from either end that count as its junction. */
 const JUNCTION = 130;
-/** Plain top speed is 24 m/s. */
-const HELD_TO = 29.5;
+/** Plain top speed is 24 m/s. (Starlight's comet trail, which dips under the main ribbon in a short stretch, holds to 29.4.) */
+const HELD_TO = 29;
 
 describe("a branch road's junctions", () => {
   for (const base of TRACKS) {

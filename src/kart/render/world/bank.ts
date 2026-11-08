@@ -46,6 +46,8 @@ export class Bank {
   /** A branch only: the road it leaves, its banking, and which samples lie near enough to it for the join to matter. */
   private readonly main: TrackGeometry | null;
   private readonly near: Uint8Array | null;
+  /** A branch only: where on the road it leaves each of its samples is nearest (lap metres), to look for it there and not along the whole loop. */
+  private readonly mainS: Float64Array | null;
 
   constructor(track: TrackGeometry) {
     const n = track.samples.length;
@@ -57,13 +59,16 @@ export class Bank {
     this.halfWidths = Float32Array.from(track.samples, (s) => s.width / 2);
     this.main = track.open ? (track as unknown as { main: TrackGeometry }).main : null;
     this.near = null;
+    this.mainS = null;
     const bank = track.def.bank ?? 0;
     let any = bank !== 0 || track.samples.some((s) => s.bank !== 0);
     if (this.main) {
       const near = new Uint8Array(n);
+      const mainS = new Float64Array(n);
       const reach = ROUTE_JOIN_EASE + 4;
       track.samples.forEach((a, i) => {
         const p = this.main!.projectLoop(a.x, a.z);
+        mainS[i] = p.s;
         // Only the stretch of road it replaces, and a little each side: a branch may pass over another part of the loop.
         if (Math.abs(this.main!.delta(p.s, a.s)) > ROUTE_JOIN_REACH + (track as unknown as { span: number }).span) return;
         if (Math.hypot(a.x - p.sample.x, a.z - p.sample.z) <= a.width / 2 + p.sample.width / 2 + reach) {
@@ -72,6 +77,7 @@ export class Bank {
         }
       });
       this.near = near;
+      this.mainS = mainS;
     }
     this.any = any;
     if (!bank && !track.samples.some((s) => s.bank !== 0)) return;
@@ -121,7 +127,7 @@ export class Bank {
     const o = Math.max(-hw, Math.min(hw, offset));
     const own = -o * Math.tan(this.roll[k]!);
     if (!this.near || !this.near[k]) return own;
-    return own + this.join(this.track.samples[k]!, offset, own);
+    return own + this.join(this.track.samples[k]!, offset, own, this.mainS![k]);
   }
 
   /**
@@ -137,7 +143,7 @@ export class Bank {
     const o = Math.max(-hw, Math.min(hw, offset));
     const own = -o * Math.tan(this.rollAt(s));
     if (!this.near || !this.near[i]) return own;
-    return own + this.join(this.track.at(s), offset, own);
+    return own + this.join(this.track.at(s), offset, own, this.mainS![i]);
   }
 
   /**
@@ -146,18 +152,19 @@ export class Bank {
    * clear of its edge. Also how far inside that road it is (`apart`, negative inside), for the mesh to leave out what the road
    * already draws.
    */
-  private join(c: TrackSample, offset: number, own: number): number {
-    const m = this.joinAt(c, offset);
+  private join(c: TrackSample, offset: number, own: number, hint?: number): number {
+    const m = this.joinAt(c, offset, hint);
     if (!m || m.w <= 0) return 0;
     return m.w * (m.surface - (c.y + own));
   }
 
-  private joinAt(c: TrackSample, offset: number): { w: number; surface: number; apart: number } | null {
+  private joinAt(c: TrackSample, offset: number, hint?: number): { w: number; surface: number; apart: number } | null {
     const main = this.main;
     if (!main) return null;
     const x = c.x - c.tz * offset;
     const z = c.z + c.tx * offset;
-    const p = main.projectLoop(x, z);
+    // Around where the branch's sample is nearest the road (40 m either way): the point is at most a verge's width from it.
+    const p = main.projectLoop(x, z, hint);
     const apart = Math.hypot(x - p.sample.x, z - p.sample.z) - p.sample.width / 2;
     const w = 1 - smooth01((apart + ON_ROAD) / ROUTE_JOIN_EASE);
     const across = Math.max(-p.sample.width / 2, Math.min(p.sample.width / 2, p.offset));
@@ -172,7 +179,7 @@ export class Bank {
     if (!this.near) return false;
     const k = this.open ? Math.max(0, Math.min(this.roll.length - 1, i)) : i;
     if (!this.near[k]) return false;
-    const m = this.joinAt(this.track.samples[k]!, offset);
+    const m = this.joinAt(this.track.samples[k]!, offset, this.mainS![k]);
     return m !== null && m.apart < -ON_ROAD;
   }
 }

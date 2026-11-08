@@ -890,7 +890,15 @@ export class RouteRoad extends TrackGeometry {
     // angle climbed a few metres in a dozen (a grade of a quarter) and its crest threw a kart at top speed into the air; so
     // the blend is held at the main road's for as long as the roads overlap (never later: that is a step) and eased over a
     // distance that grows with the height to make up, smooth enough that its crest holds a kart to over 30 m/s.
-    const easeSamples = Math.max(1, Math.round(Math.min(ROUTE_RISE_LONGEST, Math.max(ROUTE_RISE_SHORTEST, rise / ROUTE_RISE_GRADE)) / 2 / step));
+    // A short branch still comes most of the way to its own heights in its middle, however much it has to make up (Starlight's
+    // comet trail runs under the main ribbon's edge most of its way, and is a lower ribbon only for some forty metres): its ease
+    // is at most an eighth of the stretch clear of the main road, and steeper there than ROUTE_RISE_GRADE.
+    const firstFree = joins.findIndex((j) => j > 0);
+    let lastFree = joins.length - 1;
+    while (lastFree > 0 && joins[lastFree]! <= 0) lastFree--;
+    const free = firstFree >= 0 ? lastFree - firstFree : 0;
+    const wanted = Math.round(Math.min(ROUTE_RISE_LONGEST, Math.max(ROUTE_RISE_SHORTEST, rise / ROUTE_RISE_GRADE)) / 2 / step);
+    const easeSamples = Math.max(1, Math.min(wanted, Math.floor(free / 8)));
     const blend = easeJoins(joins, easeSamples);
     const samples: TrackSample[] = [];
     for (let i = 0; i <= count; i++) {
