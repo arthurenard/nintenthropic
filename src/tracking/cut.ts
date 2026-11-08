@@ -51,6 +51,8 @@ function uploadedWhite(frame: VideoFrame): boolean {
   gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
   gl.deleteFramebuffer(buffer);
   gl.deleteTexture(texture);
+  // Give the context back at once: a page holds only a few, and the race and the previews need theirs.
+  gl.getExtension("WEBGL_lose_context")?.loseContext();
   return isWhite(pixel[0]);
 }
 

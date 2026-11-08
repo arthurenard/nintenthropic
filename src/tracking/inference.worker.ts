@@ -273,7 +273,9 @@ function readTiles(image: VideoFrame | ImageBitmap, timestamp: number): SeenHand
     if (!due[i]) return { tile, hands: [] as SeenHand[], read: false };
     let canvas = tileCanvases[i];
     if (!canvas || canvas.width !== tile.width || canvas.height !== tile.height) canvas = tileCanvases[i] = new OffscreenCanvas(tile.width, tile.height);
-    canvas.getContext("2d")!.drawImage(image, tile.x, tile.y, tile.width, tile.height, 0, 0, tile.width, tile.height);
+    // The whole frame shifted onto the tile's canvas, not drawImage's source rectangle, which Safari ignores for a
+    // VideoFrame (see cropped below and cut.ts).
+    canvas.getContext("2d")!.drawImage(image, -tile.x, -tile.y);
     return { tile, hands: seenHands(landmarkers[i]!.detectForVideo(canvas, timestamp)), read: true };
   });
   schedule.record(found.map((one) => (one.read ? one.hands.length : null)));

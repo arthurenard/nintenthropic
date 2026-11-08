@@ -50,6 +50,7 @@ function browser(cuts: { draw: boolean; upload: boolean }) {
         },
         deleteFramebuffer() {},
         deleteTexture() {},
+        getExtension: () => ({ loseContext() {} }),
       };
     }
   }
