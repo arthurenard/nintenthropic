@@ -43,6 +43,7 @@ import type { FaceLandmarker, HandLandmarker } from "@mediapipe/tasks-vision";
 import { DownloadError, fetchBytes, siteUrl } from "../engine/fetch";
 import { Samples, type Percentiles } from "../engine/stats";
 import { ModelError } from "./errors";
+import { framesHonourCut } from "./cut";
 import { eyesFrom } from "./eyes";
 import { seenHands } from "./hands";
 import type { LandmarkerProgress } from "./landmarker";
@@ -457,7 +458,11 @@ class LaneTracker extends BaseTracker {
   /** One try of the other delegate at a time, across the workers. */
   private readonly trials = new Trials();
 
-  constructor(private readonly lanes: Lane[]) {
+  constructor(
+    private readonly lanes: Lane[],
+    /** Whether the browser cuts a VideoFrame to a column (visibleRect, see cut.ts); where it does not, the workers cut it. */
+    private cutHere = true,
+  ) {
     super();
     this.tileSchedule = new TileSchedule(lanes.length);
     lanes.forEach((lane, i) => lane.worker.addEventListener("message", (event: MessageEvent<FromWorker>) => this.received(i, event.data)));
@@ -527,9 +532,6 @@ class LaneTracker extends BaseTracker {
     this.columnsOf = { width, height, tiles };
     return tiles;
   }
-
-  /** Whether the browser cuts a VideoFrame to a column (visibleRect); where it cannot, the workers cut it. */
-  private cutHere = true;
 
   /** The camera's frame for one column: cut to it, or whole (with the column for the worker to cut). Null before the camera has a frame. */
   private frameFor(video: HTMLVideoElement, capturedAt: number, tile: Rect): VideoFrame | null {
@@ -679,6 +681,11 @@ export interface TrackerOptions {
   adapt?: boolean;
   /** Load the face landmarker too (a game that reads the eye is the first to be played). */
   face?: boolean;
+  /**
+   * With lanes: whether the page cuts each column out of the camera's frame (VideoFrame's visibleRect, no copy) or
+   * the workers do. Absent: asked of the browser, which does not always do what it says (cut.ts). For tests and timing.
+   */
+  cutOnPage?: boolean;
 }
 
 function workerSupported(): boolean {
@@ -728,12 +735,15 @@ async function startWorker(progress: LandmarkerProgress, prefer: "GPU" | "CPU", 
 }
 
 /** A LaneTracker over workers whose landmarkers have started (startLanes; the tests give it stand-ins). */
-export function makeLaneTracker(workers: readonly { worker: Worker; delegate: "GPU" | "CPU" }[], adapt = false): Tracker & { readonly delegates: ("GPU" | "CPU")[] } {
-  return new LaneTracker(workers.map(({ worker, delegate }) => ({ worker, delegate, busy: false, tile: null, width: 0, height: 0, placed: [], watch: adapt ? new DelegateWatch(delegate) : null, sentAt: -Infinity })));
+export function makeLaneTracker(workers: readonly { worker: Worker; delegate: "GPU" | "CPU" }[], adapt = false, cutHere = true): Tracker & { readonly delegates: ("GPU" | "CPU")[] } {
+  return new LaneTracker(
+    workers.map(({ worker, delegate }) => ({ worker, delegate, busy: false, tile: null, width: 0, height: 0, placed: [], watch: adapt ? new DelegateWatch(delegate) : null, sentAt: -Infinity })),
+    cutHere,
+  );
 }
 
 /** Starts a worker for each tile, each with its own landmarker for two hands, on the delegate asked for it (LaneTracker). */
-async function startLanes(progress: LandmarkerProgress, delegates: readonly ("GPU" | "CPU")[], hands: number, confidence?: number, adapt = false): Promise<Tracker> {
+async function startLanes(progress: LandmarkerProgress, delegates: readonly ("GPU" | "CPU")[], hands: number, confidence?: number, adapt = false, cutOnPage?: boolean): Promise<Tracker> {
   const binary = siteUrl("mediapipe/vision_wasm_module_internal.wasm");
   const [wasm, model] = await Promise.all([fetchBytes(binary, progress.wasm, WASM_BYTES), fetchBytes(siteUrl("models/hand_landmarker.task"), progress.model, MODEL_BYTES)]);
   const workers: Worker[] = [];
@@ -768,7 +778,7 @@ async function startLanes(progress: LandmarkerProgress, delegates: readonly ("GP
         return { worker, delegate };
       }),
     );
-    return makeLaneTracker(lanes, adapt);
+    return makeLaneTracker(lanes, adapt, cutOnPage ?? framesHonourCut());
   } catch (error) {
     for (const worker of workers) worker.terminate();
     throw error;
@@ -785,7 +795,7 @@ export async function loadTracker(progress: LandmarkerProgress, options: Tracker
       const tiles = Math.round(options.tiles ?? 1);
       if (tiles > 1 && options.lanes?.length === tiles && !options.face) {
         try {
-          return await startLanes(progress, options.lanes, hands, options.confidence, options.adapt);
+          return await startLanes(progress, options.lanes, hands, options.confidence, options.adapt, options.cutOnPage);
         } catch (error) {
           if (error instanceof DownloadError) throw error;
           console.warn("Hand tracking in a worker for each player is unavailable; one worker reads them all.", error);
