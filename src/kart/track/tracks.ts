@@ -833,16 +833,16 @@ export const GLACIER_PASS: TrackDef = {
       // and two icicles let go in turn beside it. The longer way, and the one the avalanche cannot reach.
       id: "falls",
       kind: "split",
-      from: 0.5923,
-      to: 0.668,
+      from: 0.585,
+      to: 0.672,
       width: 11,
       flare: 24,
       appeal: 0.55,
       points: [
-        { x: -180, z: 58, y: 4.7 },
-        { x: -214, z: 36, y: 4.2 },
-        { x: -214, z: 10, y: 3.8 },
-        { x: -180, z: -12, y: 3.4 },
+        { x: -180, z: 68, y: 4.9 },
+        { x: -208, z: 44, y: 4.4 },
+        { x: -214, z: 14, y: 3.9 },
+        { x: -194, z: -12, y: 3.5 },
       ],
       surfaces: [{ from: 0.32, to: 0.78, kind: "boost", offset: 0, width: 3 }],
       hazards: [

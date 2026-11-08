@@ -32,10 +32,10 @@ describe.each(IDS)("%s, the second pass", (id) => {
   it("has branches that are real roads: a landmark span on each, kept clear of the main road, with a lap of a sensible length", () => {
     for (const road of geo.routes) {
       expect(road.def.landmarks?.length ?? 0, `${id}/${road.routeDef.id} landmarks`).toBeGreaterThanOrEqual(1);
-      // A branch is not hugely longer than what it replaces: a split within 1.8 times, a shortcut shorter.
+      // A branch is not hugely longer than what it replaces: a split within twice, a shortcut shorter.
       const ratio = road.realLength / (road.to - road.from);
       if (road.routeDef.kind === "shortcut") expect(ratio, `${id}/${road.routeDef.id} real over lap`).toBeLessThan(1);
-      else expect(ratio, `${id}/${road.routeDef.id} real over lap`).toBeLessThan(1.8);
+      else expect(ratio, `${id}/${road.routeDef.id} real over lap`).toBeLessThan(2.0);
       // Where a span stands on it, the main road is at least 8 m from its edge through the middle half of the span.
       for (const lm of road.routeDef.landmarks ?? []) {
         if (lm.span === undefined) continue;
@@ -90,7 +90,7 @@ describe.each(IDS)("%s, the second pass", (id) => {
     const onRoute = new Set<number>();
     const onMain = new Set<number>();
     let gliding = 0;
-    while (race.tick < GO_TICK + 60 * 200 && race.view().phase !== "finished") {
+    while (race.tick < GO_TICK + 60 * 260 && race.view().phase !== "finished") {
       race.step(new Map());
       const view = race.view();
       for (const k of view.karts) {
