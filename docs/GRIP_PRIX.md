@@ -26,14 +26,17 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   speed, held it takes about a second to lose most of it and under one and
   a half to crawl, and the kart flows on into backing up without stopping dead. You
   still steer while reversing — open hands are tracked as well as fists.
-- **Drift.** Open both hands in a bend at speed, as if braking into it: the
-  kart hops into a power-slide that way, its tail swinging out, and keeps its
-  speed while the hands stay open. Turn into the slide to tighten it (the tail
-  swings further), against it to run wider; hold it hard against the slide
-  and the kart straightens out of it. Sparks grow blue, then orange, then
-  white-hot; close your hands to let go, and the kart boosts — longer for
-  each colour. It is the wheel's only drift: however far the wheel is
-  turned, fists only steer.
+- **Drift.** Open both hands at speed with the wheel turned a little, as if
+  braking into a bend: the kart hops into a power-slide that way, its tail
+  swinging out, and keeps its speed for as long as the hands stay open.
+  Open them on a straight and turn in later and it is a drift from the turn-in;
+  open them with no turn and it is only a brake. The slide holds its direction
+  for the whole bend, as on a real Mario Kart: turn into it to tighten it (the
+  tail swings further), against it to run wider, but the wheel never ends it,
+  nor does a wobble of the hands or a frame or two in which the camera takes
+  them for fists. Sparks grow blue, then orange, then white-hot; close your
+  hands to let go, and the kart boosts — longer for each colour. It is the
+  wheel's only drift: fists only steer.
 - **Jumps and tricks.** Ramps throw the kart into the air, and so does the
   top of a hill taken fast. In the air, shake the wheel (quick left and right
   turns): the kart twirls, and boosts when it lands.
@@ -94,6 +97,9 @@ Grip Prix's own (no plumbers, no shells, no question-mark boxes).
   WASD, Space to drift (and to trick in the air), Left-Right-Left quickly to
   shake, E or Shift for the item; a gamepad's left stick, triggers, A to
   drift, the stick flicked left-right-left to shake, B or X for the item.
+  Their drift is Mario Kart's: a tap hops, the wheel's direction on landing (or
+  the first turn after it, with the button held) is the drift's, holding it
+  keeps it, letting go boosts; the brake is a pedal of its own and does not end it.
 
 ### Items
 
@@ -345,21 +351,32 @@ The numbers (all in `sim/tuning.ts`):
   gives over a typical 10 m/s shed (24 to 14 m/s takes about 0.6 s). 18 and 20
   were tried on five tracks, two seeds each: laps within noise, no falls
   either way, so it stays at 16.
-- **Hop and drift.** `drift` rising at over 10 m/s with |steer| > 0.3 hops
-  (0.25 s, up to 0.35 m) into a drift that way: a power-slide. The way the
+- **Hop and drift.** `drift` rising at over 10 m/s hops (0.25 s, up to 0.35 m).
+  With `drift` held and |steer| > 0.15 (`hop.minSteer`) the drift starts that way:
+  in the hop, after it, or from a straight into a bend with the button still down
+  (over 10 m/s; 8 in the hop). In the hop the wheel thrown the other way (own ≤
+  -0.5, `drift.flip`) turns it round: the direction is the wheel's on landing. A
+  power-slide: the way the
   kart goes turns at 0.9 + 0.5 × own of a full turn (own: the wheel into the
   drift 1, straight 0, against it -1: 0.4..1.4), and its nose swings out to
   0.42 + 0.16 × own radians inside that (15°..33°), most of the way within the
   hop; it keeps 97% of the top speed; ice lets it slide on instead of coming
   round. Charge builds faster the tighter it turns: level 1 (blue) at 1.0 s,
   level 2 (orange) at 2.1 s, level 3 (the hottest) at 3.4 s of a middling
-  turn. `drift` falling, a brake, or the wheel held at own ≤ -0.8 for 0.25 s
-  (the way out of a slide toward the other side of the road) ends it: boosts
-  of 0.7, 1.3 and 1.9 s. The wheel's brake comes with `slide` (its open
-  hands): at over 10 m/s with |steer| > 0.3, or in a drift or its hop, it is
-  `drift` held with the throttle down instead of a brake, so a brake into a
-  bend slides and the hands closing let go; going straight or slower it
-  brakes. Keys and pads never slide.
+  turn. Only `drift` falling (or the speed under 4 m/s, for nothing) ends it:
+  boosts of 0.7, 1.3 and 1.9 s. The wheel held against it only widens the turn
+  (0.4 of a full turn at worst) and never ends it, as a brake held in it (keys,
+  pad) only slows the kart; the old rules that did (a brake over 0.5, the wheel
+  at own ≤ -0.8 for 0.25 s) were what made a drift end by itself mid-bend. The
+  wheel's brake comes with `slide` (its open hands): at over 10 m/s with
+  |steer| > 0.2 (`drift.wheel.steer`: a turn of about 16° of the wheel) for 3
+  ticks (`drift.wheel.ask`: a wobble of resting hands is no turn), it is `drift`
+  held with the throttle down instead of a brake; from then on the hands alone
+  hold it, whatever the wheel does, and a reading of them that goes missing is
+  waited out for 0.15 s (`drift.wheel.lapse`) before the drift is let go with
+  its boost (`KartState.slid`, `lapse`, `ask`). Going straight, under the turn
+  or slower it brakes, and backs up from a standstill. Keys and pads never
+  slide. The wheel's drift keeps the turn that began it (no flip in the hop).
   Off the road the charge does not build. Let go, the nose comes back to the
   way the kart goes within a quarter of a second.
 - **Hills.** Gravity pulls 9 m/s² per unit of grade along the road (from
@@ -438,8 +455,10 @@ The numbers (all in `sim/tuning.ts`):
     an open edge or on ice. Mistakes per bend: 11% at skill 0, a quarter of
     that at skill 1, times 0.35 (careful), 1 (aggressive) or 1.8 (erratic).
     In a slide it steers by the way it is going (`courseOf`), and a slide
-    carrying it wide it saves by holding the wheel hard against it, which
-    straightens the kart out. From skill 0.5 it may shake the wheel at a trick ramp's
+    carrying it wide, or a bend gentler than the slide, it lets go of (the
+    drift button up) once its wheel has been at own ≤ -0.8 for 0.25 s
+    (`bots.driftOut`), as it does for a hard brake (`bots.driftBrake`); a
+    wheel against the drift only widens it now. From skill 0.5 it may shake the wheel at a trick ramp's
     lip to kick the jump (its skill times 1 aggressive, 0.9 erratic, 0.5
     careful), and tricks in the air by skill otherwise.
   - *Racecraft* against every kart, bot or person: catching one, it picks a
@@ -586,7 +605,7 @@ the tracks that do (24 to 34 when the machine was quiet): under 0.4% of a frame.
   road a kart is on, the Party Rules card, who hit whom, and the second pass on
   every track). A snapshot is one JSON line, about 1.1 KB for
   eight karts: the tick, the dice, the items in the air, the eggs, and the
-  kart table, 55 numbers a kart (the last, which road it is on) (where it is and how fast, drift, boost, item,
+  kart table, 58 numbers a kart (the last three: the open hands' ask, whether they began the drift, and a bot's counter-steer; the grace takes the old counter's place; protocol 11) (where it is and how fast, drift, boost, item,
   lap, the bot's own state...). A kart's row is mostly zeros and what the kart
   before it has, so the table goes as its first row against zeros and each
   row after as what differs from the row before it: a word of bits for every
