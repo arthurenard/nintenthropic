@@ -1,0 +1,152 @@
+<!doctype html>
+<!-- Two or more players on one camera, read as the game reads them, served by the dev server only: a picture
+     (/__scene.jpg, handed over by the test) drawn at a known place on a camera-sized canvas, played as a video, and
+     read by the tracker with a worker per column (?seats=2). It reports where each hand comes back in the whole
+     picture, and what the browser does with a VideoFrame cut to a column (does texImage2D, which is how MediaPipe
+     uploads a frame, see the column or the whole picture?). Driven by e2e/seats.spec.ts and tools/seats/probe.mjs.
+     ?x=&y=&w=&h= place the picture (fractions of the canvas), ?delegate=GPU reads the first column on the GPU. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <base href="/" />
+    <title>Seats on one camera</title>
+  </head>
+  <body style="margin: 0; background: #000">
+    <canvas id="frame" width="1280" height="720"></canvas>
+    <video id="video" muted playsinline></video>
+    <script type="module">
+      import { loadTracker } from "/src/tracking/tracker.ts";
+      import { framesHonourCut } from "/src/tracking/cut.ts";
+      const params = new URLSearchParams(location.search);
+      const num = (name, fallback) => (params.has(name) ? Number(params.get(name)) : fallback);
+      const report = (window.seats = { error: null, done: false });
+      const WALL = [0xc9, 0xa9, 0x8a];
+      try {
+        const seats = num("seats", 2);
+        const canvas = document.getElementById("frame");
+        const context = canvas.getContext("2d");
+        const image = new Image();
+        image.src = params.get("scene") ?? "/__scene.jpg";
+        report.step = "decode"; await image.decode(); report.step = "decoded";
+        const at = { x: num("x", 0) * canvas.width, y: num("y", 0) * canvas.height, w: num("w", 0.5) * canvas.width, h: num("h", 1) * canvas.height };
+        let tick = 0;
+        const paint = () => {
+          context.fillStyle = "#c9a98a";
+          context.fillRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(image, at.x, at.y, at.w, at.h);
+          // A new frame each time, as a camera gives: nudge one pixel.
+          context.fillStyle = tick++ % 2 ? "#000" : "#010101";
+          context.fillRect(0, 0, 1, 1);
+        };
+        paint();
+        const video = document.getElementById("video");
+        video.srcObject = canvas.captureStream(30);
+        const timer = setInterval(paint, 33); report.step = "play"; await video.play(); report.step = "playing";
+
+
+        // What the browser gives for a VideoFrame cut to the picture's right half: its size, and where the scene's
+        // ink ends (as a fraction of the width) in what drawImage and a WebGL texture upload (MediaPipe's way) hold.
+        // The scene is in the left half of the picture, so a cut that is honoured shows (almost) none of it.
+        const column = { x: canvas.width / 2, y: 0, width: canvas.width / 2, height: canvas.height };
+        report.video = { width: video.videoWidth, height: video.videoHeight };
+        try {
+          const frame = new VideoFrame(video, { timestamp: 1, visibleRect: column });
+          report.cut = {
+            codedWidth: frame.codedWidth,
+            codedHeight: frame.codedHeight,
+            displayWidth: frame.displayWidth,
+            displayHeight: frame.displayHeight,
+            visibleRect: frame.visibleRect && { x: frame.visibleRect.x, y: frame.visibleRect.y, width: frame.visibleRect.width, height: frame.visibleRect.height },
+          };
+          const inkEnd = (small) => {
+            const data = small.getContext("2d").getImageData(0, 0, 128, 72).data;
+            let last = -1;
+            for (let x = 0; x < 128; x++) {
+              const o = (36 * 128 + x) * 4;
+              if (Math.abs(data[o] - WALL[0]) + Math.abs(data[o + 1] - WALL[1]) + Math.abs(data[o + 2] - WALL[2]) > 40) last = x;
+            }
+            return last < 0 ? 0 : (last + 1) / 128;
+          };
+          const small = document.createElement("canvas");
+          small.width = 128;
+          small.height = 72;
+          small.getContext("2d").drawImage(frame, 0, 0, 128, 72);
+          report.drawImageInkEnd = inkEnd(small);
+          const glc = document.createElement("canvas");
+          glc.width = 128;
+          glc.height = 72;
+          const g = glc.getContext("webgl", { preserveDrawingBuffer: true });
+          const shader = (type, source) => {
+            const s = g.createShader(type);
+            g.shaderSource(s, source);
+            g.compileShader(s);
+            return s;
+          };
+          const prog = g.createProgram();
+          g.attachShader(prog, shader(g.VERTEX_SHADER, "attribute vec2 p; varying vec2 u; void main(){ u = vec2(p.x*.5+.5, .5-p.y*.5); gl_Position = vec4(p,0,1); }"));
+          g.attachShader(prog, shader(g.FRAGMENT_SHADER, "precision mediump float; varying vec2 u; uniform sampler2D t; void main(){ gl_FragColor = texture2D(t,u); }"));
+          g.linkProgram(prog);
+          g.useProgram(prog);
+          g.bindBuffer(g.ARRAY_BUFFER, g.createBuffer());
+          g.bufferData(g.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), g.STATIC_DRAW);
+          const loc = g.getAttribLocation(prog, "p");
+          g.enableVertexAttribArray(loc);
+          g.vertexAttribPointer(loc, 2, g.FLOAT, false, 0, 0);
+          g.bindTexture(g.TEXTURE_2D, g.createTexture());
+          g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR);
+          g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE);
+          g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
+          g.texImage2D(g.TEXTURE_2D, 0, g.RGBA, g.RGBA, g.UNSIGNED_BYTE, frame);
+          g.drawArrays(g.TRIANGLE_STRIP, 0, 4);
+          const copy = document.createElement("canvas");
+          copy.width = 128;
+          copy.height = 72;
+          copy.getContext("2d").drawImage(glc, 0, 0);
+          report.texImageInkEnd = inkEnd(copy);
+          frame.close();
+        } catch (error) {
+          report.cutError = String(error);
+        }
+
+        report.honoursCut = framesHonourCut(); report.step = "load"; const tracker = await loadTracker(
+          { wasm: () => {}, model: () => {} },
+          {
+            where: "worker",
+            prefer: "CPU",
+            hands: seats * 2,
+            confidence: 0.4,
+            tiles: seats,
+            ...(params.get("cut") === "worker" ? { cutOnPage: false } : params.get("cut") === "page" ? { cutOnPage: true } : {}),
+            lanes: Array.from({ length: seats }, (_, i) => (i === 0 && params.get("delegate") === "GPU" ? "GPU" : "CPU")),
+          },
+        );
+        report.where = tracker.where;
+        // Every hand seen, as palm centres in the whole picture (the camera's own, unmirrored).
+        const palms = [];
+        tracker.subscribe((frame) => {
+          for (const hand of frame.hands) {
+            let x = 0;
+            let y = 0;
+            for (const i of [0, 5, 9, 13, 17]) {
+              x += hand.landmarks[i].x;
+              y += hand.landmarks[i].y;
+            }
+            palms.push({ x: x / 5, y: y / 5 });
+          }
+        });
+        tracker.start(video);
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        tracker.resetStats();
+        await new Promise((resolve) => setTimeout(resolve, num("ms", 6000)));
+        report.palms = palms;
+        report.counts = tracker.counts();
+        report.stats = tracker.stats();
+        clearInterval(timer);
+        tracker.dispose();
+      } catch (error) {
+        report.error = String(error?.stack || error);
+      }
+      report.done = true;
+    </script>
+  </body>
+</html>

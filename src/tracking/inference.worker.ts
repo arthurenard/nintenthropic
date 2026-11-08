@@ -273,18 +273,25 @@ function readTiles(image: VideoFrame | ImageBitmap, timestamp: number): SeenHand
     if (!due[i]) return { tile, hands: [] as SeenHand[], read: false };
     let canvas = tileCanvases[i];
     if (!canvas || canvas.width !== tile.width || canvas.height !== tile.height) canvas = tileCanvases[i] = new OffscreenCanvas(tile.width, tile.height);
-    canvas.getContext("2d")!.drawImage(image, tile.x, tile.y, tile.width, tile.height, 0, 0, tile.width, tile.height);
+    // The whole frame shifted onto the tile's canvas, not drawImage's source rectangle, which Safari ignores for a
+    // VideoFrame (see cropped below and cut.ts).
+    canvas.getContext("2d")!.drawImage(image, -tile.x, -tile.y);
     return { tile, hands: seenHands(landmarkers[i]!.detectForVideo(canvas, timestamp)), read: true };
   });
   schedule.record(found.map((one) => (one.read ? one.hands.length : null)));
   return joinTiles(found, width, height);
 }
 
-/** A part of the picture, drawn on a canvas of its own (where the page could not cut the frame itself). */
+/**
+ * A part of the picture, drawn on a canvas of its own (where the page could not cut the frame itself). The whole frame
+ * is drawn, shifted so that the part lands on the canvas, rather than with drawImage's source rectangle: Safari ignores
+ * that rectangle for a VideoFrame (as it does a cut, see cut.ts) and draws the whole picture squeezed into the part.
+ * The canvas clips what lies outside it.
+ */
 function cropped(image: VideoFrame | ImageBitmap, crop: { x: number; y: number; width: number; height: number }): OffscreenCanvas {
   let canvas = tileCanvases[0];
   if (!canvas || canvas.width !== crop.width || canvas.height !== crop.height) canvas = tileCanvases[0] = new OffscreenCanvas(crop.width, crop.height);
-  canvas.getContext("2d")!.drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height);
+  canvas.getContext("2d")!.drawImage(image, -crop.x, -crop.y);
   return canvas;
 }
 

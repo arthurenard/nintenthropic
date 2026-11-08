@@ -24,6 +24,7 @@ import {
   type RacerSetup,
   type Session,
   type SessionClosed,
+  type WheelStatus,
 } from "../contract";
 import { cupById, trackOfRace } from "../grandprix";
 import { Backdrop } from "./backdrop";
@@ -71,6 +72,8 @@ export interface KartAppSnapshot {
   race: { tick: number; phase: string; time: number; countdown: number; laps: number; trackId: string; karts: readonly KartView[] } | null;
   views: number[];
   mine: (number | null)[];
+  /** What each wheel on this device sees now (hands as their player sees them), in seat order; none for a keyboard. For tests. */
+  wheels: WheelStatus[];
   /** What the sound is doing (a test cannot hear it). */
   sound: SoundReport;
 }
@@ -209,6 +212,7 @@ export class KartApp {
       race: view ? { tick: view.tick, phase: view.phase, time: view.time, countdown: view.countdown, laps: view.laps, trackId: view.track.id, karts: view.karts } : null,
       views: session?.views() ?? [],
       mine: lobby && session ? localPlayers(lobby, session.device).map((player) => kartOf(lobby, player.slot)) : [],
+      wheels: this.controls.flatMap((control) => (control.wheel ? [control.wheel] : [])),
       sound: this.services.sound.report(),
     };
   }

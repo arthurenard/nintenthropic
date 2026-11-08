@@ -667,7 +667,16 @@ of three; bytes are exact and are the numbers to trust.
   others on the CPU, side by side (four players, on a machine of eight cores
   or more, all on the CPU). The page hands each worker its column as
   a VideoFrame cut to it (`visibleRect`, no copy; a browser that cannot cut
-  one sends the whole frame and the worker cuts it). A worker says what it
+  one sends the whole frame and the worker cuts it). Safari says its frames are
+  cut but reads the whole picture all the same (drawImage and a texture upload
+  both ignore the cut), which put a neighbour's hands, squeezed, into an empty
+  seat: so the browser is asked once with a picture of known colours
+  (`cut.ts`, `framesHonourCut`), and where it fails the worker draws the whole
+  frame shifted onto a canvas of its column's size (Safari ignores drawImage's
+  source rectangle for a VideoFrame too). That costs nothing measurable: the
+  same inference time in Chrome either way. `tools/seats/probe.mjs` runs the
+  real tracker in Safari's engine (Playwright's WebKit) or Chrome on a picture
+  and says where the hands came back. A worker says what it
   found as soon as it has, and a frame is published for that column alone:
   `HandFrame.read` names the columns it looked at, the other columns' hands
   are the ones last seen there, and a seated wheel takes a frame that did
