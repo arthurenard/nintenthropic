@@ -212,19 +212,26 @@ click and remembered.
 ## The landing
 
 `./` is the front door of Nintenthropic: "Games you play with your hands."
-over two cinematic tiles (Apple's product tiles are the model: art first, a few big
-words, one white pill). The kart game comes first, in reading and keyboard order, and
-is about 80% of the width: Grip Prix large on the left, Finger Guns a slim tall tile on
-the right (never narrower than its words need). On a phone held upright Grip Prix is
-large on top and Finger Guns a compact band below (its name and Play); on a phone on its
-side they sit side by side again, about 75% and 25%. The tiles size their words by their
-own width, so none is ever clipped.
+over a carousel of two cinematic tiles (Apple's product tiles are the model: art first,
+a few big words, one white pill). The tile in focus leads, about 80% of the row, with
+its words and its pill; the other is a slim peek, about 20%, showing only what kind of
+game it is, its name and a round chevron toward the side it opens to. Grip Prix comes
+first, in reading and keyboard order, and leads when the page opens; Finger Guns leads
+when the player comes home from the arcade. The lead moves when the mouse rests on the
+slim tile (160 ms, so crossing it does not), when it is tapped or clicked (a tap opens
+it; its Play is then a second tap), with a sideways swipe across the row, with the
+arrow keys inside the row (no wrapping round), and when Tab reaches the slim tile's
+words. The tiles slide to their new sizes (700 ms, the spring curve); the leading
+tile's words are laid out at the leading width all along, so they never rewrap, and
+cross-fade with the peek. The row is the container the words size themselves by, so
+nothing is clipped at any size. The two stay side by side at every size: on a phone
+held upright the slim tile's name runs up the tile.
 
 - **Grip Prix** (bright, first): its sunny poster, eyebrow "Racing · Up to 4 Players",
   the name, "Grip the wheel. Race your friends.", and Race, which goes to race.html. The
   poster is `public/assets/kart/poster.webp`, its badge `icon.png`; where they are
   missing the game's backdrop and no badge stand in.
-- **Finger Guns** (dark, slim): the four shooters' posters, one fading into the next
+- **Finger Guns** (dark): the four shooters' posters, one fading into the next
   every few seconds (still with Reduce Motion), a shade coming up from the
   foot. Eyebrow "Shooting · 4 Games", the name, one line ("Make a finger
   pistol. Take the shot."), and Play, which opens the arcade.
@@ -234,7 +241,7 @@ own width, so none is ever clipped.
   the app.
 - **Hover or focus** swells the picture a little and, under a mouse, leans it
   toward the pointer; the keyboard ring goes round the whole tile. Reduce
-  Motion holds everything still.
+  Motion holds everything still, and the tiles change places at once.
 - **Addresses.** `./` is the landing. `#finger-guns` (or `#arcade`, its old name),
   `#high-noon` and `?game=high-noon` open the arcade (on that game); `#grip-prix` and `?game=grip-prix` open the
   landing with Grip Prix's tile in hand. Coming home from Grip Prix lands on

@@ -75,6 +75,16 @@ export const BASS_PATTERNS = {
   rolling: bassTemplate("0:r:1.7 2:r:1.7 4:r:1.7 6:8:1.7 8:r:1.7 10:r:1.7 12:r:1.7 14:5:1.7"),
   /** A walking line with a chromatic lead-in on the last beat and a dotted push on the third. */
   walkpush: bassTemplate("0:r:3.4 4:5:3.2 8:3:2.6 11:5:0.9 12:a:3.4"),
+  /** Jazz-funk, the main groove: a long root on the one, a ghosted repeat, an octave pop, the fifth, a pop on the and-of-three, a run into the next chord. */
+  funkA: bassTemplate("0:r:2.4:1.15 3:r:0.6:0.5 4:8:0.8:0.95 6:5:1.2:0.9 8:r:2.2:1.05 11:8:0.8:0.85 12:r:0.7:0.55 13:r:0.7:0.55 14:a:1.5:1"),
+  /** Jazz-funk, a busier answer: sixteenth ghosts, the third and fifth walking up, an approach on the last sixteenth. */
+  funkB: bassTemplate("0:r:1.8:1.15 2:r:0.6:0.5 3:8:0.8:0.9 6:r:1.2:0.9 8:5:1.8:1 10:3:1:0.8 11:5:0.8:0.8 12:r:1.8:1 14:8:0.8:0.9 15:a:0.8:0.8"),
+  /** Jazz-funk, sparse: room for a melody over it. */
+  funkSparse: bassTemplate("0:r:3.4:1.1 6:r:0.8:0.7 8:5:2.6:0.95 12:8:1.2:0.9 14:a:1.6:1"),
+  /** Jazz-funk, the last chorus: everything in sixteenths, pops on every off-beat. */
+  funkLift: bassTemplate(
+    "0:r:1.8:1.15 2:r:0.6:0.5 3:8:0.7:0.9 4:r:1.8:1 6:r:0.6:0.5 7:5:0.7:0.8 8:r:1.8:1.05 10:8:0.8:0.9 11:r:0.7:0.55 12:5:1.2:0.95 14:3:0.8:0.8 15:a:0.8:0.9",
+  ),
   /** Waltz: the bass on one, over 12 steps. */
   waltz: bassTemplate("0:r:3.5"),
   /** Waltz with the fifth answering on the third beat. */

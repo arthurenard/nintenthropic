@@ -1,8 +1,9 @@
-/* The bar over the landing and the arcade, and the landing itself: two cinematic
-   tiles, the kart game first and large (about 80% of the width), Finger Guns a slim
-   tall tile beside it (about 20%). Apple's product tiles are the model - art first,
-   a few big words, one white pill - and the arcade's own hero (screens.css) is
-   their other half. */
+/* The bar over the landing and the arcade, and the landing itself: a carousel of two
+   cinematic tiles, the one in focus large (about 80% of the row) and the other a slim
+   peek beside it (about 20%) that opens when it is hovered, tapped, swiped to or
+   tabbed into. Grip Prix leads. Apple's product tiles are the model - art first, a few
+   big words, one white pill - and the arcade's own hero (screens.css) is their other
+   half. */
 
 :root {
   /* The bar's height, and what a page under it must clear. */
@@ -178,21 +179,29 @@ body[data-view="landing"] .spaces {
   text-align: center;
   color: var(--label-3);
 }
-/* Grip Prix about 80%, Finger Guns about 20% (never narrower than its words need). */
+/* The carousel. The row is the container the words size themselves by (cqi), so a tile's
+   words keep their size while it grows or shrinks: a tile's words are laid out at the
+   width it has when it leads, whatever its width now, and cross-fade with the slim
+   tile's own face (.tile-peek) as it opens or closes (landing.ts moves .lead). */
 .tiles {
-  display: grid;
-  grid-template-columns: minmax(0, 4fr) minmax(190px, 1fr);
-  gap: 20px;
+  --gap: 20px;
+  /* How wide the leading tile is: 80% of the row, less the gap. */
+  --big: calc((100cqi - var(--gap)) * 0.8);
+  container: tiles / inline-size;
+  display: flex;
+  gap: var(--gap);
+  /* A sideways swipe is the carousel's; up and down still scroll the page, and a pinch still zooms it. */
+  touch-action: pan-y pinch-zoom;
 }
 
 /* A tile: the picture fills it, a scrim darkens where the words sit, the words and the pill are at its foot. */
 .tile {
   --zoom: 1;
-  /* The words size themselves by the tile's own width (cqi), so the slim tile and the large one each fit theirs. */
-  container-type: inline-size;
   position: relative;
   display: flex;
+  flex: 1 1 0;
   align-items: flex-end;
+  min-width: 0;
   height: clamp(400px, calc(100dvh - 276px), 780px);
   overflow: hidden;
   isolation: isolate;
@@ -205,8 +214,13 @@ body[data-view="landing"] .spaces {
   /* Keeps the rounded corners honest while the picture inside moves. */
   transform: translateZ(0);
   transition:
+    flex-grow 700ms var(--spring),
     box-shadow 500ms var(--spring),
     transform 500ms var(--spring);
+}
+/* Four parts of the row to the other's one. */
+.tile.lead {
+  flex-grow: 4;
 }
 /* The picture leans toward the pointer and swells a little: slow, so it is felt more than seen. */
 .tile-art {
@@ -221,7 +235,7 @@ body[data-view="landing"] .spaces {
 .tile:has(.tile-go:focus-visible) {
   --zoom: 1.05;
 }
-.tile:active {
+.tile.lead:active {
   transform: translateZ(0) scale(0.994);
 }
 .tile:has(.tile-go:focus-visible) {
@@ -288,13 +302,21 @@ body[data-view="landing"] .spaces {
     linear-gradient(to top, rgba(4, 22, 52, 0.88) 0%, rgba(4, 22, 52, 0.72) 26%, rgba(4, 22, 52, 0.5) 40%, rgba(4, 22, 52, 0.14) 58%, rgba(4, 22, 52, 0) 72%),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0) 30%);
 }
+/* The leading tile's words: as wide as a leading tile, so they never rewrap while it opens; they come in once it has
+   mostly opened, and go at once when it starts to close (still in the keyboard's reach, so tabbing to them opens it). */
 .tile-body {
   display: grid;
+  flex: none;
   gap: 8px;
-  width: 100%;
-  max-width: 600px;
+  width: min(var(--big), 600px);
   padding: 0 40px 40px;
   text-shadow: 0 1px 24px rgba(0, 0, 0, 0.3);
+  transition: opacity 380ms var(--ease) 200ms;
+}
+.tile:not(.lead) .tile-body {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms var(--ease);
 }
 .tile-body .eyebrow {
   color: rgba(255, 255, 255, 0.78);
@@ -312,34 +334,11 @@ body[data-view="landing"] .spaces {
     0 8px 24px rgba(0, 0, 0, 0.35);
 }
 .tile-title {
-  font-size: clamp(40px, 7cqi, 104px);
+  font-size: clamp(40px, 5.6cqi, 104px);
   line-height: 1;
   font-weight: 700;
   letter-spacing: -0.03em;
   text-wrap: balance;
-}
-/* The slim tile: its words stack, its pill is as wide as the tile's words. */
-.tile-arcade .tile-body {
-  padding: 0 24px 28px;
-}
-.tile-arcade .tile-title {
-  font-size: clamp(30px, 17cqi, 56px);
-  line-height: 1.02;
-}
-.tile-arcade .tile-line {
-  font-size: clamp(15px, 7cqi, 20px);
-}
-.tile-arcade .tile-actions {
-  display: grid;
-  justify-items: stretch;
-  gap: 2px;
-}
-.tile-arcade .tile-go {
-  min-width: 0;
-}
-.tile-arcade .tile-how {
-  justify-self: start;
-  padding-left: 0;
 }
 .tile-line {
   max-width: 22em;
@@ -399,6 +398,114 @@ body[data-view="landing"] .spaces {
   transform: translateX(3px);
 }
 
+/* The slim tile's own face: what kind of game, its name stacked, and a round chevron toward the side it opens to,
+   over a shade of its own. It is only a picture: a tap on it opens the tile (landing.ts), and the keyboard reaches
+   the tile's real words. */
+.tile-peek {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: grid;
+  align-content: end;
+  justify-items: start;
+  gap: 6px;
+  padding: 0 24px 28px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.5) 34%, rgba(0, 0, 0, 0.12) 70%, rgba(0, 0, 0, 0.04) 100%);
+  text-shadow: 0 1px 24px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.tile:not(.lead) .tile-peek {
+  opacity: 1;
+  transition: opacity 380ms var(--ease) 180ms;
+}
+.tile-peek-eyebrow {
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+}
+.tile-peek-title {
+  font-size: clamp(26px, 3.1cqi, 52px);
+  line-height: 1.02;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+.tile-peek-open {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-top: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  color: #fff;
+  transition:
+    background-color 250ms var(--ease),
+    transform 250ms var(--spring);
+}
+.tile-peek-open svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2.2;
+}
+@media (hover: hover) {
+  .tile:not(.lead):hover .tile-peek-open {
+    background: rgba(255, 255, 255, 0.34);
+    transform: scale(1.08);
+  }
+}
+/* A slim tile too narrow for its name across (a phone held upright, a narrow window): the name runs up the tile. */
+@container tiles (max-width: 760px) {
+  .tile-peek {
+    justify-items: center;
+    gap: 16px;
+    padding: 0 0 20px;
+  }
+  .tile-peek-eyebrow {
+    display: none;
+  }
+  .tile-peek-title {
+    font-size: 26px;
+    white-space: nowrap;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
+  }
+  .tile-peek-open {
+    width: 36px;
+    height: 36px;
+    margin-top: 0;
+  }
+  .tile-title {
+    font-size: clamp(32px, 9cqi, 48px);
+  }
+  .tile-body {
+    padding: 0 20px 24px;
+  }
+  .tile-icon {
+    top: 18px;
+    left: 18px;
+    width: 46px;
+    height: 46px;
+  }
+  /* The leading tile is narrower than it is tall here: the cat's kart is brought to its middle. */
+  .tile-grip.lead .tile-art img {
+    object-position: 80% 50%;
+  }
+}
+/* While the landing first arrives on a tile, it is simply there (landing.ts sets this for a frame). */
+.tiles.still :is(.tile, .tile-body, .tile-peek) {
+  transition: none !important;
+}
+
 /* --- How It Plays ---------------------------------------------------------------------- */
 
 .how {
@@ -432,27 +539,29 @@ body[data-view="landing"] .spaces {
   .landing-title {
     font-size: 84px;
   }
+  .tiles {
+    --gap: 28px;
+  }
   .tile {
     height: clamp(400px, calc(100dvh - 330px), 960px);
   }
-  .tiles {
-    gap: 28px;
-  }
   .tile-body {
-    max-width: 860px;
+    width: min(var(--big), 860px);
     padding: 0 56px 56px;
-  }
-  .tile-arcade .tile-body {
-    padding: 0 32px 40px;
   }
   .tile-line {
     font-size: 26px;
   }
-  .tile-arcade .tile-line {
-    font-size: 22px;
-  }
-  .tile-body .eyebrow {
+  .tile-body .eyebrow,
+  .tile-peek-eyebrow {
     font-size: 15px;
+  }
+  .tile-peek {
+    padding: 0 32px 40px;
+  }
+  .tile-peek-open {
+    width: 52px;
+    height: 52px;
   }
   .tile-icon {
     top: 40px;
@@ -481,11 +590,10 @@ body[data-view="landing"] .spaces {
   .tile-body {
     padding: 0 32px 32px;
   }
-  .tile-arcade .tile-body {
+  .tile-peek {
     padding: 0 20px 24px;
   }
 }
-/* Stacked: Grip Prix large on top, Finger Guns a compact band below, each as wide as the page. */
 @media (max-width: 860px) {
   /* Beside the two spaces the wordmark no longer fits: the mark and its chevron lead back. */
   body[data-view="arcade"] .brand-mark {
@@ -499,62 +607,18 @@ body[data-view="landing"] .spaces {
   body[data-view="arcade"] .brand {
     padding-right: 4px;
   }
+  /* Side by side still, one screen high: what is left after the bar, the title and the footnote. */
+  /* On the shortest phones the badge gives its corner to the words. */
+  @media (max-height: 640px) {
+    .tile-icon {
+      display: none !important;
+    }
+  }
   .tiles {
-    grid-template-columns: 1fr;
-    gap: 14px;
+    --gap: 10px;
   }
-  /* What is left of the screen after the bar, the title, the band and the footnote: Grip Prix takes about 80% of the two. */
-  .tile-grip {
-    height: clamp(400px, calc(100dvh - 332px), 640px);
-  }
-  .tile-grip .tile-art img {
-    object-position: 90% 50%;
-  }
-  .tile-body {
-    padding: 0 24px 28px;
-  }
-  .tile-icon {
-    top: 20px;
-    left: 20px;
-    width: 48px;
-    height: 48px;
-  }
-  /* The band: its name and what kind of game on the left, Play on the right; the picture crossfades behind. */
-  .tile-arcade {
-    height: 112px;
-    align-items: center;
-  }
-  .tile-arcade .tile-body {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "eyebrow go"
-      "title go";
-    align-items: center;
-    gap: 2px 16px;
-    padding: 0 20px;
-  }
-  .tile-arcade .eyebrow {
-    grid-area: eyebrow;
-    align-self: end;
-  }
-  .tile-arcade .tile-title {
-    grid-area: title;
-    align-self: start;
-    font-size: clamp(28px, 8vw, 40px);
-  }
-  .tile-arcade .tile-line,
-  .tile-arcade .tile-how {
-    display: none;
-  }
-  .tile-arcade .tile-actions {
-    grid-area: go;
-    margin-top: 0;
-  }
-  .tile-arcade .tile-go {
-    min-width: 96px;
-  }
-  .tile-arcade::before {
-    background: linear-gradient(to right, rgba(0, 0, 0, 0.74) 0%, rgba(0, 0, 0, 0.4) 60%, rgba(0, 0, 0, 0.16) 100%);
+  .tile {
+    height: clamp(300px, calc(100dvh - 280px), 680px);
   }
   .landing-main {
     justify-content: flex-start;
@@ -616,8 +680,7 @@ body[data-view="landing"] .spaces {
   }
 }
 
-/* A phone on its side: the two tiles side by side again, one short screen
-   high with their Play and Race in view, the title giving them its room. */
+/* A phone on its side: one short screen high with Play in view, the title giving the tiles its room. */
 @media (max-height: 520px) and (orientation: landscape) {
   .landing-main {
     justify-content: flex-start;
@@ -628,24 +691,18 @@ body[data-view="landing"] .spaces {
   .landing-title {
     font-size: 24px;
   }
-  /* About 75% and 25%. */
   .tiles {
-    grid-template-columns: minmax(0, 3fr) minmax(150px, 1fr);
-    gap: 12px;
+    --gap: 12px;
   }
-  .tile,
-  .tile-grip,
-  .tile-arcade {
-    height: max(240px, calc(100dvh - var(--nav) - 76px));
-    align-items: flex-end;
+  .tile {
+    height: max(220px, calc(100dvh - var(--nav) - 96px));
   }
-  .tile-body,
-  .tile-arcade .tile-body {
-    display: grid;
-    grid-template-columns: none;
-    grid-template-areas: none;
+  .tile-body {
     gap: 4px;
     padding: 0 20px 20px;
+  }
+  .tile-body .eyebrow {
+    display: none;
   }
   .tile-title {
     font-size: 34px;
@@ -653,8 +710,8 @@ body[data-view="landing"] .spaces {
   .tile-line {
     font-size: 15px;
   }
-  .tile-grip .tile-art img {
-    object-position: 72% 50%;
+  .tile-actions {
+    margin-top: 10px;
   }
   .tile-icon {
     top: 16px;
@@ -662,46 +719,35 @@ body[data-view="landing"] .spaces {
     width: 40px;
     height: 40px;
   }
-  /* The slim tile keeps to its name and its pill. */
-  .tile-arcade .tile-body {
+  .tile-peek {
     padding: 0 16px 16px;
   }
-  .tile-arcade .eyebrow,
-  .tile-grip .eyebrow {
+  .tile-peek-eyebrow {
     display: none;
   }
-  .tile-grip .tile-actions {
-    margin-top: 10px;
+  .tile-peek-title {
+    font-size: 24px;
+  }
+  .tile-peek-open {
+    width: 34px;
+    height: 34px;
+    margin-top: 6px;
   }
   .tile-grip::before {
     background: linear-gradient(to top, rgba(4, 22, 52, 0.92) 0%, rgba(4, 22, 52, 0.78) 34%, rgba(4, 22, 52, 0.3) 62%, rgba(4, 22, 52, 0) 80%);
   }
-  .tile-arcade .tile-title {
-    grid-area: auto;
-    align-self: auto;
-    font-size: clamp(22px, 14cqi, 30px);
-  }
-  .tile-arcade .tile-line,
-  .tile-arcade .tile-how {
-    display: none;
-  }
-  .tile-arcade .tile-actions {
-    grid-area: auto;
-    margin-top: 8px;
-  }
-  .tile-arcade .tile-go {
-    min-width: 0;
-  }
-  .tile-arcade::before {
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.92) 0%, rgba(0, 0, 0, 0.55) 45%, rgba(0, 0, 0, 0.1) 80%);
-  }
 }
 
-/* --- reduced motion: the tiles hold still, and the posters do not turn ---------------------- */
+/* --- reduced motion: the tiles hold still, open and close at once, and the posters do not turn --- */
 
 :root[data-reduce-motion] {
   .tile {
     --zoom: 1 !important;
+    transition: none !important;
+  }
+  .tile-body,
+  .tile-peek {
+    transition: none !important;
   }
   .tile:hover {
     box-shadow:
@@ -716,11 +762,12 @@ body[data-view="landing"] .spaces {
   .tile-art img[data-game].on.loaded {
     animation: none;
   }
-  .tile:active {
+  .tile.lead:active {
     transform: translateZ(0);
   }
   body[data-view="arcade"] .brand:hover .brand-back,
-  .tile-how:hover svg {
+  .tile-how:hover svg,
+  .tile:not(.lead):hover .tile-peek-open {
     transform: none;
   }
 }

@@ -1,6 +1,7 @@
 // The front door of Nintenthropic and the arcade behind it. The landing shows the two
-// families side by side - the four shooters of Finger Guns, and Grip Prix, a page
-// of its own - and the arcade is the shooters' own space: the chosen game as
+// families as a carousel of two tiles - Grip Prix, a page of its own, and the four
+// shooters of Finger Guns - the one in focus large, the other a slim peek - and
+// the arcade is the shooters' own space: the chosen game as
 // a full-bleed hero, the row of games to choose from (by click, by keyboard as
 // a radio group), the choice remembered and in the address, a link that opens
 // a game's card, and the way back, to the landing and from a game. Photographed
@@ -98,6 +99,8 @@ test("the browser's Back in a game pauses it, and never leaves the page with the
   page.on("pageerror", (error) => errors.push(error.message));
   await returningVisitor(page, { "handy.control.v1": "mouse" });
   await page.goto("/");
+  await page.locator("#tile-arcade").hover();
+  await carouselMoves(page, true);
   await page.locator("#tile-arcade").getByRole("link", { name: "Play" }).click();
   await card(page, "Dead of Night").click();
   await page.getByRole("button", { name: "Play", exact: true }).click();
@@ -129,6 +132,8 @@ test("the browser's Back while a game gets ready cancels it, to where the addres
     await route.continue().catch(() => {});
   });
   await page.goto("/");
+  await page.locator("#tile-arcade").hover();
+  await carouselMoves(page, true);
   await page.locator("#tile-arcade").getByRole("link", { name: "Play" }).click();
   await card(page, "High Noon").click();
   await page.getByRole("button", { name: "Play", exact: true }).click();
@@ -143,6 +148,27 @@ test("the browser's Back while a game gets ready cancels it, to where the addres
   expect(errors).toEqual([]);
 });
 
+/** The carousel's own transitions now running in the page: the tiles' widths and their faces' fades (not the posters' drift and crossfade). */
+async function carouselMoves(page: Page, settle: boolean): Promise<number> {
+  return page.locator("#tiles").evaluate(async (row, settle) => {
+    const moving = row
+      .getAnimations({ subtree: true })
+      .filter((a) => a instanceof CSSTransition && ((a.effect as KeyframeEffect | null)?.target as Element | null)?.matches(".tile, .tile-body, .tile-peek"));
+    if (settle) await Promise.all(moving.map((a) => a.finished.catch(() => undefined)));
+    return moving.length;
+  }, settle);
+}
+
+/** Each tile's width, once the carousel has stopped moving. */
+async function settledWidths(page: Page): Promise<{ grip: number; arcade: number; lead: string | null }> {
+  await carouselMoves(page, true);
+  return page.evaluate(() => ({
+    grip: document.getElementById("tile-grip")!.getBoundingClientRect().width,
+    arcade: document.getElementById("tile-arcade")!.getBoundingClientRect().width,
+    lead: document.getElementById("tiles")!.dataset.lead ?? null,
+  }));
+}
+
 test("the landing: Grip Prix large and first, Finger Guns slim, and the way into each", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -153,7 +179,7 @@ test("the landing: Grip Prix large and first, Finger Guns slim, and the way into
   expect((await snapshot(page)).view).toBe("landing");
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Games you play with your hands.");
 
-  // Two tiles side by side, the kart game first and about four times as wide: each with its name, a line, and the one thing to do.
+  // Two tiles side by side, the kart game first, in the lead and about four times as wide: each with its name, a line, and the one thing to do.
   const arcade = page.locator("#tile-arcade");
   const grip = page.locator("#tile-grip");
   await expect(arcade.getByRole("heading", { name: "Finger Guns" })).toBeVisible();
@@ -166,6 +192,9 @@ test("the landing: Grip Prix large and first, Finger Guns slim, and the way into
   expect(Math.abs(a.y - g.y)).toBeLessThan(2);
   expect(a.x).toBeGreaterThan(g.x + g.width);
   expect(g.width / a.width).toBeGreaterThan(3);
+  await expect(page.locator("#tiles")).toHaveAttribute("data-lead", "grip-prix");
+  await expect(grip).toHaveClass(/\blead\b/);
+  await expect(arcade).not.toHaveClass(/\blead\b/);
   // Grip Prix first for the keyboard too: its Race is the first button in the page's order.
   expect(await page.locator("#landing .tile-go").first().getAttribute("href")).toBe("race.html");
   // Grip Prix goes to its own page; Finger Guns' Play opens the arcade, not a game.
@@ -175,7 +204,10 @@ test("the landing: Grip Prix large and first, Finger Guns slim, and the way into
   // Its picture arrives over its sunny backdrop, which is also what stands in until it does (or if it never does).
   expect(await grip.locator(".tile-art").evaluate((art) => getComputedStyle(art).backgroundImage)).toContain("gradient");
 
-  // Play: into the arcade, on the game chosen last, with the browser's history behind it.
+  // Play: the slim tile opens first (the mouse resting on it), then into the arcade, on the game chosen last, with the browser's history behind it.
+  await arcade.hover();
+  await expect(page.locator("#tiles")).toHaveAttribute("data-lead", "arcade");
+  await carouselMoves(page, true);
   await arcade.getByRole("link", { name: "Play" }).click();
   await expect(page.locator("#arcade")).toBeVisible();
   await expect(page.locator("#landing")).toBeHidden();
@@ -192,6 +224,7 @@ test("the landing: Grip Prix large and first, Finger Guns slim, and the way into
   await expect(page.locator("#arcade")).toBeHidden();
   expect(hash(page)).toBe("");
   await expect(arcade.getByRole("link", { name: "Play" })).toBeFocused();
+  await expect(page.locator("#tiles")).toHaveAttribute("data-lead", "arcade");
   await page.goBack();
   await expect(page.locator("#arcade")).toBeVisible();
   await expect(page.locator("#feature-title")).toHaveText("Dead of Night");
@@ -202,6 +235,115 @@ test("the landing: Grip Prix large and first, Finger Guns slim, and the way into
   await arcade.getByRole("link", { name: "Play" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.locator("#arcade")).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("the landing is a carousel: the tile in focus is large, and the mouse, a tap, a swipe and the keys move the focus", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await returningVisitor(page);
+  await page.goto("/");
+  await expect(page.locator("#landing")).toBeVisible();
+  const row = page.locator("#tiles");
+  const grip = page.locator("#tile-grip");
+  const arcade = page.locator("#tile-arcade");
+  await expect(row).toHaveAttribute("aria-roledescription", "carousel");
+
+  // At rest: Grip Prix leads, about 80% of the row; Finger Guns shows its slim face, not its words.
+  let w = await settledWidths(page);
+  expect(w.lead).toBe("grip-prix");
+  expect(w.grip / (w.grip + w.arcade)).toBeGreaterThan(0.77);
+  expect(w.grip / (w.grip + w.arcade)).toBeLessThan(0.83);
+  await expect(arcade.locator(".tile-peek")).toHaveCSS("opacity", "1");
+  await expect(arcade.locator(".tile-body")).toHaveCSS("opacity", "0");
+  await expect(grip.locator(".tile-body")).toHaveCSS("opacity", "1");
+
+  // The mouse resting on the slim tile opens it, and the other closes; crossing it quickly does not.
+  await page.mouse.move(1, 1);
+  const slim = (await arcade.boundingBox())!;
+  await page.mouse.move(slim.x + slim.width / 2, slim.y + 40);
+  await page.mouse.move(1, slim.y + 40, { steps: 2 });
+  await page.waitForTimeout(400);
+  await expect(row).toHaveAttribute("data-lead", "grip-prix");
+  await arcade.hover();
+  await expect(row).toHaveAttribute("data-lead", "arcade");
+  w = await settledWidths(page);
+  expect(w.arcade / (w.grip + w.arcade)).toBeGreaterThan(0.77);
+  await expect(arcade.locator(".tile-body")).toHaveCSS("opacity", "1");
+  await expect(grip.locator(".tile-peek")).toHaveCSS("opacity", "1");
+  // Leaving the row keeps the focus where it is.
+  await page.mouse.move(1, 1);
+  await page.waitForTimeout(300);
+  await expect(row).toHaveAttribute("data-lead", "arcade");
+
+  // A click on the slim tile opens it, and does not start its game.
+  await grip.dispatchEvent("click");
+  await expect(row).toHaveAttribute("data-lead", "grip-prix");
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator("#landing")).toBeVisible();
+  // A double tap (two clicks in a row) on the slim tile opens it, and the second does not start its game before its words are in.
+  const far = (await arcade.boundingBox())!;
+  await page.mouse.click(far.x + far.width / 2, far.y + far.height / 2);
+  await page.mouse.click(far.x + far.width / 2, far.y + far.height / 2);
+  await expect(row).toHaveAttribute("data-lead", "arcade");
+  await page.waitForTimeout(300);
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator("#landing")).toBeVisible();
+
+  // The arrow keys move the focus along the row (no wrapping round), standing on the tile's Play.
+  await grip.getByRole("link", { name: "Play" }).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(row).toHaveAttribute("data-lead", "arcade");
+  await expect(arcade.getByRole("link", { name: "Play" })).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect(row).toHaveAttribute("data-lead", "arcade");
+  await page.keyboard.press("ArrowLeft");
+  await expect(row).toHaveAttribute("data-lead", "grip-prix");
+  await expect(grip.getByRole("link", { name: "Play" })).toBeFocused();
+  // Tab goes into the slim tile's words, and that opens it.
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await expect(arcade.getByRole("link", { name: "Play" })).toBeFocused();
+  await expect(row).toHaveAttribute("data-lead", "arcade");
+
+  // A sideways swipe moves the focus the way the finger went; an upward drag does not.
+  const swipe = (dx: number, dy: number, thenClick = false) =>
+    row.evaluate(
+      (node, [dx, dy, thenClick]) => {
+        const box = node.getBoundingClientRect();
+        const [x, y] = [box.x + box.width / 2, box.y + box.height / 2];
+        const init = { pointerId: 7, pointerType: "touch", isPrimary: true, bubbles: true };
+        node.dispatchEvent(new PointerEvent("pointerdown", { ...init, clientX: x, clientY: y }));
+        node.dispatchEvent(new PointerEvent("pointerup", { ...init, clientX: x + dx, clientY: y + dy }));
+        // The click a browser may send after the finger lifts, at once (the swipe's window is 400 ms of wall clock).
+        if (thenClick) document.querySelector<HTMLElement>("#tile-arcade .tile-go")!.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+      },
+      [dx, dy, thenClick] as const,
+    );
+  await swipe(120, 6);
+  await expect(row).toHaveAttribute("data-lead", "grip-prix");
+  await swipe(-20, -160);
+  await expect(row).toHaveAttribute("data-lead", "grip-prix");
+  // A swipe to Finger Guns, and the click it may leave behind starts nothing.
+  await swipe(-120, 10, true);
+  await expect(row).toHaveAttribute("data-lead", "arcade");
+  await page.waitForTimeout(300);
+  await expect(page.locator("#landing")).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+
+  // Reduce Motion: the tiles change places at once, their words with them.
+  await page.evaluate(() => document.documentElement.setAttribute("data-reduce-motion", ""));
+  await page.keyboard.press("ArrowLeft");
+  await expect(row).toHaveAttribute("data-lead", "grip-prix");
+  expect(await carouselMoves(page, false)).toBe(0);
+  await expect(grip.locator(".tile-body")).toHaveCSS("opacity", "1");
+  await expect(page.locator("#tile-arcade .tile-peek")).toHaveCSS("opacity", "1");
+
+  // The keyboard never stays on a tile that closes: the mouse resting on the other one takes the focus along.
+  await grip.getByRole("link", { name: "Play" }).focus();
+  await page.locator("#tile-arcade").hover();
+  await expect(row).toHaveAttribute("data-lead", "arcade");
+  await expect(page.locator("#tile-arcade").getByRole("link", { name: "Play" })).toBeFocused();
   expect(errors).toEqual([]);
 });
 
@@ -254,6 +396,8 @@ test("Grip Prix, and the way home from it", async ({ page }) => {
   await page.goto("/#arcade");
   await page.getByRole("link", { name: "Nintenthropic" }).click();
   await expect(page.locator("#tile-arcade").getByRole("link", { name: "Play" })).toBeFocused();
+  // Standing on it: it leads, there at once rather than opening.
+  await expect(page.locator("#tiles")).toHaveAttribute("data-lead", "arcade");
   expect(errors).toEqual([]);
 });
 
@@ -272,6 +416,8 @@ test("How It Plays: each tile names its gesture and its steps, in a sheet, with 
   // Back to the button that opened it.
   await expect(page.locator("#tile-grip").getByRole("button", { name: "How It Plays" })).toBeFocused();
 
+  // The slim tile opens first (its words are behind its peek until then).
+  await page.locator("#tile-arcade").hover();
   await page.locator("#tile-arcade").getByRole("button", { name: "How It Plays" }).click();
   await expect(how.getByRole("heading", { name: "Finger Pistol" })).toBeVisible();
   await expect(how.locator(".gesture-steps li")).toHaveText(["Point", "Fold your thumb", "Fire"]);
@@ -313,10 +459,15 @@ test("a first visit lands straight on the landing; How It Plays lists the steps,
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Games you play with your hands.");
   // How It Plays: the words and the steps, lit one after another; no hand is drawn.
   const how = page.getByRole("dialog");
+  // The slim tile opens first (its words are behind its peek until then).
+  await page.locator("#tile-arcade").hover();
   await page.locator("#tile-arcade").getByRole("button", { name: "How It Plays" }).click();
   await expect(how.locator(".gesture-steps li")).toHaveText(["Point", "Fold your thumb", "Fire"]);
   await expect(how.locator("svg")).toHaveCount(0);
   await how.getByRole("button", { name: "Done" }).click();
+  // Grip Prix opens again under the mouse (Finger Guns took the lead), then its How It Plays.
+  await page.locator("#tile-grip").hover();
+  await expect(page.locator("#tiles")).toHaveAttribute("data-lead", "grip-prix");
   await page.locator("#tile-grip").getByRole("button", { name: "How It Plays" }).click();
   await expect(how.locator(".gesture-steps li")).toHaveText(["Grip", "Turn left", "Turn right"]);
   await expect(how.locator("svg")).toHaveCount(0);
@@ -364,23 +515,34 @@ test("the landing and the arcade at every size", async ({ page }, info) => {
   ] as const;
   for (const [width, height] of sizes) {
     await page.setViewportSize({ width, height });
-    // The landing: side by side, Grip Prix large and first, whole in the window; stacked on a phone, Grip Prix on top, wide as the page.
+    // The landing: a carousel side by side at every size, Grip Prix leading and first, the row whole in the window; then Finger Guns in the lead.
     await page.goto("/");
     await expect(page.locator("#landing")).toBeVisible();
     await page.mouse.move(1, 1);
-    const [a, g] = [(await page.locator("#tile-arcade").boundingBox())!, (await page.locator("#tile-grip").boundingBox())!];
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-    if (width > 860) {
+    for (const lead of ["grip-prix", "arcade"] as const) {
+      if (lead === "arcade") await page.locator("#tile-arcade").getByRole("link", { name: "Play" }).focus();
+      const w = await settledWidths(page);
+      expect(w.lead).toBe(lead);
+      const [a, g] = [(await page.locator("#tile-arcade").boundingBox())!, (await page.locator("#tile-grip").boundingBox())!];
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       expect(Math.abs(a.y - g.y)).toBeLessThan(2);
-      expect(g.width).toBeGreaterThan(a.width * 3);
+      expect(a.x).toBeGreaterThan(g.x + g.width);
+      if (lead === "grip-prix") expect(g.width).toBeGreaterThan(a.width * 3);
+      else expect(a.width).toBeGreaterThan(g.width * 3);
       expect(a.y + a.height).toBeLessThanOrEqual(height);
-    } else {
-      expect(a.y).toBeGreaterThan(g.y + g.height - 1);
-      expect(g.width).toBeGreaterThan(width - 40);
-      expect(g.height).toBeGreaterThan(a.height * 2.5);
+      // The leading tile's words fit inside it, its Play whole in view.
+      const tile = page.locator(lead === "grip-prix" ? "#tile-grip" : "#tile-arcade");
+      const [box, go, title] = [
+        (await tile.boundingBox())!,
+        (await tile.locator(".tile-go").boundingBox())!,
+        (await tile.locator(".tile-title").boundingBox())!,
+      ];
+      expect(go.x + go.width).toBeLessThanOrEqual(box.x + box.width + 1);
+      expect(go.y + go.height).toBeLessThanOrEqual(box.y + box.height + 1);
+      expect(title.x + title.width).toBeLessThanOrEqual(box.x + box.width + 1);
+      await page.waitForTimeout(700);
+      await shot(page, info, `landing-${width}x${height}${lead === "arcade" ? "-finger-guns" : ""}`, 0);
     }
-    await page.waitForTimeout(700);
-    await shot(page, info, `landing-${width}x${height}`, 0);
 
     for (const game of ["high-noon", "overwatch-ridge"]) {
       await page.goto(`/#${game}`);

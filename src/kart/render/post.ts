@@ -61,6 +61,8 @@ uniform vec4 uRush[4];
 uniform int uRushTaps;
 
 float gLuma(vec3 c) { return dot(c, vec3(0.2126, 0.7152, 0.0722)); }
+/** A pixel some shader left NaN or infinite reads as black, so the rush cannot smear it into a streak (see guardBrightPass). */
+vec3 gClean(vec3 c) { return any(isnan(c)) || any(isinf(c)) ? vec3(0.0) : max(c, vec3(0.0)); }
 
 void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
   // Which view tile this pixel is in, where in it, and that view's rush.
@@ -80,7 +82,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     }
   }
 
-  vec3 c = max(inputColor.rgb, vec3(0.0));
+  vec3 c = gClean(inputColor.rgb);
 
   // The rush: the outer part of the view smeared outward along the line from the point the world streams from. Only the
   // scene's part is smeared (what bloom added stays), and never across into another view.
@@ -91,12 +93,12 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
       vec2 d = uv - (tile.xy + rush.zw * tile.zw);
       vec2 lo = tile.xy + texelSize;
       vec2 hi = tile.xy + tile.zw - texelSize;
-      vec3 here = max(texture2D(inputBuffer, uv).rgb, vec3(0.0));
+      vec3 here = gClean(texture2D(inputBuffer, uv).rgb);
       vec3 sum = here;
       float n = 1.0;
       for (int k = 1; k <= 6; k++) {
         if (k > uRushTaps) break;
-        sum += max(texture2D(inputBuffer, clamp(uv - d * (float(k) * 0.009 * m), lo, hi)).rgb, vec3(0.0));
+        sum += gClean(texture2D(inputBuffer, clamp(uv - d * (float(k) * 0.009 * m), lo, hi)).rgb);
         n += 1.0;
       }
       c = max(c + sum / n - here, vec3(0.0));
@@ -141,6 +143,25 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   outputColor = vec4(inView ? max(c, vec3(0.0)) : uDivider, inputColor.a);
 }
 `;
+
+/** What the glow's bright pass reads first in the library's shader (postprocessing's luminance.frag). */
+const BRIGHT_READ = "vec4 texel=texture2D(inputBuffer,vUv);";
+
+/**
+ * Makes the glow's bright pass read a NaN or infinite pixel as black. One such pixel (a shader normalising a zero vector,
+ * a pow of a negative number) is otherwise blurred by every level of the glow into a black block over half the picture;
+ * guarded, it stays one pixel. Returns whether the guard went in (false if the library's shader changed: the tests say so).
+ */
+export function guardBrightPass(material: { fragmentShader: string; needsUpdate: boolean }): boolean {
+  if (material.fragmentShader.includes("isnan(texel)")) return true;
+  if (!material.fragmentShader.includes(BRIGHT_READ)) return false;
+  material.fragmentShader = material.fragmentShader.replace(
+    BRIGHT_READ,
+    `${BRIGHT_READ}if(any(isnan(texel))||any(isinf(texel)))texel=vec4(0.0);`,
+  );
+  material.needsUpdate = true;
+  return true;
+}
 
 /** The divider between split-screen views: the canvas's clear colour and the free quadrant's (hud.css). */
 export const DIVIDER = 0x0b0b0d;
@@ -234,6 +255,7 @@ export class PostChain {
     // The thresholded copy the glow is blurred from is full size, which is a full-size read and write of the half-float picture; on the
     // lesser tiers it is made at half size (the blur's first step halves it anyway), a slightly softer glow for a quarter of the work.
     if (tier !== "high") this.bloom.luminancePass.resolution.scale = 0.5;
+    guardBrightPass(this.bloom.luminanceMaterial);
     // Bloom's own blend (screen) adds the glow to the picture; the grade then maps the sum.
     this.composer.addPass(new EffectPass(this.camera, this.bloom, this.grade));
     if (tier === "low") this.composer.addPass(new EffectPass(this.camera, new SMAAEffect({ preset: SMAAPreset.LOW })));

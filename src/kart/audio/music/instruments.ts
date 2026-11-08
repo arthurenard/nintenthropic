@@ -196,6 +196,28 @@ export const INSTRUMENTS = {
     }),
     (buf) => drive(buf, 3.2),
   ),
+  /** A punchy funk synth bass: two saws and a square through a resonant filter that snaps shut, a sine at the same pitch for body (no octave below: it stays out of the kick's way) and a thin pluck an octave up for the pop. */
+  "bass-funk": layer(
+    {
+      voice: subtractive({
+        oscs: [{ wave: "saw", cents: -7, level: 0.5 }, { wave: "saw", cents: 7, level: 0.5 }, { wave: "square", level: 0.25 }],
+        cutoff: 130, keytrack: 1.2, envOct: 3.2, fdecay: 0.09, fsustain: 0.15, q: 2.6, drive: 1.6,
+        attack: 0.002, decay: 0.22, sustain: 0.5, release: 0.06, fixedPhase: true, velBright: 0.9,
+      }),
+    },
+    { voice: subtractive({ oscs: [{ wave: "sine" }], cutoff: 300, attack: 0.003, decay: 0.25, sustain: 0.6, release: 0.05, fixedPhase: true }), gain: 0.35 },
+    { voice: guitar({ t60: 0.25, brightness: 0.95, hardness: 9000, position: 0.1, damp: 0.2, click: 0.5 }), gain: 0.2, mult: 2 },
+  ),
+  /** A clavinet: a short, hard, nasal string, damped almost at once. */
+  clav: guitar({ t60: 0.3, brightness: 0.98, hardness: 9800, position: 0.07, damp: 0.5, click: 0.55, body: [[2400, 1.6, 4], [900, 1.2, 2]] }),
+  /** A muted funk guitar: a chank, mostly click and a stopped string. */
+  "gtr-muted": guitar({ t60: 0.14, brightness: 0.85, hardness: 8000, position: 0.12, damp: 0.6, click: 0.5, body: [[1800, 1.3, 3]] }),
+  /** A bright jazz-funk synth lead: pulse and saw, a filter that opens on the attack, only a late vibrato. */
+  "lead-funk": subtractive({
+    oscs: [{ wave: "pulse", width: 0.36, level: 0.5 }, { wave: "saw", cents: 6, level: 0.4 }, { wave: "saw", cents: -6, level: 0.25, mult: 0.5 }],
+    cutoff: 1100, keytrack: 1.3, envOct: 1.6, fdecay: 0.22, fsustain: 0.45, q: 1.5,
+    attack: 0.004, decay: 0.3, sustain: 0.65, release: 0.09, vibrato: { rate: 5.4, depth: 10, delay: 0.35 }, velBright: 0.6,
+  }),
   rhodes: rhodes({ tau: 1.1, warm: 1.7, bark: 1.6, drive: 1.3 }),
   "rhodes-bright": rhodes({ tau: 0.8, warm: 2.2, bark: 2.6, barkTau: 0.05, drive: 1.6 }),
   "rhodes-soft": rhodes({ tau: 1.4, warm: 1.1, bark: 0.8, drive: 1 }),

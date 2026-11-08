@@ -311,6 +311,36 @@ describe("the Blender kart as the game draws it", () => {
     expect(thin.boundingBox!.max.z).toBeLessThanOrEqual(2.01);
   });
 
+  it("never gives the far kart a zero normal, even where faces turned opposite ways share a cell (a NaN pixel the glow spreads into a black block)", () => {
+    // A thin plate: its top and its underside on the same four corners, one surface.
+    const corners = [-0.5, 0, -0.5, 0.5, 0, -0.5, 0.5, 0, 0.5, -0.5, 0, 0.5];
+    const position = [...corners, ...corners];
+    const normal = [...Array(4).fill([0, 1, 0]).flat(), ...Array(4).fill([0, -1, 0]).flat()];
+    const plate = new BoxGeometry().toNonIndexed();
+    plate.deleteAttribute("uv");
+    plate.setAttribute("position", new Float32BufferAttribute(position, 3));
+    plate.setAttribute("normal", new Float32BufferAttribute(normal, 3));
+    plate.setAttribute("color", new Float32BufferAttribute(new Array(24).fill(1), 3));
+    plate.setAttribute("aSurf", new Float32BufferAttribute(new Array(32).fill(0.5), 4));
+    plate.setIndex([0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6]);
+    const unit = (g: ReturnType<typeof cluster>) => {
+      const n = g.getAttribute("normal");
+      for (let i = 0; i < n.count; i++) expect(Math.hypot(n.getX(i), n.getY(i), n.getZ(i)), `normal ${i}`).toBeCloseTo(1, 3);
+    };
+    unit(cluster(plate, 0.2));
+    // And every driver's real far kart, from the karts file.
+    const nodes = art();
+    for (const c of CHARACTERS) {
+      resetArtKart();
+      const model = createArtKart({ id: 2, colour: "#30D158", character: c.id }, kit, (n) => nodes.get(n)?.clone(true) ?? null);
+      const lod = model!.root.children[0] as unknown as { levels: { object: Object3D }[] };
+      lod.levels[1]!.object.traverse((o) => {
+        if ((o as Mesh).isMesh) unit((o as Mesh).geometry as ReturnType<typeof cluster>);
+      });
+      model!.dispose();
+    }
+  });
+
   it("builds a model that the actor can pose: wheels spin, the front pair steers, the steering wheel turns, a far version takes over", () => {
     const nodes = art();
     const model = createArtKart({ id: 3, colour: "#30D158", character: "fox" }, kit, (n) => nodes.get(n)?.clone(true) ?? null);
@@ -336,9 +366,18 @@ describe("the Blender kart as the game draws it", () => {
     expect(at(KART_EXHAUST.right, KART_EXHAUST.y, KART_EXHAUST.forward + 0.02)!.visible).toBe(true);
     kart.pose(pose({ flame: 0 }));
     expect(at(KART_EXHAUST.right, KART_EXHAUST.y, KART_EXHAUST.forward + 0.02)!.visible).toBe(false);
-    // Near and far versions of the kart.
-    const lod = kart.root.children[0] as unknown as { levels: unknown[] };
+    // Near and far versions of the kart, the far one from the renderer's distance (the tier's, or the load governor's step), held near for Big Heads.
+    const lod = kart.root.children[0] as unknown as { levels: { distance: number }[]; userData: { far?: number } };
     expect(lod.levels).toHaveLength(2);
+    kart.pose(pose({}));
+    expect(lod.levels[1]!.distance).toBe(34);
+    lod.userData.far = 20;
+    kart.pose(pose({}));
+    expect(lod.levels[1]!.distance).toBe(20);
+    kart.pose(pose({ headScale: 1.8 }));
+    expect(lod.levels[1]!.distance).toBe(Infinity);
+    kart.pose(pose({}));
+    expect(lod.levels[1]!.distance).toBe(20);
     expect(() => kart.dispose()).not.toThrow();
   });
 

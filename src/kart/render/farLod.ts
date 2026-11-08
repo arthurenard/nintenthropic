@@ -4,7 +4,8 @@
  * fraction of the triangles of a near one. Vertices that fall in the same cell
  * of a grid, and share a surface (chrome stays chrome, paint stays paint), merge
  * into one; triangles that collapse are dropped. Colours and surfaces are kept
- * from the cluster's first vertex, positions and normals averaged. Nothing here
+ * from the cluster's first vertex, positions and normals averaged (a normal that
+ * averages to nothing keeps the first vertex's own). Nothing here
  * is random, so every device makes the same far kart.
  */
 import { BufferGeometry, Float32BufferAttribute } from "three";
@@ -53,11 +54,21 @@ export function cluster(geometry: BufferGeometry, cell: number): BufferGeometry 
     position[c * 3] = sum[s]! * k;
     position[c * 3 + 1] = sum[s + 1]! * k;
     position[c * 3 + 2] = sum[s + 2]! * k;
-    const len = Math.hypot(sum[s + 3]!, sum[s + 4]!, sum[s + 5]!) || 1;
-    normal[c * 3] = sum[s + 3]! / len;
-    normal[c * 3 + 1] = sum[s + 4]! / len;
-    normal[c * 3 + 2] = sum[s + 5]! / len;
     const f = first[c]!;
+    // Faces turned opposite ways in one cell (a thin panel's two sides, a body's rear corner) can sum to nothing: a zero
+    // normal, which the kart's shader normalises into NaN, and the glow then spreads that one bad pixel into a black
+    // block over half the picture. Such a cell keeps its first vertex's own normal.
+    const len = Math.hypot(sum[s + 3]!, sum[s + 4]!, sum[s + 5]!);
+    if (len > 1e-3 * count[c]!) {
+      normal[c * 3] = sum[s + 3]! / len;
+      normal[c * 3 + 1] = sum[s + 4]! / len;
+      normal[c * 3 + 2] = sum[s + 5]! / len;
+    } else {
+      const own = Math.hypot(nor.getX(f), nor.getY(f), nor.getZ(f));
+      normal[c * 3] = own > 1e-6 ? nor.getX(f) / own : 0;
+      normal[c * 3 + 1] = own > 1e-6 ? nor.getY(f) / own : 1;
+      normal[c * 3 + 2] = own > 1e-6 ? nor.getZ(f) / own : 0;
+    }
     color[c * 3] = col.getX(f);
     color[c * 3 + 1] = col.getY(f);
     color[c * 3 + 2] = col.getZ(f);

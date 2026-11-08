@@ -425,7 +425,7 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
   const applyLevel = (level: number) => {
     look = lookFor(level, settings.shadowRange);
     const far = kartFar();
-    for (const lod of lods) lod.levels[1]!.distance = far;
+    for (const lod of lods) lod.userData.far = lod.levels[1]!.distance = far;
     if (effects) effects.density = look.particles;
     post.setRushTaps(look.rushTaps);
   };
@@ -439,7 +439,8 @@ export function createRaceRenderer(canvas: HTMLCanvasElement, hudRoot: HTMLEleme
       const lod = o as LOD;
       if (lod.isLOD && lod.levels[1]) {
         lods.push(lod);
-        lod.levels[1].distance = kartFar();
+        // Kept on the node too: the kart's pose sets the distance each frame (Big Heads holds it near) from this one.
+        lod.userData.far = lod.levels[1].distance = kartFar();
       }
     });
     kartGroup.add(a.root);

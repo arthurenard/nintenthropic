@@ -37,13 +37,18 @@
       </div>
     </header>
 
-    <!-- The landing: the two families of Nintenthropic, the kart game first and large (about 80%), Finger Guns slim beside it (about 20%). -->
+    <!-- The landing: the two families of Nintenthropic as a carousel of two tiles. The one in focus is large (about 80%), the other a slim peek (about 20%) that opens when it is hovered, tapped, swiped to or tabbed into. Grip Prix leads. -->
     <div id="landing" class="view landing" hidden>
       <main class="landing-main">
         <h1 class="landing-title" id="landing-title">Games you play with your hands.</h1>
-        <div class="tiles">
-          <article class="tile tile-grip" id="tile-grip" aria-labelledby="tile-grip-title">
+        <div class="tiles" id="tiles" data-lead="grip-prix" role="group" aria-roledescription="carousel" aria-label="Games">
+          <article class="tile tile-grip lead" id="tile-grip" aria-labelledby="tile-grip-title" aria-roledescription="slide">
             <div class="tile-art" id="tile-grip-art" aria-hidden="true"></div>
+            <div class="tile-peek" aria-hidden="true">
+              <span class="tile-peek-eyebrow">Racing</span>
+              <span class="tile-peek-title">Grip Prix</span>
+              <span class="tile-peek-open"><svg viewBox="0 0 24 24"><use href="#i-chevron-left" /></svg></span>
+            </div>
             <div class="tile-body">
               <img class="tile-icon" id="tile-grip-icon" alt="" hidden />
               <p class="eyebrow">Racing · Up to 4 Players</p>
@@ -57,8 +62,13 @@
               </div>
             </div>
           </article>
-          <article class="tile tile-arcade" id="tile-arcade" aria-labelledby="tile-arcade-title">
+          <article class="tile tile-arcade" id="tile-arcade" aria-labelledby="tile-arcade-title" aria-roledescription="slide">
             <div class="tile-art" id="tile-arcade-art" aria-hidden="true"></div>
+            <div class="tile-peek" aria-hidden="true">
+              <span class="tile-peek-eyebrow">Shooting</span>
+              <span class="tile-peek-title">Finger Guns</span>
+              <span class="tile-peek-open"><svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg></span>
+            </div>
             <div class="tile-body">
               <p class="eyebrow" id="tile-arcade-eyebrow">Shooting</p>
               <h2 class="tile-title" id="tile-arcade-title">Finger Guns</h2>
