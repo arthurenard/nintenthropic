@@ -11,10 +11,15 @@ async function stage(page: Page, script: string): Promise<void> {
 
 test("first run, the landing and the arcade", async ({ page }, info) => {
   await page.goto("/");
-  // A first visit lands on the landing, with the two spaces side by side.
+  // A first visit lands on the landing: the two spaces side by side, Grip Prix in the lead.
   await expect(page.locator("#landing")).toBeVisible();
   await page.mouse.move(1, 1);
   await shot(page, info, "02-landing", 1200);
+  // Finger Guns opens under the mouse, then its Play.
+  await page.locator("#tile-arcade").hover();
+  await expect(page.locator("#tiles")).toHaveAttribute("data-lead", "arcade");
+  // Once it has opened (a click while a tile is still opening only opens it).
+  await page.locator("#tiles").evaluate((row) => Promise.all(row.getAnimations({ subtree: true }).filter((a) => a instanceof CSSTransition).map((a) => a.finished.catch(() => undefined))));
   await page.locator("#tile-arcade").getByRole("link", { name: "Play" }).click();
   await expect(page.locator("#arcade")).toBeVisible();
   await page.mouse.move(1, 1);

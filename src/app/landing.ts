@@ -40,6 +40,8 @@ const KART_ICON = "assets/kart/icon.png";
 const HOVER_INTENT = 160;
 /** How far a finger travels sideways, px, before a touch is a swipe through the carousel rather than a tap. */
 const SWIPE = 36;
+/** How long after a tile opens a click on it still only opens it, ms: a double tap, or a second tap before its words are in, never starts its game. */
+const OPENING = 350;
 /** The carousel's tiles in their order on the page, left to right. */
 const ORDER: readonly Tile[] = ["grip-prix", "arcade"];
 
@@ -150,6 +152,8 @@ export class Landing {
   private touch: { id: number; x: number; y: number } | null = null;
   /** Until when a click is the tail of a swipe, not a tap (ms, performance.now()). */
   private swipedUntil = 0;
+  /** When the tile in the lead took it (ms, performance.now()). */
+  private openedAt = -Infinity;
 
   constructor(
     shooters: readonly GameEntry[],
@@ -184,6 +188,7 @@ export class Landing {
     if (tile === this.lead) return;
     const leaving = this.tiles[this.lead];
     this.lead = tile;
+    this.openedAt = animate ? performance.now() : -Infinity;
     if (!animate) this.row.classList.add("still");
     this.row.dataset.lead = tile;
     for (const name of ORDER) this.tiles[name].classList.toggle("lead", name === tile);
@@ -214,7 +219,8 @@ export class Landing {
       });
       // A tap or a click on the slim tile opens it; its Play is the leading tile's, a second tap away.
       tile.addEventListener("click", (event) => {
-        if (name === this.lead) return;
+        // A pointer's click (not the keyboard's Enter, whose detail is 0) on a tile still opening only opens it.
+        if (name === this.lead && !(event.detail > 0 && performance.now() - this.openedAt < OPENING)) return;
         event.preventDefault();
         this.bring(name);
       });
@@ -289,6 +295,7 @@ export class Landing {
 
   hide(): void {
     this.collage.stop();
+    window.clearTimeout(this.hoverTimer);
   }
 
   /** Stands on a tile's own button, that tile in the lead: where the player came from, or was sent to. */

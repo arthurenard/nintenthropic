@@ -190,8 +190,8 @@ body[data-view="landing"] .spaces {
   container: tiles / inline-size;
   display: flex;
   gap: var(--gap);
-  /* A sideways swipe is the carousel's; up and down still scroll the page. */
-  touch-action: pan-y;
+  /* A sideways swipe is the carousel's; up and down still scroll the page, and a pinch still zooms it. */
+  touch-action: pan-y pinch-zoom;
 }
 
 /* A tile: the picture fills it, a scrim darkens where the words sit, the words and the pill are at its foot. */
@@ -457,9 +457,11 @@ body[data-view="landing"] .spaces {
   height: 22px;
   stroke-width: 2.2;
 }
-.tile:not(.lead):hover .tile-peek-open {
-  background: rgba(255, 255, 255, 0.34);
-  transform: scale(1.08);
+@media (hover: hover) {
+  .tile:not(.lead):hover .tile-peek-open {
+    background: rgba(255, 255, 255, 0.34);
+    transform: scale(1.08);
+  }
 }
 /* A slim tile too narrow for its name across (a phone held upright, a narrow window): the name runs up the tile. */
 @container tiles (max-width: 760px) {
@@ -606,6 +608,12 @@ body[data-view="landing"] .spaces {
     padding-right: 4px;
   }
   /* Side by side still, one screen high: what is left after the bar, the title and the footnote. */
+  /* On the shortest phones the badge gives its corner to the words. */
+  @media (max-height: 640px) {
+    .tile-icon {
+      display: none !important;
+    }
+  }
   .tiles {
     --gap: 10px;
   }
