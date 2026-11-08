@@ -15,14 +15,14 @@ const IRON = rgb("#2e303a");
 const GOLD = rgb("#e0b040");
 
 /** 0 while the leaf is down, 1 while it is up, easing over the eighth of a cycle either side. */
+const smooth = (x: number): number => {
+  const c = Math.min(1, Math.max(0, x));
+  return c * c * (3 - 2 * c);
+};
 export function leafRaised(race: number): number {
   const u = ((((race / DRAWBRIDGE.period) % 1) + 1) % 1);
   const ease = 0.06;
-  const ramp = (x: number): number => {
-    const c = Math.min(1, Math.max(0, x));
-    return c * c * (3 - 2 * c);
-  };
-  return ramp((u - (DRAWBRIDGE.from - ease)) / ease) * (1 - ramp((u - DRAWBRIDGE.to) / ease));
+  return smooth((u - (DRAWBRIDGE.from - ease)) / ease) * (1 - smooth((u - DRAWBRIDGE.to) / ease));
 }
 
 /** Where the signals are: "up" (green), "warn" (amber, blinking: the leaf is about to rise) or "down" (red). */
@@ -102,40 +102,24 @@ const drawbridge: LandmarkSpec = {
         },
       });
     });
-    // The counterweights: a concrete block on a cable down each tower's outer face, lowest when the leaf is highest.
+    // The counterweights: a concrete block on each tower's outer face, on a cable from the pulley, lowest when the leaf is highest.
+    // Both blocks are one moving part (they go together), and the cables are fixed.
+    const blocks = new MeshBuilder();
     for (const s of [-1, 1]) {
       const wx = s * (X + 3.3);
-      const block = new MeshBuilder();
-      block.box(wx, 0, -16, 2.2, 4.2, 2.6, { bottom: scaleRgb(STONE_D, 0.9), top: scaleRgb(STONE, 0.95) });
-      block.box(wx, 1.9, -16, 2.4, 0.3, 2.8, IRON);
-      block.box(wx, 0, -16 - 1.31, 1.6, 0.5, 0.06, rgb("#e8c030"));
-      parts.push({
-        lit: block,
-        pivot: [wx, 0, -16],
-        update(_t, part, race = 0) {
-          part.position.y = 15 - 9.5 * leafRaised(race);
-        },
-      });
-      // The cable: a thin pole from the pulley down to the block, stretching as the block drops.
-      const cable = new MeshBuilder();
-      cable.box(wx, -0.5, -16, 0.14, 1, 0.14, IRON);
-      parts.push({
-        lit: cable,
-        pivot: [wx, -0.5, -16],
-        update(_t, part, race = 0) {
-          // From the pulley (y = TOP - 2) down to the top of the block.
-          const top = TOP - 2;
-          const len = Math.max(0.05, top - (15 - 9.5 * leafRaised(race) + 2.1));
-          part.scale.y = len;
-          part.position.y = top - len / 2 + 0.5;
-        },
-      });
+      blocks.box(wx, 0, -16, 2.2, 4.2, 2.6, { bottom: scaleRgb(STONE_D, 0.9), top: scaleRgb(STONE, 0.95) });
+      blocks.box(wx, 1.9, -16, 2.4, 0.3, 2.8, IRON);
+      blocks.box(wx, 0, -16 - 1.31, 1.6, 0.5, 0.06, rgb("#e8c030"));
+      lit.box(wx, (TOP - 2 + 7) / 2, -16, 0.14, TOP - 2 - 7, 0.14, IRON);
     }
-    const halos = [
-      { x: 0, y: lamps[0]!.y, z: -13.5, size: 4.0, colour: [3.0, 0.4, 0.3] as const, alpha: 0.2, twinkle: 0.3 },
-      { x: 0, y: lamps[2]!.y, z: -13.5, size: 4.0, colour: [0.3, 3.0, 0.9] as const, alpha: 0.12, twinkle: 0.3 },
-    ];
-    return { lit, glow, moving: parts, halos };
+    parts.push({
+      lit: blocks,
+      pivot: [0, 0, -16],
+      update(_t, part, race = 0) {
+        part.position.y = 15 - 9.5 * leafRaised(race);
+      },
+    });
+    return { lit, glow, moving: parts };
   },
 };
 

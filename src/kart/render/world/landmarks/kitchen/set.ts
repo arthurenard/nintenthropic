@@ -45,18 +45,18 @@ export const mixer: LandmarkSpec = {
     lit.box(px / 2 + 1.2, armY, 0, px - 1.5, 2.4, 3.6, { bottom: ENAMEL_D, top: ENAMEL });
     lit.box(px / 2 + 1.2, armY - 0.55, -1.82, px - 1.5, 0.35, 0.1, scaleRgb(STEEL_L, 0.85));
     // The motor head hung at the end of it, over the middle of the road, with its grille and the shaft down to the whisk.
-    lit.blob(0, armY - 0.3, 0, 4.4, 2.6, 4.4, { bottom: ENAMEL_D, top: WHITE }, 1);
-    lit.box(0, armY - 0.2, -3.9, 3.4, 1.4, 0.2, rgb("#2a2f3a"));
+    lit.blob(0, armY - 0.3, 0, 2.7, 2.4, 4.8, { bottom: ENAMEL_D, top: WHITE }, 1);
+    lit.box(0, armY - 0.2, -4.5, 2.6, 1.4, 0.2, rgb("#2a2f3a"));
     lit.post(0, 7.0, 0, 0.7, 2.6, { bottom: STEEL_D, top: STEEL_L }, 10);
     lit.post(0, 6.6, 0, 0.5, 0.6, STEEL_L, 8);
     // A speed dial on the column's face, a red knob and a lever, an indicator LED on the head.
     lit.post(px - 2.7, 8.0, -0.2, 0.9, 0.5, STEEL_D, 12);
     lit.add(shapes.cylinder(12), xf(px - 2.75, 8.0, -1.1, 0.7, 0.8, 0.7, 0, Math.PI / 2), lift("#d62b2b", 1.4));
     lit.box(px - 2.75, 9.8, -2.4, 0.3, 1.3, 0.2, STEEL);
-    glow.blob(0, armY - 0.3, -4.0, 0.3, 0.3, 0.2, [3.0, 0.35, 0.25], 1);
+    glow.blob(0, armY - 0.3, -4.6, 0.3, 0.3, 0.2, [3.0, 0.35, 0.25], 1);
     // A small brand plate on the base (the bowl is the road).
     lit.box(px - 4.52, 1.1, 0, 0.1, 0.7, 3.0, GOLD);
-    return { lit, glow, halos: [{ x: 0, y: armY - 0.3, z: -4.2, size: 3.4, colour: [3.0, 0.4, 0.3], alpha: 0.35, twinkle: 0.2 }] };
+    return { lit, glow, halos: [{ x: 0, y: armY - 0.3, z: -4.8, size: 3.4, colour: [3.0, 0.4, 0.3], alpha: 0.35, twinkle: 0.2 }] };
   },
 };
 

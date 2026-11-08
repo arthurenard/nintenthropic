@@ -37,12 +37,12 @@ const farmGate: LandmarkSpec = {
     const lit = new MeshBuilder();
     // Two stone posts with a cap each, and a low dry-stone wall running off either side.
     for (const x of [-3.2, 3.2]) {
-      lit.box(x, 1.4, 0, 1.3, 3.0, 1.3, ramp(scaleRgb(STONE, 0.7), STONE));
-      lit.box(x, 3.15, 0, 1.6, 0.35, 1.6, rgb("#c8ccd0"));
+      lit.box(x, 1.4, 0, 1.3, 3.0, 1.3, ramp(scaleRgb(STONE, 0.4), scaleRgb(STONE, 0.62)));
+      lit.box(x, 3.15, 0, 1.6, 0.35, 1.6, scaleRgb(STONE, 0.8));
     }
     for (const s of [-1, 1]) {
       for (let i = 0; i < 4; i++) {
-        lit.box(s * (5.8 + i * 2.0), 0.55 + (i % 2) * 0.06, 0, 2.1, 1.1, 0.9, ramp(scaleRgb(STONE, 0.62), scaleRgb(STONE, 0.95)), s * 0.05 * i);
+        lit.box(s * (5.8 + i * 2.0), 0.55 + (i % 2) * 0.06, 0, 2.1, 1.1, 0.9, ramp(scaleRgb(STONE, 0.4), scaleRgb(STONE, 0.66)), s * 0.05 * i);
       }
     }
     // The gate itself, a five-bar leaf hung on the left post and swung open about seventy degrees.

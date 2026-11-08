@@ -45,7 +45,7 @@ const CWEBP = process.env.CWEBP ?? (existsSync("/opt/homebrew/bin/cwebp") ? "/op
 const POSES = {
   "meadow-loop": {
     // The windmill and the tethered balloons from the outside of the left-hand bend that wraps the hill; Bun drifts with orange sparks.
-    at: 0.242,
+    at: 0.26,
     boxes: false,
     focus: 0,
     eye: { d: 16.5, off: 6.5, up: 0.5 },
@@ -78,12 +78,12 @@ const POSES = {
   "harbour-lights": {
     // Night on the quay, from behind: the karts drive away from us past the lighthouse and its beam, a crane and the town's
     // lights, and what glows is their tail lamps and Juniper's flame (head on, the headlights were big white blobs on the road).
-    at: 0.1768,
+    at: 0.235,
     boxes: false,
     focus: 4,
-    eye: { d: 34, off: -3.5, up: 0.5 },
-    target: { lm: "lighthouse", d: 0, off: 10, up: 13 },
-    fov: 58,
+    eye: { d: 30, off: -4.5, up: 0.7 },
+    target: { at: 0.235, d: 12, off: 12, up: 8 },
+    fov: 62,
     roll: 3,
     karts: [
       { id: 4, d: 21, off: 2.8, boost: 0.6, yaw: 3.4 },
