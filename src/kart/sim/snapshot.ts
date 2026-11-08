@@ -24,11 +24,11 @@ export const KART_AT = {
   lap: 26, lapStart: 27, bestLap: 28, finished: 29, finalPlace: 30, ai: 31,
   botPresses: 32, botWait: 33, botStuck: 34, botBack: 35, botNext: 36, botFreeze: 37, botSteer: 38, botDrifting: 39,
   botCut: 40, air: 41, vy: 42, flight: 43, trick: 44, rescue: 45, immune: 46,
-  comet: 47, zap: 48, draft: 49, aloft: 50, shakes: 51, prime: 52, counter: 53,
-  route: 54,
+  comet: 47, zap: 48, draft: 49, aloft: 50, shakes: 51, prime: 52, lapse: 53,
+  route: 54, ask: 55, slid: 56, botOut: 57,
 } as const;
 
-const KART_FIELDS = 55;
+const KART_FIELDS = 58;
 
 const item = (kind: KartState["item"]): number => (kind === null ? -1 : ITEM_KINDS.indexOf(kind));
 const kind = (index: number): KartState["item"] => (index < 0 ? null : (ITEM_KINDS[index] ?? null));
@@ -77,6 +77,7 @@ function packKart(k: KartState): number[] {
   a[KART_AT.botFreeze] = m.freeze;
   a[KART_AT.botSteer] = m.steer;
   a[KART_AT.botDrifting] = bit(m.drifting);
+  a[KART_AT.botOut] = m.out;
   a[KART_AT.botCut] = m.cut;
   a[KART_AT.air] = k.air;
   a[KART_AT.vy] = k.vy;
@@ -90,7 +91,9 @@ function packKart(k: KartState): number[] {
   a[KART_AT.aloft] = k.aloft;
   a[KART_AT.shakes] = k.shakes;
   a[KART_AT.prime] = k.prime;
-  a[KART_AT.counter] = k.counter;
+  a[KART_AT.lapse] = k.lapse;
+  a[KART_AT.ask] = k.ask;
+  a[KART_AT.slid] = bit(k.slid);
   a[KART_AT.route] = k.route;
   return a;
 }
@@ -137,6 +140,7 @@ function unpackKart(k: KartState, a: readonly number[], w: World): void {
   m.freeze = a[KART_AT.botFreeze]!;
   m.steer = a[KART_AT.botSteer]!;
   m.drifting = a[KART_AT.botDrifting]! === 1;
+  m.out = a[KART_AT.botOut] ?? 0;
   m.cut = a[KART_AT.botCut]!;
   k.air = a[KART_AT.air]!;
   k.vy = a[KART_AT.vy]!;
@@ -150,7 +154,9 @@ function unpackKart(k: KartState, a: readonly number[], w: World): void {
   k.aloft = a[KART_AT.aloft]!;
   k.shakes = a[KART_AT.shakes]!;
   k.prime = a[KART_AT.prime]!;
-  k.counter = a[KART_AT.counter]!;
+  k.lapse = a[KART_AT.lapse]!;
+  k.ask = a[KART_AT.ask] ?? 0;
+  k.slid = a[KART_AT.slid] === 1;
   // What follows from the rest.
   const race = w.main ?? w;
   // Which road it is on is sent, not worked out: where two roads overlap in a flare, nearest is not the same as the one it stayed on.

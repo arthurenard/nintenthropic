@@ -43,7 +43,8 @@ const BRAKE_FULL = ticks(D.brakeRamp * 6);
 const LEVEL_1 = ticks(DR.level1);
 const LEVEL_2 = ticks(DR.level2);
 const LEVEL_3 = ticks(DR.level3);
-const AGAINST_TICKS = ticks(DR.againstTime);
+const ASK_TICKS = ticks(DR.wheel.ask);
+const LAPSE_TICKS = ticks(DR.wheel.lapse);
 const FLOOD_AFTER = ticks(TUNING.start.floodAfter);
 const BOOST_WINDOW = ticks(TUNING.start.boostWindow);
 const RESCUE_TICKS = ticks(F.rescue);
@@ -57,7 +58,7 @@ const DRAFT_COS = Math.cos(DRAFT.angle);
 const finite = (v: number): number => (Number.isFinite(v) ? v : 0);
 
 export function newBotMemory(): BotMemory {
-  return { presses: 0, wait: 0, stuck: 0, back: 0, next: 0, freeze: 0, steer: 0, drifting: false, cut: 0 };
+  return { presses: 0, wait: 0, stuck: 0, back: 0, next: 0, freeze: 0, steer: 0, drifting: false, cut: 0, out: 0 };
 }
 
 /** How the kart drives: its driver's weight class (or the card's), with the card's say in speed, pick-up and grip. */
@@ -91,7 +92,9 @@ export function newKart(racer: RacerSetup, place: number, geo: TrackGeometry, ru
     charge: 0,
     level: 0,
     prevDrift: false,
-    counter: 0,
+    lapse: 0,
+    ask: 0,
+    slid: false,
     draft: 0,
     boost: 0,
     spin: 0,
@@ -210,7 +213,9 @@ function endDrift(k: KartState, boost: boolean, emit: Emit): void {
   k.drift = 0;
   k.charge = 0;
   k.level = 0;
-  k.counter = 0;
+  k.lapse = 0;
+  k.ask = 0;
+  k.slid = false;
 }
 
 /** A hit: spun round, most of the speed gone, no drift, no boost. */
@@ -305,6 +310,7 @@ function stepRescue(w: World, k: KartState, emit: Emit): void {
   k.bot.freeze = 0;
   k.bot.cut = 0;
   k.bot.drifting = false;
+  k.bot.out = 0;
   emit({ type: "rescued", kart: k.id });
 }
 
@@ -553,10 +559,29 @@ export function stepKart(world: World, k: KartState, input: DriveInput, emit: Em
   } else if (k.flight > 0) {
     flyControl(w, k, steerIn, driftIn, shook, emit);
   } else {
-    // The wheel's open hands brake, but in a bend at speed (or already drifting) they hold the drift with the throttle
-    // down instead: a brake into a bend is a slide, and closing the hands lets it go.
-    const slide = input.slide === true && brakeIn > 0 && (k.drift !== 0 || k.hop > 0 || (fwd > H.minSpeed && Math.abs(steerIn) > H.minSteer));
-    drive(w, k, steerIn, slide ? 1 : throttleIn, slide ? 0 : brakeIn, slide || driftIn, shook, fwd, emit);
+    // The wheel's open hands brake, but with a clear turn on at speed they are a drift instead (the throttle stays down),
+    // and closing the hands lets it go with its boost. The drift button is the keys' and the pad's own.
+    const open = input.slide === true && brakeIn > 0;
+    let slide = false;
+    if (k.drift !== 0 && (k.slid || open)) {
+      // Holding the bend: the hands stay open for the whole of it, whatever the wheel does. A frame or two of the camera
+      // reading them as fists is waited out; only a reading gone for the whole of the grace lets the drift go.
+      if (open) {
+        k.lapse = 0;
+        k.slid = true;
+      } else if (k.lapse < LAPSE_TICKS) {
+        k.lapse++;
+      }
+      slide = open || k.lapse < LAPSE_TICKS;
+    } else if (k.drift === 0 && open && fwd > H.minSpeed && Math.abs(steerIn) > DR.wheel.steer) {
+      // Open hands, a clear turn: a drift from the moment it has held for a few ticks. A brake on a straight, or at a crawl,
+      // stays a brake; open hands on a straight turned into a bend later become a drift there.
+      k.ask++;
+      slide = k.ask >= ASK_TICKS;
+    } else {
+      k.ask = 0;
+    }
+    drive(w, k, steerIn, slide ? 1 : throttleIn, slide ? 0 : brakeIn, slide || driftIn, slide, shook, fwd, emit);
   }
 
   // A kart off the ground (in a jump, or skimming a crest) rises and falls; one on it may be thrown off a crest or a lip.
@@ -590,7 +615,7 @@ function groundOf(w: World, k: KartState): (typeof GROUND)[keyof typeof GROUND] 
 }
 
 /** On the ground (or skimming a crest): the throttle, the brake, the wheel, the hop and the power-slide, the hills. */
-function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brakeIn: number, driftIn: boolean, shook: boolean, fwd: number, emit: Emit): void {
+function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brakeIn: number, driftIn: boolean, slide: boolean, shook: boolean, fwd: number, emit: Emit): void {
   // A Comet drives the rough as if it were road.
   const ground = k.comet > 0 && GROUND[k.ground].rough ? GROUND.road : groundOf(w, k);
   // The throttle, unless the engine is flooded.
@@ -608,15 +633,22 @@ function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brak
   k.prevDrift = driftIn;
   if (k.hop > 0) k.hop--;
   if (rising && k.hop === 0 && k.drift === 0 && fwd > H.minSpeed) k.hop = HOP_TICKS;
-  if (k.drift === 0 && k.hop > 0 && driftIn && Math.abs(steerIn) > H.minSteer && fwd > H.minSpeed * 0.8) {
+  // The direction is the wheel's, as it is on landing: with the button held, the first turn of the wheel (in the hop,
+  // after it, or from a straight into a bend with the button still down) starts the drift that way.
+  if (k.drift === 0 && driftIn && Math.abs(steerIn) > H.minSteer && fwd > (k.hop > 0 ? H.minSpeed * 0.8 : H.minSpeed)) {
     k.drift = steerIn > 0 ? 1 : -1;
     k.charge = 0;
     k.level = 0;
+    k.slid = slide;
+  } else if (k.drift !== 0 && !k.slid && k.hop > 0 && steerIn * k.drift <= -DR.flip) {
+    // Still in the hop, the wheel thrown the other way: that is the way it goes (the open hands' drift keeps the turn that began it).
+    k.drift = -k.drift as -1 | 1;
+    k.charge = 0;
+    k.level = 0;
   }
-  // Letting go, or a brake, ends it and gives the boost the charge earned; running out of speed gives nothing.
-  // Held hard against the slide for a moment, the kart straightens out of it.
-  k.counter = k.drift !== 0 && steerIn * k.drift <= -DR.against ? k.counter + 1 : 0;
-  if (k.drift !== 0 && (!driftIn || brakeIn > DR.endBrake || fwd < DR.minSpeed || k.counter >= AGAINST_TICKS)) endDrift(k, fwd >= DR.minSpeed, emit);
+  // Letting go ends it and gives the boost the charge earned; running out of speed gives nothing. Neither the wheel (held
+  // against the slide it only widens the turn) nor the brake ends it: a brake held in a drift just slows the kart.
+  if (k.drift !== 0 && (!driftIn || fwd < DR.minSpeed)) endDrift(k, fwd >= DR.minSpeed, emit);
 
   // Hills: gravity pulls along the road's grade, and a descent just behind raises the top speed while its pace lasts.
   const terrain = w.plan.terrain;

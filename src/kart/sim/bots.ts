@@ -40,6 +40,7 @@ import { bendNear, mood, takeOf, wideness, wobble, type BendNear, type Take } fr
 
 const B = TUNING.bots;
 const DR = TUNING.drift;
+const OUT_TICKS = ticks(B.driftOutTime);
 
 /** A bot's lane, -1..1, spread over the grid by a golden-ratio step so neighbours differ. */
 function laneOf(k: KartState): number {
@@ -676,6 +677,18 @@ export function botInput(world: World, k: KartState): DriveInput {
   const calm = !beside && !cutting && toRamp > 60 && !onIce(w, k) && Math.abs(tableAt(plan, plan.curve, k.s + 10)) < B.driftCurvature;
   steer = clamp(steer + wobble(w, k, style, calm), -1, 1);
 
+  if (k.drift !== 0) {
+    // In a drift the wheel is remapped to 0.4..1.4 of a full turn into it, and against it the turn only widens. A bend gentler
+    // than that, or one that has turned the other way, is a wheel against the drift: held for a moment, it lets the drift go.
+    const own = clamp((Math.abs(steer) - DR.steerBase) / DR.steerRange, -1, 1);
+    const given = Math.sign(steer) === k.drift ? own * k.drift : -k.drift;
+    m.out = given * k.drift <= -B.driftOut ? m.out + 1 : 0;
+    // In the hop it keeps short of the wheel thrown the other way, which would turn the drift round (`drift.flip`).
+    steer = k.hop > 0 ? Math.max(given * k.drift, -DR.flip + 0.1) * k.drift : given;
+  } else {
+    m.out = 0;
+  }
+
   // Drifting the long bends (not on ice, not into a ramp, not across a verge), unless it lets this one go by.
   const bendLength = tableAt(plan, plan.bend, k.s + 6);
   const bendTurn = tableAt(plan, plan.curve, k.s + 6);
@@ -683,7 +696,10 @@ export function botInput(world: World, k: KartState): DriveInput {
   if (m.drifting) {
     // A botched drift lets go at the apex, before the charge has come to much.
     const botched = takeKart?.drift === "short" && bendKart !== null && bendKart.toApex < 0;
-    const ending = bendLeft < 7 || (k.drift !== 0 && Math.sign(tableAt(plan, plan.curve, k.s + 2)) !== k.drift) || k.spin > 0 || toRamp < 30 || cutting || onIce(w, k) || botched;
+    // The wheel this drift is being given has been hard against it for a moment: the bend has turned, or is gentler than the
+    // slide (a wheel against a drift only widens it now), so the way out is to let go, boost and all.
+    const wantsOut = m.out >= OUT_TICKS;
+    const ending = wantsOut || bendLeft < 7 || (k.drift !== 0 && Math.sign(tableAt(plan, plan.curve, k.s + 2)) !== k.drift) || k.spin > 0 || toRamp < 30 || cutting || onIce(w, k) || botched;
     const failed = k.drift === 0 && k.hop === 0;
     if (ending || failed) m.drifting = false;
   } else if (
@@ -702,14 +718,6 @@ export function botInput(world: World, k: KartState): DriveInput {
   ) {
     m.drifting = true;
   }
-  if (k.drift !== 0) {
-    // In a drift the wheel is remapped to 0.4..1.4 of a full turn into it. Turning too much, the wheel goes hard the other way,
-    // and held there it straightens the kart out of the slide (`drift.against`), boost and all: how it saves a slide that is
-    // carrying it wide.
-    const own = clamp((Math.abs(steer) - DR.steerBase) / DR.steerRange, -1, 1);
-    steer = Math.sign(steer) === k.drift ? own * k.drift : -k.drift;
-  }
-
   // Speed: what the line allows ahead, within this bot's top speed; braking a little earlier or later this time round, and
   // carrying more or less through the bend. A bot pressing to catch the player corners as well as it can.
   const band = k.band;
@@ -755,6 +763,9 @@ export function botInput(world: World, k: KartState): DriveInput {
 
   // A shake of the wheel just before a ramp's lip kicks the jump (the sharp and the bold).
   const shakes = k.shakes + (kicks(w, k, style, fwd) ? 1 : 0);
+
+  // A bot braking hard in a drift lets it go first (its boost is still earned): the brake is for the corner ahead.
+  if (m.drifting && brake > B.driftBrake) m.drifting = false;
 
   return { steer, throttle, brake, drift: m.drifting, itemPresses: presses, shakes };
 }

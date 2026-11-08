@@ -63,6 +63,8 @@ export interface BotMemory {
   drifting: boolean;
   /** The verge cut (index + 1, in the plan's list) it is driving, or 0. */
   cut: number;
+  /** Ticks its steering has wanted the other way from the drift it is in. */
+  out: number;
 }
 
 /** What the kart is driving on: the road, or one of the track's other grounds. */
@@ -90,8 +92,12 @@ export interface KartState {
   charge: number;
   level: 0 | 1 | 2 | 3;
   prevDrift: boolean;
-  /** Ticks the wheel has been held hard against the drift. */
-  counter: number;
+  /** Ticks the open hands have gone unread in a drift they began (the wheel's grace before the drift is let go). */
+  lapse: number;
+  /** Ticks the open hands have been turned past the line while braking, before they become a drift. */
+  ask: number;
+  /** The drift (or the one about to start) is the wheel's open hands, not a button: a dropped reading gets its grace. */
+  slid: boolean;
   /** Ticks in the wake of another kart (the slipstream's charge); below zero, the rest after its boost, counting up. */
   draft: number;
 

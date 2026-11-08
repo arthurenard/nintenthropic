@@ -3,6 +3,7 @@ import { TrackGeometry } from "../track/geometry";
 import { QUAY as HARBOUR_AS_BUILT } from "./quayFixture";
 import { GO_TICK } from "./kart";
 import { ARENA, count, input, level, patch, race, racer, racers, run, toGo, view } from "./testing";
+import { TUNING } from "./tuning";
 
 /** Harbour Lights with its bridges levelled: these tests drive its start straight as the flat road it was, with no ship-deck road leaving it. */
 const HARBOUR_LIGHTS = { ...level(HARBOUR_AS_BUILT), routes: [] };
@@ -304,8 +305,8 @@ describe("hop and drift", () => {
     for (const [name, wheel] of [["into", 1], ["straight", 0], ["against", -0.6]] as const) {
       const r = arena();
       const speed = view(r).speed;
-      run(r, 1, () => drift(1));
-      run(r, 15, () => drift(wheel));
+      // The hop takes the way the wheel is turned; only then does the wheel go where the test says.
+      run(r, 16, () => drift(1));
       // Most of the way out within the quarter second of the hop.
       expect(Math.abs(slip(r)), name).toBeGreaterThan(14);
       run(r, 60, () => drift(wheel));
@@ -324,7 +325,7 @@ describe("hop and drift", () => {
     const turned = (wheel: number, drifting: boolean): number => {
       const r = arena();
       const course = (): number => view(r).course ?? view(r).heading;
-      run(r, 1, () => drift(1, drifting));
+      run(r, 16, () => drift(1, drifting));
       const start = course();
       let total = 0;
       let last = start;
@@ -346,19 +347,17 @@ describe("hop and drift", () => {
     expect(into).toBeGreaterThan(turned(1, false) * 1.2);
   });
 
-  it("straightens out when the wheel is held hard against it for a quarter second, with the boost it had earned", () => {
+  it("is never ended by the wheel: held hard against it for seconds the drift only widens, and the charge goes on", () => {
     const r = arena();
-    run(r, 1, () => drift(1));
-    run(r, 70, () => drift(1));
+    run(r, 71, () => drift(1));
     expect(view(r).driftLevel).toBe(1);
-    // A flick against it is only a correction...
-    run(r, 10, () => drift(-1));
-    run(r, 5, () => drift(1));
+    run(r, 120, () => drift(-1));
     expect(view(r).drift).toBe(1);
-    // ...held there, it is the way out.
-    const events = run(r, 16, () => drift(-1));
-    expect(view(r).drift).toBe(0);
-    expect(events.find((e) => e.type === "boost")).toMatchObject({ source: "drift", level: 1 });
+    const level = view(r).driftLevel;
+    expect(level).toBeGreaterThanOrEqual(2);
+    // The boost is there when the button goes up.
+    const events = run(r, 1, () => input({ throttle: 1 }));
+    expect(events.find((e) => e.type === "boost")).toMatchObject({ source: "drift", level });
   });
 
   it("unwinds when let go: the nose comes back to the way the kart goes within half a second", () => {
@@ -444,15 +443,23 @@ describe("hop and drift", () => {
     expect(view(quick).boost).toBe(0);
   });
 
-  it("is ended by a brake, which still gives the boost it had charged", () => {
+  it("is not ended by a brake: held in a drift (keys or pad) it slows the kart, and the drift and its charge go on", () => {
     const r = arena();
     run(r, 130, () => drift(1));
     expect(view(r).driftLevel).toBe(2);
-    const events = run(r, 3, () => input({ brake: 1, drift: true, steer: 1 }));
-    expect(view(r).drift).toBe(0);
-    expect(events.find((e) => e.type === "boost")).toMatchObject({ source: "drift", level: 2 });
-    expect(view(r).boost).toBeGreaterThan(1);
+    const before = view(r).speed;
+    const events = run(r, 30, () => input({ brake: 1, drift: true, steer: 1 }));
+    expect(view(r).drift).toBe(1);
+    expect(view(r).speed).toBeLessThan(before - 2);
+    expect(count(events, "boost")).toBe(0);
+    const level = view(r).driftLevel;
+    expect(level).toBeGreaterThanOrEqual(2);
+    const out = run(r, 1, () => input({ throttle: 1 }));
+    expect(out.find((e) => e.type === "boost")).toMatchObject({ source: "drift", level });
   });
+
+  /** Ticks of grace the sim gives open hands that go missing in a drift (TUNING.drift.wheel.lapse). */
+  const LAPSE = Math.round(TUNING.drift.wheel.lapse * 60);
 
   /** The wheel's open hands: a brake that is a slide in a bend at speed. */
   const open = (steer: number) => input({ brake: 1, slide: true, steer });
@@ -460,13 +467,14 @@ describe("hop and drift", () => {
   it("starts from open hands in a bend at speed, keeps the speed, and boosts when the hands close", () => {
     const r = arena();
     const before = view(r).speed;
-    run(r, 1, () => open(1));
+    run(r, 3, () => open(1));
     expect(view(r).drift).toBe(1);
     run(r, 130, () => open(1));
     expect(view(r).drift).toBe(1);
     expect(view(r).driftLevel).toBe(2);
     expect(view(r).speed).toBeGreaterThan(before * 0.9);
-    const events = run(r, 2, () => input({ throttle: 1, steer: 1 }));
+    // The hands closing is let go of once the grace for a dropped reading has run out.
+    const events = run(r, LAPSE + 1, () => input({ throttle: 1, steer: 1, slide: false }));
     expect(view(r).drift).toBe(0);
     expect(events.find((e) => e.type === "boost")).toMatchObject({ source: "drift", level: 2 });
   });
@@ -476,7 +484,7 @@ describe("hop and drift", () => {
     run(r, 60, () => drift(1));
     run(r, 60, () => open(0));
     expect(view(r).drift).toBe(1);
-    const events = run(r, 2, () => input({ throttle: 1 }));
+    const events = run(r, LAPSE + 1, () => input({ throttle: 1, slide: false }));
     expect(view(r).drift).toBe(0);
     expect(count(events, "boost")).toBe(1);
   });
