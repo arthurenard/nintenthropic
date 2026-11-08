@@ -1,6 +1,6 @@
 import { Vector3 } from "three";
 import { describe, expect, it } from "vitest";
-import { barrierDistance, isOpen } from "../../sim/terrain";
+import { barrierDistance, isDrop } from "../../sim/terrain";
 import { KartSpace } from "./kartSpace";
 import { TRACKS } from "../../track/tracks";
 import { chaseOffsets } from "../cameras";
@@ -26,7 +26,7 @@ describe("the chase camera's room", () => {
         const c = geo.at(s);
         const half = c.width / 2;
         for (const side of [-1, 1] as const) {
-          if (isOpen(sim, c.s, side)) continue;
+          if (isDrop(sim, c.s, side)) continue;
           const wall = barrierDistance(sim, c.s, side);
           // A kart at the barrier line and a little inside it, nosed this way and that across the road: the camera trails behind.
           for (const inset of [0.8, 3]) {
@@ -45,7 +45,7 @@ describe("the chase camera's room", () => {
               worstGround = Math.min(worstGround, pos.y - terrain.heightAt(pos.x, pos.z));
               // By the nearest road of any (the loop or a branch road), as the sim puts a kart.
               const here = kartSpace.place(pos.x, pos.z, 200);
-              // Over an open edge there is no barrier to keep inside of: the ground falls away there.
+              // Over a drop the rail is at the road's edge and the ground falls away beyond it: the camera may swing out there.
               if (!here || !here.walled) continue;
               // Midway between two roads the sim keeps a kart on the one it is on (project's stickiness): judge by that one.
               if (here.route !== geo.project(pos.x, pos.z, undefined, kartAt.route).route) continue;
@@ -58,8 +58,9 @@ describe("the chase camera's room", () => {
       layer.dispose();
       expect(tried).toBeGreaterThan(50);
       expect(worstGround, "camera above the ground").toBeGreaterThanOrEqual(0.8);
-      // (On a narrow, curving branch road the camera is held to the nearest sample's margin: a tenth of a metre of the 1.5 m margin is slack.)
-      expect(worstOut, "camera beyond the barrier's margin").toBeLessThanOrEqual(0.2);
+      // (On a narrow, curving branch road, or between a road and a branch that leaves it, the camera is held to the nearest sample's margin
+      // and the sim measures from the curve between the samples: under half a metre of the 1.5 m margin is slack.)
+      expect(worstOut, "camera beyond the barrier's margin").toBeLessThanOrEqual(0.45);
     });
   }
 

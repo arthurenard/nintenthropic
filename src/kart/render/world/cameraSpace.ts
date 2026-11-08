@@ -42,7 +42,14 @@ export function createCameraSpace(track: TrackGeometry, terrain: Terrain, featur
     fit(pos, kart) {
       // Where the camera is along the kart's own road: a bend can swing it across to another stretch of the lap (a hairpin's other leg).
       const kp = track.project(kart.x, kart.z);
-      const p = track.project(pos.x, pos.z, kp.s, kp.route);
+      let p = track.project(pos.x, pos.z, kp.s, kp.route);
+      // A branch road the hint (where the kart is) does not reach but that is nearer: the sim holds a kart by the nearest road.
+      const farther = Math.hypot(pos.x - p.sample.x, pos.z - p.sample.z);
+      for (const road of track.routes) {
+        if (road.route === p.route || pos.x < road.minX || pos.x > road.maxX || pos.z < road.minZ || pos.z > road.maxZ) continue;
+        const q = road.projectOpen(pos.x, pos.z);
+        if (Math.hypot(pos.x - q.sample.x, pos.z - q.sample.z) < farther - 0.25) p = q;
+      }
       const road = roads[p.route] ?? roads[0]!;
       const f = road.features;
       const geo = road.geo;
@@ -50,7 +57,8 @@ export function createCameraSpace(track: TrackGeometry, terrain: Terrain, featur
       const side = p.offset > 0 ? 1 : -1;
       const i = indexOf(geo, p.s);
 
-      // Not past the margin beyond the barrier (an open edge has none: the ground falls away there, and nothing stands in the void).
+      // Not past the margin beyond the barrier (over a drop it is a rail at the road's edge, with the ground falling away beyond it:
+      // the camera may swing out over the drop, and nothing stands in the void).
       const open = (side < 0 ? f.dropLeft : f.dropRight)[i]! > 0.5;
       if (!open) {
         const most = half + (side < 0 ? f.wallLeft : f.wallRight)[i]! + SOLID_MARGIN - 0.2;

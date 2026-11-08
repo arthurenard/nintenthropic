@@ -397,7 +397,7 @@ function frame(now: number): void {
     const fingers = control.fingers;
     set("fingers", `L ${fingers.left ?? "–"} · R ${fingers.right ?? "–"}`);
     // The wheel drifts with open hands in a bend; whether it is going fast enough is the kart's to say, and there is no kart here.
-    const drift = input.drift || (input.slide === true && Math.abs(input.steer) > TUNING.hop.minSteer);
+    const drift = input.drift || (input.slide === true && Math.abs(input.steer) > TUNING.drift.wheel.steer);
     set("drift", drift ? "At speed" : "Off", drift ? "on" : "");
     if (drift && !player.drifting) replay(v.get("drift")!, "pulse");
     player.drifting = drift;

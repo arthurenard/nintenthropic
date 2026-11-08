@@ -6,6 +6,7 @@
  * is, and the patches of ice, mud and boost strip across it. Fractions of the
  * lap in the data become metres here.
  */
+import { edgesOf, railWall, RAIL_GAP } from "../track/edges";
 import { inStretch, type HazardDef, type Stretch, type Surface, type TrackDef, type TrackGeometry } from "../track/geometry";
 import type { Ground } from "./state";
 import { TUNING } from "./tuning";
@@ -48,9 +49,12 @@ export interface Terrain {
   gaps: Span[];
   patches: Patch[];
   hazards: HazardDef[];
-  /** Per geometry sample: 1 where that side has no barrier. */
+  /** Per geometry sample: 1 where that side has a drop beside it (a rail stands over it: see `railLeft`; or the road is missing, in a gap). */
   openLeft: Uint8Array;
   openRight: Uint8Array;
+  /** Per sample: how far the rail over a drop has come in to the road's edge, 0..1 (it eases in over ten metres: `barrierLeft` follows). */
+  railLeft: Float32Array;
+  railRight: Float32Array;
   /** Per sample: how far beyond the road's edge the barrier stands. */
   barrierLeft: Float32Array;
   barrierRight: Float32Array;
@@ -156,12 +160,13 @@ export function buildTerrain(def: TrackDef, geo: TrackGeometry): Terrain {
   const gaps: Span[] = [];
   for (const drop of def.drops ?? []) {
     if (drop.gap) gaps.push(spanOf(drop, length));
-    for (let i = 0; i < n; i++) {
-      if (!inStretch(frac(i), drop)) continue;
-      if (drop.side !== "right") openLeft[i] = 1;
-      if (drop.side !== "left") openRight[i] = 1;
-    }
   }
+  // Drops, and the rail over them, are worked out with the picture's (track/edges.ts): the same stretches, eased the same way.
+  const edges = edgesOf(geo);
+  openLeft.set(edges.dropLeft);
+  openRight.set(edges.dropRight);
+  const railLeft = edges.railLeft;
+  const railRight = edges.railRight;
   for (const verge of def.verges ?? []) {
     for (let i = 0; i < n; i++) {
       if (!inStretch(frac(i), verge)) continue;
@@ -179,6 +184,14 @@ export function buildTerrain(def: TrackDef, geo: TrackGeometry): Terrain {
     if (gates.left[i]) barrierLeft[i] = Math.max(barrierLeft[i]!, gates.left[i]!);
     if (gates.right[i]) barrierRight[i] = Math.max(barrierRight[i]!, gates.right[i]!);
   }
+  // Over a drop the barrier is a rail at the road's edge, closing in from where it usually stands as the drop begins.
+  for (let i = 0; i < n; i++) {
+    barrierLeft[i] = railWall(barrierLeft[i]!, railLeft[i]!);
+    barrierRight[i] = railWall(barrierRight[i]!, railRight[i]!);
+    // A deck is road under the kart's wheels all the way to the rail.
+    if (barrierLeft[i]! <= RAIL_GAP + 0.01 && railLeft[i]! >= 0.5) groundLeft[i] = "road";
+    if (barrierRight[i]! <= RAIL_GAP + 0.01 && railRight[i]! >= 0.5) groundRight[i] = "road";
+  }
   const patches: Patch[] = (def.surfaces ?? []).map((surface) => {
     const middle = surface.offset ?? 0;
     const half = (surface.width ?? Infinity) / 2;
@@ -189,7 +202,7 @@ export function buildTerrain(def: TrackDef, geo: TrackGeometry): Terrain {
     const lift = ramp.lift ?? R.lift;
     return { s: geo.wrap(ramp.at * length), lift, trick: ramp.trick !== false, length: R.length, height: (R.height * lift) / R.lift };
   });
-  return { length, spacing: geo.spacing, origin: geo.origin, open: geo.open, ramps, arcs: buildArcs(def, geo), gaps, patches, hazards: def.hazards ?? [], openLeft, openRight, barrierLeft, barrierRight, groundLeft, groundRight, ...hills(geo) };
+  return { length, spacing: geo.spacing, origin: geo.origin, open: geo.open, ramps, arcs: buildArcs(def, geo), gaps, patches, hazards: def.hazards ?? [], openLeft, openRight, railLeft, railRight, barrierLeft, barrierRight, groundLeft, groundRight, ...hills(geo) };
 }
 
 /** The road's grade, its crests and dips, and how steep the descent just behind each place is: the hills the karts feel. */
@@ -204,13 +217,21 @@ function hills(geo: TrackGeometry): Pick<Terrain, "grade" | "crest" | "fallBehin
   const stretch = geo.stretch;
   const grade = new Float32Array(n);
   const crest = new Float32Array(n);
+  // Near a branch road's ends only the road there is read (the span either side cut short to what there is): read as far as
+  // a clamped end, a sloping branch had half its grade at its first metre and a crest beside it that was not in the road.
   for (let i = 0; i < n; i++) {
     const s = geo.samples[i]!.s;
-    grade[i] = (y(s + span) - y(s - span)) / (2 * span * stretch);
+    const ahead = geo.open ? Math.min(span, (n - 1 - i) * spacing) : span;
+    const behind = geo.open ? Math.min(span, i * spacing) : span;
+    grade[i] = ahead + behind > 0 ? (y(s + ahead) - y(s - behind)) / ((ahead + behind) * stretch) : 0;
   }
   // The bow over a crest is how fast the grade falls away, read over the same span.
   const reach = Math.max(1, Math.round(span / spacing));
-  for (let i = 0; i < n; i++) crest[i] = -(grade[idx(i + reach)]! - grade[idx(i - reach)]!) / (2 * reach * spacing * stretch);
+  for (let i = 0; i < n; i++) {
+    const hi = geo.open ? Math.min(n - 1, i + reach) : i + reach;
+    const lo = geo.open ? Math.max(0, i - reach) : i - reach;
+    crest[i] = hi > lo ? -(grade[idx(hi)]! - grade[idx(lo)]!) / ((hi - lo) * spacing * stretch) : 0;
+  }
   const back = Math.max(1, Math.round(TUNING.slope.carry / spacing));
   const fallBehind = new Float32Array(n);
   const fallAhead = new Float32Array(n);
@@ -274,10 +295,15 @@ export function sampleAt(t: Terrain, s: number): number {
   return ((Math.round(s / t.spacing) % n) + n) % n;
 }
 
-/** Is the edge on this side (+1 right, -1 left) open here: no barrier, a drop? */
-export function isOpen(t: Terrain, s: number, side: 1 | -1): boolean {
+/** Is there a drop beside the road on this side (+1 right, -1 left) here? A rail stands over it, except in a gap. */
+export function isDrop(t: Terrain, s: number, side: 1 | -1): boolean {
   const i = sampleAt(t, s);
   return (side > 0 ? t.openRight[i] : t.openLeft[i]) === 1;
+}
+
+/** Is the edge on this side open here: nothing to stop a kart, which falls (only in a gap, where the road itself is missing)? */
+export function isOpen(t: Terrain, s: number, side: 1 | -1): boolean {
+  return isDrop(t, s, side) && gapAt(t, s) !== null;
 }
 
 /** How far beyond the road's edge the barrier stands on this side here (the usual 6 m, or a verge's). */

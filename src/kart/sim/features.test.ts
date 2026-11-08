@@ -13,7 +13,8 @@ import { GO_TICK } from "./kart";
 import { planFor } from "./plan";
 import type { SimRace } from "./race";
 import { KART_AT } from "./snapshot";
-import { wedgeAt } from "./terrain";
+import { barrierDistance, groundAt, wedgeAt } from "./terrain";
+import { RAIL_GAP } from "../track/edges";
 import { count, give, input, patch, race, racers, run, toGo, view } from "./testing";
 
 /**
@@ -447,30 +448,66 @@ describe("item boxes", () => {
   });
 });
 
-describe("open edges and the rescue drone", () => {
+describe("rails over a drop", () => {
   const track = stadium((f) => ({ drops: [{ from: f(100), to: f(330), side: "left" }] }));
 
-  /** Kart 0 drives off the left edge near 200 m with a puck in hand; returns the race and the events up to the moment it is set down. */
-  function falling() {
+  it("stop a kart that drives at the edge: it scrapes or hits the rail and stays on the road, it does not fall", () => {
     const r = race(track, racers(2, 0));
     toGo(r);
     place(r, track, 150, -5, 15);
+    const events = drive(r, () => ({ throttle: 1, steer: -0.25 }), () => false, 400);
+    expect(count(events, "fall")).toBe(0);
+    expect(count(events, "wall")).toBeGreaterThan(0);
+    const geo = planFor(track).geo;
+    const k = view(r);
+    const p = geo.project(k.x, k.z);
+    // Held at the rail: a kart's centre is at most a metre past the road's edge here (the rail's gap less the barrier's inset).
+    expect(p.offset).toBeGreaterThanOrEqual(-(p.sample.width / 2 + 1.001));
+    expect(p.offset).toBeLessThan(0);
+  });
+
+  it("stand on both sides of the road's deck, and the barrier is back 6 m out after the edge's end", () => {
+    const geo = planFor(track).geo;
+    const terrain = planFor(track).terrain;
+    const half = geo.at(200).width / 2;
+    expect(barrierDistance(terrain, 200, -1)).toBeCloseTo(RAIL_GAP, 3);
+    expect(barrierDistance(terrain, 200, 1)).toBeCloseTo(6, 3);
+    expect(barrierDistance(terrain, 345, -1)).toBeCloseTo(6, 3);
+    // Eased in and out, not a step.
+    expect(barrierDistance(terrain, 97, -1)).toBeLessThan(6);
+    expect(barrierDistance(terrain, 97, -1)).toBeGreaterThan(RAIL_GAP);
+    // The deck is road all the way to the rail.
+    expect(groundAt(terrain, 200, -(half + 1), half)).toBe("road");
+    const r = race(track, racers(1, 0));
+    toGo(r);
+    place(r, track, 340, -5, 15);
+    expect(count(drive(r, () => ({ throttle: 1, steer: -0.25 }), () => false, 300), "fall")).toBe(0);
+  });
+});
+
+describe("the rescue drone", () => {
+  // A stretch of road that is missing, with no ramp: a kart that drives in falls.
+  const track = stadium((f) => ({ drops: [{ from: f(200), to: f(215), side: "both", gap: true }] }));
+
+  /** Kart 0 drives into the gap with a puck in hand; returns the race and the events up to the moment it falls. */
+  function falling() {
+    const r = race(track, racers(2, 0));
+    toGo(r);
+    place(r, track, 150, 0, 15);
     give(r, 0, "puck");
-    const events = drive(r, () => ({ throttle: 1, steer: -0.25 }), (e) => e.some((x) => x.type === "fall"), 400);
+    const events = drive(r, () => ({ throttle: 1, steer: 0 }), (e) => e.some((x) => x.type === "fall"), 400);
     return { r, events };
   }
 
-  it("lets a kart go over an edge that has no barrier, and says so", () => {
+  it("lets a kart that drives into a gap fall, and says so", () => {
     const { events } = falling();
     expect(count(events, "fall")).toBe(1);
     expect(count(events, "wall")).toBe(0);
   });
 
-  it("holds a kart for 2.5 s where it went over, then sets it down on the centre line about 15 m behind, standing still, facing forward", () => {
+  it("holds a kart for 2.5 s where it went over, then sets it down on the centre line well before the gap, standing still, facing forward", () => {
     const { r, events } = falling();
     const fell = first(events, "fall")!;
-    const before = r.snapshot();
-    const at = (before.k as number[][])[0]![KART_AT.s]!;
     expect(view(r).rescue).toBeGreaterThan(2.4);
     expect(view(r).rescue).toBeLessThanOrEqual(2.5);
     // It stays where it went over, nothing moving, for the whole rescue (the picture draws the fall and the drone).
@@ -494,13 +531,14 @@ describe("open edges and the rescue drone", () => {
     expect(k.rescue).toBe(0);
     expect(k.hop).toBe(0);
     expect(Math.abs(p.offset)).toBeLessThan(0.1);
-    expect(geo.delta(p.s, at)).toBeCloseTo(15, 0);
+    // Set down with room to get up to the speed the jump needs: 48 m before the gap.
+    expect(geo.delta(p.s, 200 - 48)).toBeCloseTo(0, 0);
     expect(k.speed).toBe(0);
     expect(Math.abs(k.heading - geo.heading(p.s))).toBeLessThan(0.01);
     // It kept its item, and the progress of the lap went back with it.
     expect(k.item).toBe("puck");
     const after = r.snapshot();
-    expect((after.k as number[][])[0]![KART_AT.progress]!).toBeCloseTo(at - 15, 0);
+    expect((after.k as number[][])[0]![KART_AT.progress]!).toBeCloseTo(200 - 48, 0);
     // And it can drive on.
     run(r, 120, () => input({ throttle: 1 }));
     expect(view(r).speed).toBeGreaterThan(8);
@@ -522,19 +560,6 @@ describe("open edges and the rescue drone", () => {
     const events = run(a.r, 5, () => input({ throttle: 1 }));
     expect(count(events, "bump")).toBe(0);
     expect(Math.hypot(view(a.r, 1).x - parked.x, view(a.r, 1).z - parked.z)).toBeLessThan(0.05);
-  });
-
-  it("does not happen on the barrier side, or after the edge's end", () => {
-    const r = race(track, racers(1, 0));
-    toGo(r);
-    place(r, track, 150, 5, 15);
-    const events = drive(r, () => ({ throttle: 1, steer: 0.3 }), () => false, 300);
-    expect(count(events, "fall")).toBe(0);
-    expect(count(events, "wall")).toBeGreaterThan(0);
-    const late = race(track, racers(1, 0));
-    toGo(late);
-    place(late, track, 340, -5, 15);
-    expect(count(drive(late, () => ({ throttle: 1, steer: -0.25 }), () => false, 300), "fall")).toBe(0);
   });
 });
 
@@ -783,7 +808,7 @@ describe("verges", () => {
 describe("snapshots and prediction", () => {
   const track = stadium((f) => ({
     ramps: [{ at: f(300) }],
-    drops: [{ from: f(301.5), to: f(315), side: "both", gap: true }, { from: f(80), to: f(250), side: "left" }],
+    drops: [{ from: f(301.5), to: f(315), side: "both", gap: true }, { from: f(100), to: f(115), side: "both", gap: true }],
     surfaces: [{ from: f(40), to: f(110), kind: "ice" }],
   }));
 
@@ -821,10 +846,15 @@ describe("snapshots and prediction", () => {
     let sawAir = 0;
     let sawRescue = 0;
     let sawIce = 0;
+    let fetched = false;
     for (let i = 0; i < 60 * 20; i++) {
-      // Slide left over the edge on the ice, be fetched back, then up the straight, the ramp and over.
+      // Slide on the ice into a gap, be fetched back, then (set down past it) up the straight, the ramp and over.
       const t = i / 60;
-      const given = input({ throttle: 1, steer: t > 1 && t < 2.5 ? -0.5 : 0, drift: i % 97 < 3 });
+      const given = input({ throttle: 1, steer: t > 1 && t < 2.5 ? -0.1 : 0, drift: i % 97 < 3 });
+      if (!fetched && sawRescue > 0 && view(stepped).rescue === 0) {
+        fetched = true;
+        for (const r of [stepped, predicted]) place(r, track, 230, 0, 22);
+      }
       stepped.step(new Map([[0, given]]));
       predicted.predict([0], new Map([[0, given]]));
       const s = view(stepped);

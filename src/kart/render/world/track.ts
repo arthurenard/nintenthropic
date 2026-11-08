@@ -24,7 +24,14 @@ import type { ThemeStyle } from "./themes";
 import { ROAD_TILE } from "./textures";
 import type { Glow, TrackBuild } from "./trackContext";
 import { buildAirPads } from "./airPads";
-import { buildFestoons, buildGapEnds, buildOpenEdges, buildPads, buildPatches, buildRamps, buildSpaceEdges, type PatchGeometry } from "./trackFeatures";
+import { buildFestoons, buildGapEnds, buildOpenEdges, buildPads, buildPatches, buildRamps, buildSpaceEdges, SHELF_BEYOND, type PatchGeometry } from "./trackFeatures";
+
+/** How far out a verge can reach from its road's edge (to a far barrier and its slope), metres: past it no other road is under it. */
+const VERGE_REACH = 30;
+/** A verge lowered under another road sits this far below that road's surface, metres. */
+const UNDER_OTHER = 0.04;
+/** A verge this far above another road is passing over it (a bridge), not lying on it, metres. */
+const OVER_OTHER = 2.5;
 
 /** Samples per chunk (about metres: the geometry samples every metre). */
 const CHUNK = 48;
@@ -145,6 +152,94 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     const a = S(i);
     return [a.x - a.tz * off, a.y + bank.liftAt(i, off) + dy, a.z + a.tx * off];
   };
+  // A verge can reach over another road where the two meet (the loop's grass over a branch climbing up to it, a branch's over
+  // the loop): drawn at its own road's height it lay on that road's surface as a patch of grass. Over another road a verge goes
+  // just under that road's surface instead, an embankment down (or up) to it. Only samples near another road are looked at, and
+  // each looks for the other road only around where it found it (`nearS`): searching the whole of it for every vertex cost a
+  // track up to half a second more to build.
+  const others: TrackGeometry[] = open ? [(track as unknown as { main: TrackGeometry }).main] : track.routes;
+  const nearOther = new Uint8Array(n);
+  const nearS = others.map(() => new Float64Array(n).fill(NaN));
+  others.forEach((other, r) => {
+    for (let i = 0; i < n; i++) {
+      const a = samples[i]!;
+      const q = other.open ? other.projectOpen(a.x, a.z) : other.projectLoop(a.x, a.z);
+      if (Math.abs(q.offset) >= q.sample.width / 2 + a.width / 2 + VERGE_REACH) continue;
+      nearOther[i] = 1;
+      nearS[r]![i] = q.s;
+    }
+  });
+  /** How far a vertex at `v` must come down to lie under another road there (0 if it lies on none, or high over it: a bridge). */
+  const sink = (v: V3, i: number, margin: number): number => {
+    let drop = 0;
+    others.forEach((other, r) => {
+      const hint = nearS[r]![wrapI(i)]!;
+      if (Number.isNaN(hint)) return;
+      const q = other.open ? other.projectOpen(v[0], v[2], hint) : other.projectLoop(v[0], v[2], hint);
+      const half = q.sample.width / 2;
+      if (Math.abs(q.offset) > half + margin) return;
+      const surface = q.sample.y + Bank.of(other).lift(q.s, Math.max(-half, Math.min(half, q.offset)));
+      const above = v[1] - (surface - UNDER_OTHER);
+      // Well above the other road it is not lying on it but passing over it: left as it is.
+      if (above > 0 && above < OVER_OTHER) drop = Math.max(drop, above);
+    });
+    return drop;
+  };
+  /**
+   * A piece of verge: corners 0 and 1 across the road at sample `i`, 3 and 2 at the next. Where it reaches another road it is
+   * drawn in strips half a metre wide, each corner lowered under that road where it lies on it: lowered at its corners alone, a
+   * piece reaching across the other road's edge still lay over the road between them.
+   */
+  const vergeQuad = (into: MeshBuilder, i: number, q: V3[], c: Rgb[]): void => {
+    const mix = (a: number, b: number, t: number): number => a + (b - a) * t;
+    const blend = (list: readonly (readonly [number, number, number])[], u: number, v: number): [number, number, number] =>
+      [0, 1, 2].map((k) => mix(mix(list[0]![k]!, list[1]![k]!, u), mix(list[3]![k]!, list[2]![k]!, u), v)) as [number, number, number];
+    const across = Math.max(Math.hypot(q[1]![0] - q[0]![0], q[1]![2] - q[0]![2]), Math.hypot(q[2]![0] - q[3]![0], q[2]![2] - q[3]![2]));
+    let reaches = false;
+    if (nearOther[wrapI(i)] === 1 || nearOther[wrapI(i + 2)] === 1) {
+      // Looked at every two metres across, on both ends and the middle: a road (at least eight metres wide) cannot pass between.
+      const steps = Math.max(1, Math.ceil(across / 2));
+      for (let a = 0; a <= steps && !reaches; a++) for (const v of [0, 0.5, 1]) if (sink(blend(q, a / steps, v), i, 1.6) > 0) reaches = true;
+    }
+    if (!reaches) {
+      into.quad(q[0]!, q[1]!, q[2]!, q[3]!, c[0]!, c[1]!, c[2]!, c[3]!, UP, groundUv(q[0]!, q[1]!, q[2]!, q[3]!));
+      return;
+    }
+    const cols = Math.max(1, Math.min(40, Math.ceil(across / 0.5)));
+    const grid: V3[][] = [];
+    // Which columns of strips lie clear of the other road (no corner lowered): runs of those are drawn as one piece.
+    const clear = new Array<boolean>(cols + 1).fill(true);
+    // Two rows along: another road's edge crossing a piece at a slant can lie over its middle and neither end.
+    const rows = [0, 0.5, 1];
+    for (const v of rows) {
+      const row: V3[] = [];
+      for (let a = 0; a <= cols; a++) {
+        const p = blend(q, a / cols, v);
+        const drop = sink(p, i, 0.6);
+        if (drop > 0) clear[a] = false;
+        row.push([p[0], p[1] - drop, p[2]]);
+      }
+      grid.push(row);
+    }
+    let a = 0;
+    while (a < cols) {
+      // A run of strips whose corners are all where they would be anyway is one piece (the same surface, fewer vertices).
+      let b = a + 1;
+      if (clear[a] && clear[b]) while (b < cols && clear[b + 1]) b++;
+      const u0 = a / cols;
+      const u1 = b / cols;
+      for (let r = 0; r + 1 < rows.length; r++) {
+        const v0 = rows[r]!;
+        const v1 = rows[r + 1]!;
+        const p0 = grid[r]![a]!;
+        const p1 = grid[r]![b]!;
+        const p2 = grid[r + 1]![b]!;
+        const p3 = grid[r + 1]![a]!;
+        into.quad(p0, p1, p2, p3, blend(c, u0, v0), blend(c, u1, v0), blend(c, u1, v1), blend(c, u0, v1), UP, groundUv(p0, p1, p2, p3));
+      }
+      a = b;
+    }
+  };
   const chunks = Math.ceil(n / CHUNK);
   const road: MeshBuilder[] = [];
   const deco: MeshBuilder[] = [];
@@ -237,7 +332,7 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     const v0 = (i * realStep) / ROAD_TILE;
     const v1 = ((i + 1) * realStep) / ROAD_TILE;
     // Four strips across, so a banked road is not a single tilted plane through its middle.
-    const cols = bank.any ? 4 : 1;
+    const cols = bank.any ? (open ? 8 : 4) : 1;
     for (let k = 0; k < cols; k++) {
       const u0 = k / cols;
       const u1 = (k + 1) / cols;
@@ -245,6 +340,8 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       const l1 = -hw0 + u1 * hw0 * 2;
       const m0 = -hw1 + u0 * hw1 * 2;
       const m1 = -hw1 + u1 * hw1 * 2;
+      // A branch lying wholly on the road it leaves is the road's own surface there (see Bank): drawn once, so no two textures fight.
+      if (open && bank.onMain(i, l0) && bank.onMain(i, l1) && bank.onMain(i + 1, m0) && bank.onMain(i + 1, m1)) continue;
       road[chunkOf(i)]!.quad(P(i, l0), P(i, l1), P(i + 1, m1), P(i + 1, m0), WHITE, WHITE, WHITE, WHITE, up, [u0, v0, u1, v0, u1, v1, u0, v1]);
     }
   }
@@ -259,8 +356,10 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
     const a = S(i);
     const b = S(i + 2);
     for (const side of [-1, 1] as const) {
-      // An open edge has its shelf and cliff instead; a gap has no road to flank.
-      if (ctx.open(i, side) > 0.3 || ctx.open(i + 2, side) > 0.3 || ctx.gap(i) || ctx.gap(i + 2)) continue;
+      // A gap has no road to flank.
+      if (ctx.gap(i) || ctx.gap(i + 2)) continue;
+      // Over a drop the deck runs out under the rail and a little past it, and a cliff falls from its edge (trackFeatures.ts) in place of the verge's slope.
+      const over = ctx.open(i, side) > 0.02 || ctx.open(i + 2, side) > 0.02;
       const w0 = ctx.wall(i, side);
       const w1 = ctx.wall(i + 2, side);
       const kind = (side < 0 ? features.vergeLeft : features.vergeRight)[wrapI(i)];
@@ -272,8 +371,8 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       const vergeOuter1 = w1 + 3.4;
       const h0 = a.width / 2 - 0.05;
       const h1 = b.width / 2 - 0.05;
-      const flat0 = a.width / 2 + w0 + 0.4;
-      const flat1 = b.width / 2 + w1 + 0.4;
+      const flat0 = a.width / 2 + w0 + (over ? SHELF_BEYOND : 0.4);
+      const flat1 = b.width / 2 + w1 + (over ? SHELF_BEYOND : 0.4);
       const out0 = a.width / 2 + vergeOuter0;
       const out1 = b.width / 2 + vergeOuter1;
       // Inner strip, flat just under the road's surface.
@@ -288,9 +387,9 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
       const wall: V3[] =
         side > 0 ? [P(i, m0, d), P(i, flat0, d), P(i + 2, flat1, d), P(i + 2, m1, d)] : [P(i, -flat0, d), P(i, -m0, d), P(i + 2, -m1, d), P(i + 2, -flat1, d)];
       const dc = vergeB[chunkOf(i)]!;
-      dc.quad(inner[0]!, inner[1]!, inner[2]!, inner[3]!, stripe, stripe, next, next, UP, groundUv(inner[0]!, inner[1]!, inner[2]!, inner[3]!));
-      if (side > 0) dc.quad(wall[0]!, wall[1]!, wall[2]!, wall[3]!, stripe, shade, shadeNext, next, UP, groundUv(wall[0]!, wall[1]!, wall[2]!, wall[3]!));
-      else dc.quad(wall[0]!, wall[1]!, wall[2]!, wall[3]!, shade, stripe, next, shadeNext, UP, groundUv(wall[0]!, wall[1]!, wall[2]!, wall[3]!));
+      vergeQuad(dc, i, inner, [stripe, stripe, next, next]);
+      if (side > 0) vergeQuad(dc, i, wall, [stripe, shade, shadeNext, next]);
+      else vergeQuad(dc, i, wall, [shade, stripe, next, shadeNext]);
       // Outer strip falls to the ground beside it, taking the ground's colour so there is no seam. Where a verge puts
       // the barrier far out the ground there is not at the road's own level, so it falls (or rises) to where the ground is.
       const edgeP = (j: number, o: number): V3 => {
@@ -305,9 +404,9 @@ export function buildTrackMeshes(track: TrackGeometry, style: ThemeStyle, terrai
           : [far ? edgeP(i, -out0) : P(i, -out0, -GROUND_SINK + 0.02), P(i, -flat0, d), P(i + 2, -flat1, d), far ? edgeP(i + 2, -out1) : P(i + 2, -out1, -GROUND_SINK + 0.02)];
       const outerA = groundAt(side > 0 ? slope[1]! : slope[0]!);
       const outerB = groundAt(side > 0 ? slope[2]! : slope[3]!);
-      const slopeUv = groundUv(slope[0]!, slope[1]!, slope[2]!, slope[3]!);
-      if (side > 0) dc.quad(slope[0]!, slope[1]!, slope[2]!, slope[3]!, shade, outerA, outerB, shadeNext, UP, slopeUv);
-      else dc.quad(slope[0]!, slope[1]!, slope[2]!, slope[3]!, outerA, shade, shadeNext, outerB, UP, slopeUv);
+      if (over) continue;
+      if (side > 0) vergeQuad(dc, i, slope, [shade, outerA, outerB, shadeNext]);
+      else vergeQuad(dc, i, slope, [outerA, shade, shadeNext, outerB]);
     }
   }
 

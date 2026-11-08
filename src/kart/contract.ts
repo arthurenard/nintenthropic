@@ -47,13 +47,18 @@ export interface DriveInput {
   throttle: number;
   /** 0..1. Held, it slows the kart and then backs it up. */
   brake: number;
-  /** Held to drift: true while the drift button is held (keys and pads; the wheel drifts with `slide`). */
+  /**
+   * Held to drift: true while the drift button is held (keys and pads; the wheel drifts with `slide`). A press hops; the
+   * direction is the wheel's on landing (or the first turn after it with the button held), and letting go boosts.
+   */
   drift: boolean;
   /**
    * The brake is the wheel's open hands, which slide as well as brake: turned
-   * at speed (or already in a drift) the sim holds the drift with the throttle
-   * down instead of braking, and closing the hands lets it go. Keys and pads
-   * never set it. Optional: none is false.
+   * a little at speed (or already in a drift) the sim holds the drift with the
+   * throttle down instead of braking, whatever the wheel does after, and closing
+   * the hands lets it go with its boost (a reading of the hands that goes
+   * missing for a frame or two is waited out). Keys and pads never set it.
+   * Optional: none is false.
    */
   slide?: boolean;
   /**

@@ -222,6 +222,16 @@ function tilesOverride(): number | null {
 }
 
 /**
+ * `?cut=worker` or `?cut=page` (test builds only): who cuts each player's column out of a shared camera's frame, instead
+ * of asking the browser (tracking/cut.ts). A test in Chrome, which cuts as asked, uses `worker` to drive the path Safari takes.
+ */
+function cutOverride(): boolean | undefined {
+  if (import.meta.env.MODE === "production" || typeof location === "undefined") return undefined;
+  const asked = new URLSearchParams(location.search).get("cut");
+  return asked === "page" ? true : asked === "worker" ? false : undefined;
+}
+
+/**
  * The real tracker for a wheel, with the download's two parts folded into one fraction: two or more players sharing the
  * camera each read in a tile and a worker of their own (lanesFor), and a worker whose landmarker is slow here tries the
  * other delegate (tracking/adapt.ts).
@@ -242,6 +252,6 @@ async function loadForWheel(hands: number, progress: (fraction: number) => void)
         report();
       },
     },
-    { hands, confidence: handConfidence(hands), tiles, lanes: lanesFor(tiles) ?? undefined, adapt: true },
+    { hands, confidence: handConfidence(hands), tiles, lanes: lanesFor(tiles) ?? undefined, adapt: true, cutOnPage: cutOverride() },
   );
 }

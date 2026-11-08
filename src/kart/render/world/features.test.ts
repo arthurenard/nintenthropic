@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { RAIL_GAP } from "../../track/edges";
 import { TrackGeometry, type TrackDef } from "../../track/geometry";
 import { analyseFeatures, inMetres, RAMP_HEIGHT, RAMP_LENGTH, rampHeight, WALL_DISTANCE } from "./features";
 
@@ -84,19 +85,23 @@ describe("analyseFeatures", () => {
     expect(f.dropRight[edge]).toBeLessThan(0.9);
   });
 
-  it("calls a short drop on both sides just behind a ramp a gap in the road, and no other", () => {
-    const withRamp = TrackGeometry.build(track({ ramps: [{ at: 0.3 }], drops: [{ from: 0.31, to: 0.335, side: "both" }] }));
-    const f = analyseFeatures(withRamp);
-    const mid = Math.round((0.32 * withRamp.length) / withRamp.spacing);
+  it("calls a drop on both sides that the track marks a gap a gap in the road, and no other: the sim's own reading", () => {
+    const marked = TrackGeometry.build(track({ ramps: [{ at: 0.3 }], drops: [{ from: 0.31, to: 0.335, side: "both", gap: true }] }));
+    const f = analyseFeatures(marked);
+    const mid = Math.round((0.32 * marked.length) / marked.spacing);
     expect(f.gap[mid]).toBe(1);
     expect(f.ramps).toHaveLength(1);
-    expect(f.ramps[0]!.lip).toBeCloseTo(0.3 * withRamp.length, 5);
+    expect(f.ramps[0]!.lip).toBeCloseTo(0.3 * marked.length, 5);
 
-    const without = analyseFeatures(TrackGeometry.build(track({ drops: [{ from: 0.31, to: 0.335, side: "both" }] })));
-    expect(without.gap[mid]).toBe(0);
-    // A long open edge beside a ramp is not a gap either.
-    const longOne = analyseFeatures(TrackGeometry.build(track({ ramps: [{ at: 0.3 }], drops: [{ from: 0.31, to: 0.6, side: "both" }] })));
-    expect(longOne.gap[mid]).toBe(0);
+    // A short drop right behind a ramp's lip is an open edge with a rail over it unless it says so: the sim has no gap there.
+    const unmarked = analyseFeatures(TrackGeometry.build(track({ ramps: [{ at: 0.3 }], drops: [{ from: 0.31, to: 0.335, side: "both" }] })));
+    expect(unmarked.gap[mid]).toBe(0);
+    // A gap with no ramp near it (a cannon or a glide clears it) is a gap too.
+    const flown = analyseFeatures(TrackGeometry.build(track({ air: [{ kind: "cannon", at: 0.2, length: 80, height: 9 }], drops: [{ from: 0.31, to: 0.335, side: "both", gap: true }] })));
+    expect(flown.gap[mid]).toBe(1);
+    // Over a drop that is not a gap the barrier is a rail at the road's edge, closing in over the ten metres before it.
+    expect(unmarked.wallLeft[mid]).toBeCloseTo(RAIL_GAP, 3);
+    expect(unmarked.wallRight[mid]).toBeCloseTo(RAIL_GAP, 3);
   });
 
   it("moves the barrier out where a verge is, on its side", () => {
