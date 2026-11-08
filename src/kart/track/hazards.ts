@@ -160,7 +160,7 @@ export function hazardAt(track: TrackGeometry, hazard: HazardDef, time: number):
       const half = Math.abs(hazard.span ?? f.width / 2 + 3);
       const d = hazard.dir ?? ((hazard.span ?? 1) < 0 ? -1 : 1);
       const run = 0.5;
-      const lead = 0.22;
+      const lead = Math.min(0.5, hazard.lead ?? 0.22);
       if (cycle < run) {
         const u = cycle / run;
         const lateral = offset + d * (-1 + 2 * u) * half;

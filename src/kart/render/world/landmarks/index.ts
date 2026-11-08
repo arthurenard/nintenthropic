@@ -54,5 +54,5 @@ export const THEME_HAZARDS: Readonly<Record<string, readonly { kind: string; mot
   volcano: [{ kind: "fireball", motion: "bob" }, { kind: "boulder", motion: "roll" }, { kind: "geyser", motion: "bob" }, { kind: "ember-rock", motion: "crush" }, { kind: "lava-surge", motion: "slide" }],
   funfair: [{ kind: "teacup-ride", motion: "orbit" }, { kind: "bumper-car", motion: "cross" }, { kind: "arm-ball", motion: "orbit" }, { kind: "mallet", motion: "crush" }, { kind: "funhouse-panel", motion: "slide" }, { kind: "swing-boat", motion: "swing" }],
   space: [{ kind: "asteroid", motion: "orbit" }, { kind: "comet", motion: "roll" }, { kind: "meteor", motion: "crush" }, { kind: "plasma-orb", motion: "orbit" }],
-  palm: [{ kind: "crab", motion: "cross" }, { kind: "coconut", motion: "roll" }, { kind: "beach-ball", motion: "roll" }, { kind: "tide-wave", motion: "slide" }],
+  palm: [{ kind: "crab", motion: "cross" }, { kind: "coconut", motion: "roll" }, { kind: "beach-ball", motion: "roll" }, { kind: "tide-wave", motion: "slide" }, { kind: "coconut-bunch", motion: "crush" }],
 };

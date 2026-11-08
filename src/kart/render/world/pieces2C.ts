@@ -8,6 +8,7 @@
  *  - lava-surge (Volcano Rush): a tongue of lava that runs across the road on a beat ("slide"), a beacon before it.
  *  - tide-wave (Five Finger Circuit): a wave that washes across the beach road ("slide"), a flag and a lamp before it.
  *  - plasma-orb (Starlight Ribbon): a ball on an arm turning round a hub ("orbit", from `sweeper`).
+ *  - coconut-bunch (Five Finger Circuit): three husked coconuts on a snapped stalk that drop out of the palms ("crush", from `rockRain`).
  *
  * Models stand on y = 0, face +z (the way they move) and are `radius` metres across at their widest; the layer scales
  * them to each hazard's own radius.
@@ -155,6 +156,38 @@ export const MODELS_2C: Record<string, PieceModel2C> = {
       b.blob(0.6, 0.12, -2.0, 1.4, 0.1, 0.5, scaleRgb(FOAM, 0.9), 0);
     },
   },
+  // A bunch of coconuts shaken out of a palm: three fat brown husks (tufted, with the three dark eyes), the snapped stalk and a few
+  // fronds still on it, a sprinkle of fibre.
+  "coconut-bunch": {
+    radius: 2.2,
+    build(b) {
+      const HUSK: Rgb = [0.36, 0.22, 0.1];
+      const HUSK_LIGHT: Rgb = [0.62, 0.42, 0.2];
+      const EYE: Rgb = [0.07, 0.04, 0.03];
+      const FROND: Rgb = [0.18, 0.62, 0.2];
+      const nuts: [number, number, number, number][] = [[-0.9, 1.25, 0.2, 1.25], [1.0, 1.15, -0.2, 1.15], [0.1, 1.2, 1.0, 1.2]];
+      nuts.forEach(([x, y, z, r], k) => {
+        b.blob(x, y, z, r, r * 1.05, r, { bottom: HUSK, top: HUSK_LIGHT }, 1, k * 1.7);
+        // Three eyes on the face that looks up, and a tuft of fibre at the top.
+        for (let e = 0; e < 3; e++) {
+          const a = e * 2.1 + k;
+          b.blob(x + Math.cos(a) * r * 0.32, y + r * 0.93, z + Math.sin(a) * r * 0.32, 0.17, 0.12, 0.17, EYE, 0);
+        }
+        b.add(shapes.cone(5), xf(x, y + r * 1.0, z, 0.3, 0.55, 0.3), { bottom: HUSK_LIGHT, top: HUSK });
+      });
+      // The stalk they hang from, and the fronds still on it, trailing up (it is falling).
+      b.rod([0, 2.0, 0.3], [0.2, 4.4, 0.2], 0.22, [0.3, 0.2, 0.1]);
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2 + 0.3;
+        b.rod([0.2, 4.3, 0.2], [0.2 + Math.cos(a) * 1.9, 5.3 + (i % 2) * 0.6, 0.2 + Math.sin(a) * 1.9], 0.1, FROND);
+        b.blob(0.2 + Math.cos(a) * 1.3, 4.9 + (i % 2) * 0.35, 0.2 + Math.sin(a) * 1.3, 0.75, 0.1, 0.28, FROND, 0);
+      }
+      for (let i = 0; i < 6; i++) {
+        const a = i * 1.7;
+        b.blob(Math.cos(a) * 2.0, 2.6 + (i % 3) * 0.7, Math.sin(a) * 2.0, 0.14, 0.14, 0.14, HUSK_LIGHT, 0);
+      }
+    },
+  },
   // A ball of plasma on its arm: a hot core in a glass shell, a ring round it and a few spikes.
   "plasma-orb": {
     radius: 1.4,
@@ -182,6 +215,7 @@ export const STYLES_2C: Record<string, PieceStyle2C> = {
   "lava-surge": { bare: true, rise: true, post: false },
   "tide-wave": { bare: true, rise: true, riseK: 0, post: false, noFlush: true },
   "plasma-orb": { noFlush: true },
+  "coconut-bunch": { sky: true, noFlush: true },
 };
 
 export const KINDS_2C: readonly string[] = Object.keys(MODELS_2C);

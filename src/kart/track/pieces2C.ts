@@ -6,7 +6,7 @@
 import type { HazardDef } from "./geometry";
 
 export interface RainSpec {
-  /** "ember-rock" or "meteor". */
+  /** "ember-rock", "meteor" or "coconut-bunch". */
   kind: string;
   /** Where the first row falls, a fraction of the lap, and how far apart (a fraction) the next rows are. */
   at: number;
@@ -60,6 +60,8 @@ export interface FrontSpec {
   reach: number;
   radius?: number;
   offset?: number;
+  /** How much of the cycle its warning shows before it comes (default 0.22). */
+  lead?: number;
 }
 
 /** A front of lava or water that sweeps across the whole road once a cycle: `count` pieces side by side, a lamp before it comes. */
@@ -76,6 +78,7 @@ export function front(spec: FrontSpec): HazardDef[] {
       span: spec.reach,
     };
     if (spec.phase !== undefined) def.phase = spec.phase;
+    if (spec.lead !== undefined) def.lead = spec.lead;
     out.push(def);
   }
   return out;

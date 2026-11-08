@@ -1907,7 +1907,7 @@ front of them (or a laptop), and the TV is the host's screen.
   (`front`: a few pieces side by side that sweep the road together, from out of sight on one side to out of sight on the other,
   the way round alternating): they have no rails and no lamp post (nowhere to stand on a bridge or a beach), and the
   telegraph is the thing itself rising out of the lake or appearing at the road's edge as foam, growing for the last fifth of
-  the cycle before it runs. `plasma-orb` (Starlight) is a ball of `sweeper`. A branch road's own timed pieces are drawn too (the
+  the cycle before it runs. `plasma-orb` (Starlight) is a ball of `sweeper`. `coconut-bunch` (Five Finger) is a sky-falling "crush" like the rocks (a volley down the palm trail). A "slide" takes an optional `lead` (the share of its cycle its warning shows before it comes, default 0.22; the bridge's lava and the beach's tide use 0.36, about 2.5 s). A branch road's own timed pieces are drawn too (the
   comet trail's meteors): `world/index.ts` hands a route's pieces to `buildPieces` as the main road's. Not built yet:
   turntable platforms that carry a kart, floors and gates that rise. Also
   not built, from the round's wish list: the Canyon mine tunnel through the
@@ -2016,7 +2016,7 @@ front of them (or a laptop), and the TV is the host's screen.
 | volcano | volcano, lava-fall, basalt-columns, stone-bridge (span), obsidian-arch (span), hot-spring, lava-tube (span: a tunnel through the crater's rock) | fireball (bob), boulder (roll), geyser (bob), ember-rock (crush: falls from the sky), lava-surge (slide: a swell of lava) |
 | funfair | ferris-wheel, carousel, big-top (span: a tunnel), rollercoaster (span: over the road), entrance-arch (span), food-stall, balloon-stand, hook-a-duck, helter-skelter, fireworks | teacup-ride (orbit), bumper-car (cross), arm-ball (orbit: a carousel's bar), funhouse-panel (slide), mallet (crush), swing-boat (swing) |
 | space | ringed-planet, ring-gate (span), asteroid, satellite, space-station, nebula | asteroid (orbit), comet (roll), meteor (crush: falls from the sky), plasma-orb (orbit: a sweeper's arm) |
-| palm | palm-tree, beach-hut, surfboard, sandcastle, beach-towel, giant-ring (span), wristwatch (span: the start gantry), tiki-arch (span: a gate of carved bamboo) | crab (cross), coconut (roll), beach-ball (roll), tide-wave (slide: a breaker) |
+| palm | palm-tree, beach-hut, surfboard, sandcastle, beach-towel, giant-ring (span), wristwatch (span: the start gantry), tiki-arch (span: a gate of carved bamboo) | crab (cross), coconut (roll), beach-ball (roll), tide-wave (slide: a breaker), coconut-bunch (crush: falls from the palms) |
 
 ## The tracks
 
@@ -2148,7 +2148,7 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    a lane clear (outside, inside, middle): every bomb's shadow grows and reddens for a second and a half
    before it lands, so the rows are a slalom you read; beyond them, on the lip, fireballs leap from the lava on either side in
    turn. On the bridge two swells of lava (`lava-surge`, one each way, half a beat apart) rise out of the lake beside the deck
-   and sweep it. **Route:** the **lava tube** is a shortcut that leaves the rim's first straight and runs under the crater's lip
+   and sweep it (their warning shows for 2.5 s: the swell rises beside the deck first). **Route:** the **lava tube** is a shortcut that leaves the rim's first straight and runs under the crater's lip
    (a tunnel through the rock, black on the outside and lit orange from two channels of lava along its walls; narrow, a strip of
    boost down it, about 50 m shorter than the rim: two seconds) and out onto the rim's exit; it skips the fireballs, and the bombs fall on the road it
    leaves, so the choice is made with the shadows already growing. **Air:** the cannon and the glide as before. *Reshaped:* the old ridge
@@ -2178,8 +2178,11 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    it or slip by its far side). **Air:** the lips, the glide, the cannon, as before. *Reshaped:* the carousel falls nine metres
    instead of five and the lower ribbon, glide and cannon run lower, so the lap has more height to lose; the curvature lean
    (the track's `bank`) is gone and every bend is banked by its own points, so that the split's junctions can be flat; the twist is
-   later on the first ribbon (after the split rejoins). Not built: a loop-the-loop and a ribbon that twists right over (see the
-   air sections), so the twist is a roll of 0.3 rad.
+   later on the first ribbon (after the split rejoins) and its outline is new: the ribbon swings out right, rolling hard (0.42 rad), and
+   back across to the left on its way up to the crests, instead of a straight climb with a lean, and the lower ribbon has a lazy S in it. The
+   crests, the spiral and the descent keep their shape because the lips, the glide and the cannon need their straight run-ups. Not built: a
+   loop-the-loop or a corkscrew that crosses over itself (a road is found by its nearest centre line, so two coils of one road would be mistaken
+   for each other), so the twist is a banked S and the wow moments stay the glide and the cannon.
 **Secret: Five Finger Circuit** (palm): an island shaped like an open hand,
 seen from above — the hand you play with. The road runs up and down every finger
 (the fingertips are banked hairpins), round the thumb, across the palm and back
@@ -2194,14 +2197,18 @@ tip and down to the wrist over the water, to rings painted at the foot of the th
 fingers, one by one, each a climb and a hairpin and a drop (the middle finger the highest, six metres up), the
 **palm trail** (the choice), the thumb and its glide (the wow), the wrist's beach where the tide comes in, and home.
 The hand is tilted and now climbs more: every finger rises to its tip and back (twice as high
-as before) and the tips are banked hairpins. **Route:** the **palm trail** is a shortcut that leaves
+as before) and the tips are banked hairpins; the wrist has a **watch-strap buckle** (the road swings out to the sea side and back in a wide S) before the
+last U onto the start straight. The outline of the fingers is otherwise the first pass's: knuckle kinks in the finger legs were tried and
+dropped (a 13 m road with a 12 m kink is too sharp for the chase camera and for the slowest bots), and the legs are 26 m apart, so
+there is no room for more shape without the roads passing close to each other. The palm trail leaves earlier than it did (on the
+pinky's leg, before the valley's corner): where it left at the corner itself the bots circled on the mouth of the fork. **Route:** the **palm trail** is a shortcut that leaves
 the pinky's side of the first valley, runs straight on across the sand of the palm under the ring finger (a **tiki arch**
-at its mouth, carved bamboo posts with chevrons, lanterns and torches; a strip of boost; a coconut rolling down it) and
-comes up onto the middle finger's long leg: narrower, flat, and a little shorter than going over the ring finger.
+at its mouth, carved bamboo posts with chevrons, lanterns and torches; a strip of boost; the palms lean over it and shake a volley of coconuts (`coconut-bunch`, three rows, a beat apart, a lane clear each time) onto it) and
+comes up onto the middle finger's long leg: narrower, flat, and a little shorter than going over the ring finger, and the volley is what it costs.
 (It had to run under the fingers, not across them: a road is found by the nearest centre line, so no road may cross another, and
-a zig-zag has no chord that skips a finger without crossing a leg.) **Timed pieces:** the **tide**, two sets of breakers (`tide-wave`) that
+a zig-zag has no chord that skips a finger without crossing a leg.) **Timed pieces:** the **tide**, two sets of breakers (`tide-wave`, three joined pieces each, 12 m of white-crested water) that
 wash up the wrist's beach road from the sea, one each side of the first bend, half a beat apart: each shows as foam at the
-road's edge and grows before it runs across. **Air:** the cannon, the lip and the glide, as before. The fingers are too close together
+road's edge and grows for 2.3 s before it runs across; and the **coconut volley** on the palm trail (above). **Air:** the cannon, the lip and the glide, as before. The fingers are too close together
 and the legs too short for long flights (a cannon needs 20 m of road after it before a hard bend), so the hand gets short hops and one
 long glide down the thumb. The minimap is a hand, tilted. The duck sunbathes, in sunglasses, in the middle of the palm, below the trail.
 Unlocked by winning both cups (or, for those who know, the Konami code on the

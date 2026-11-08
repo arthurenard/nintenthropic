@@ -251,11 +251,13 @@ export async function createWorld(
     const layer = buildLandmarks(routeEnv, [...(road.def.landmarks ?? [])], mats);
     own(layer);
     group.add(layer.group);
-    const moving = buildHazards(routeEnv, (road.def.hazards ?? []).filter((h) => !isPiece(h)), mats, shadowTex);
+    const routeDefs = road.def.hazards ?? [];
+    const moving = buildHazards(routeEnv, routeDefs.filter((h) => !isPiece(h)), mats, shadowTex);
     own(moving);
     group.add(moving.group);
     // The timed pieces on a branch (a shower of meteors on a comet trail) are drawn as the main road's are.
-    const routePieces = buildPieces(routeEnv, road.def.hazards ?? [], mats, shadowTex);
+    // (A branch with none builds nothing: no empty instanced meshes to update every frame.)
+    const routePieces = buildPieces(routeEnv, routeDefs.some(isPiece) ? routeDefs : [], mats, shadowTex);
     own(routePieces);
     group.add(routePieces.group);
     return { layer, moving, routePieces };

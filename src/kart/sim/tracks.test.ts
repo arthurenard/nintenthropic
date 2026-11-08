@@ -32,7 +32,7 @@ const HAZARDS: Record<TrackTheme, string[]> = {
   volcano: ["fireball", "boulder", "geyser", "ember-rock", "lava-surge"],
   funfair: ["teacup-ride", "bumper-car", "arm-ball", "funhouse-panel", "mallet", "swing-boat"],
   space: ["asteroid", "comet", "meteor", "plasma-orb"],
-  palm: ["crab", "coconut", "beach-ball", "tide-wave"],
+  palm: ["crab", "coconut", "beach-ball", "tide-wave", "coconut-bunch"],
 };
 
 describe("the cups", () => {

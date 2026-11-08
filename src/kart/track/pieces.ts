@@ -29,6 +29,7 @@ export const PIECE_KINDS: readonly string[] = [
   "lava-surge",
   "tide-wave",
   "plasma-orb",
+  "coconut-bunch",
 ];
 
 export function isPieceKind(kind: string): boolean {
