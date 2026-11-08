@@ -13,6 +13,12 @@
 import type { TrackDef } from "./geometry";
 import { crosser, pendulum, stomperRow, sweeper } from "./pieces";
 
+/** Seconds the flock takes to cross Meadow's road, once a beat; the farm gate's lamp blinks in the last fifth of it (picture/landmarks/meadow). */
+export const SHEEP_PERIOD = 7.2;
+
+/** The drawbridge's leaf on Harbour's start straight, raised for a quarter of every ten seconds (the signals and the counterweights follow it). */
+export const DRAWBRIDGE = { period: 10, from: 0.7, to: 0.95 } as const;
+
 /**
  * The gentle opener, a bigger and busier one than it was. Off the line the road passes the farm gate, kinks, and climbs the
  * windmill's hill (eleven metres, a long left-hander with a strip of boost on its inside) with round hay bales rolling down
@@ -61,10 +67,10 @@ export const MEADOW_LOOP: TrackDef = {
     { x: 94, z: -24, y: 3.2 },
     { x: 82, z: 12, y: 4, bank: 0.14 },
     { x: 50, z: 26, y: 3, bank: 0.14 },
-    { x: 46, z: 4, y: 1.6 },
+    { x: 40, z: 4, y: 1.6 },
     // Down by the pond and round the banked hairpin.
-    { x: 44, z: -38, y: 0.2 },
-    { x: 36, z: -66, y: -0.3, bank: -0.2 },
+    { x: 40, z: -38, y: 0.2 },
+    { x: 33, z: -66, y: -0.3, bank: -0.2 },
     { x: 14, z: -80, y: -0.2, bank: -0.24 },
     { x: -6, z: -64, y: -0.1, bank: -0.2 },
     { x: 0, z: -44 },
@@ -88,7 +94,7 @@ export const MEADOW_LOOP: TrackDef = {
     { kind: "hay-roll", at: 0.2030, motion: "roll", period: 6.2, radius: 1.35, offset: -3, span: 0.0599 },
     { kind: "hay-roll", at: 0.2030, motion: "roll", period: 6.2, phase: 0.5, radius: 1.35, offset: 3, span: 0.0599 },
     // The flock crosses once every beat, once the gate's lamp has blinked.
-    { kind: "sheep-flock", at: 0.6323, motion: "slide", period: 7.2, radius: 2.2, span: 12 },
+    { kind: "sheep-flock", at: 0.6323, motion: "slide", period: SHEEP_PERIOD, radius: 2.2, span: 12 },
   ],
   routes: [
     {
@@ -117,8 +123,8 @@ export const MEADOW_LOOP: TrackDef = {
         { kind: "acorn", at: 0.8, motion: "crush", period: 4.4, phase: 0.66, radius: 1.3, offset: 0 },
       ],
       landmarks: [
-        { kind: "oak", at: 0.7, offset: -13 },
-        { kind: "oak", at: 0.7, offset: 13, turn: 3.14 },
+        { kind: "oak", at: 0.7, offset: -18 },
+        { kind: "oak", at: 0.7, offset: 18, turn: 3.14 },
         { kind: "pond", at: 0.38, offset: 30, scale: 0.8 },
         { kind: "hay-bales", at: 0.35, offset: 32 },
         { kind: "flower-field", at: 0.5, offset: -36 },
@@ -158,8 +164,9 @@ export const MEADOW_LOOP: TrackDef = {
     { kind: "flower-field", at: 0.3790, offset: 42, scale: 1.2 },
     { kind: "pond", at: 0.4593, offset: -34, scale: 1 },
     { kind: "pond", at: 0.4641, offset: 34, scale: 1 },
+    { kind: "barn", at: 0.5300, offset: 40, turn: 3.1 },
     { kind: "farm-gate", at: 0.6323, offset: -17.5 },
-    { kind: "farm-gate", at: 0.6323, offset: 17.5, turn: 3.14 },
+    { kind: "farm-gate", at: 0.6323, offset: 17.5 },
     { kind: "sheep", at: 0.5990, offset: 30 },
     { kind: "hot-air-balloon", at: 0.6785, offset: 65, scale: 1.3 },
     { kind: "hay-bales", at: 0.8142, offset: -17.5 },
@@ -363,7 +370,7 @@ export const KITCHEN_RALLY: TrackDef = {
     { kind: "mug", at: 0.2276, offset: -48 },
     { kind: "mixer", at: 0.6312, offset: 0, span: 16 },
     { kind: "cooker", at: 0.6457, offset: 0, span: 56 },
-    { kind: "spatula", at: 0.7305, offset: 16, turn: 1.57 },
+    { kind: "spatula", at: 0.7305, offset: 21, turn: 1.57 },
     { kind: "toaster", at: 0.8879, offset: -42, turn: 1.57 },
     { kind: "grater", at: 0.9766, offset: 0, span: 30 },
     { kind: "cereal-box", at: 0.8394, offset: 46, turn: 0.4 },
@@ -483,7 +490,7 @@ export const HARBOUR_LIGHTS: TrackDef = {
   ],
   air: [
     // The drawbridge's leaf: live only while it is raised.
-    { kind: "lip", at: 0.0792, length: 30, height: 3.4, timed: { period: 10, from: 0.7, to: 0.95 } },
+    { kind: "lip", at: 0.0792, length: 30, height: 3.4, timed: DRAWBRIDGE },
     // The ship's stern cannon: across the water to the pier.
     { kind: "cannon", at: 0.5436, length: 56, height: 7 },
   ],
@@ -531,11 +538,11 @@ export const HARBOUR_LIGHTS: TrackDef = {
     { kind: "buoy", at: 0.1584, offset: 36 },
     { kind: "lighthouse", at: 0.2727, offset: 52, scale: 1.2 },
     { kind: "buoy", at: 0.3002, offset: -36 },
-    { kind: "warehouse", at: 0.3919, offset: -45, scale: 1.4 },
+    { kind: "warehouse", at: 0.3919, offset: -50, scale: 1.4 },
     { kind: "warehouse", at: 0.4169, offset: 62 },
     { kind: "ship", at: 0.5170, offset: -118, scale: 2.2 },
     { kind: "ship-deck", at: 0.5170, offset: 0, span: 56 },
-    { kind: "crane", at: 0.5837, offset: -40, scale: 1.2 },
+    { kind: "crane", at: 0.5837, offset: -52, scale: 1.2 },
     { kind: "containers", at: 0.6504, offset: -52, scale: 1.1 },
     { kind: "crane", at: 0.6971, offset: -36, scale: 1.3 },
     { kind: "crane", at: 0.7237, offset: 36, scale: 1.1 },

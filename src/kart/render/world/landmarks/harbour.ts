@@ -7,6 +7,7 @@ import { Group, Mesh, type Object3D } from "three";
 import type { Paint } from "../builder";
 import { byHeight, extrudeZ, grid, lathe, MeshBuilder, mixRgb, prism, ramp, rgb, rockBlob, scaleRgb, shapes, torus, xf, type Rgb, type V3 } from "./kit";
 import type { Halo, HazardSpec, LandmarkSpec, MovingPart } from "./types";
+import * as second from "./harbourSet";
 
 const TAU = Math.PI * 2;
 
@@ -791,6 +792,7 @@ export const LANDMARKS: Record<string, LandmarkSpec> = {
   containers,
   warehouse,
   buoy,
+  ...second.LANDMARKS,
 };
 
 /** A container on a crane's hook, swinging round over the dock; a ring of hazard stripes on the box, a shadow-blind hook above. */

@@ -53,9 +53,10 @@ export interface MovingPart {
   /**
    * Poses the part for clock time `t` seconds: set `part.rotation` /
    * `part.position` (relative to the pivot) / `part.scale`. Cheap, please:
-   * it runs every frame.
+   * it runs every frame. `race` is the race's clock (0 before the start), for a part that
+   * follows what the sim does by it: the drawbridge's signals, a lamp before the sheep cross.
    */
-  update(t: number, part: Object3D): void;
+  update(t: number, part: Object3D, race?: number): void;
 }
 
 /** A soft round light (the stand-in for bloom): a lamp, a window, a bulb, a star. */

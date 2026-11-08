@@ -6,6 +6,7 @@
 import type { Paint } from "../builder";
 import { byHeight, extrudeZ, lathe, MeshBuilder, mixRgb, ramp, rgb, scaleRgb, shapes, xf, type Rgb, type Shade, type V3 } from "./kit";
 import type { HazardSpec, LandmarkSpec, MovingPart } from "./types";
+import * as second from "./meadowSet";
 
 const TAU = Math.PI * 2;
 
@@ -683,6 +684,7 @@ export const LANDMARKS: Record<string, LandmarkSpec> = {
   "hot-air-balloon": hotAirBalloon,
   sheep: sheepFlock,
   "flower-field": flowerField,
+  ...second.LANDMARKS,
 };
 
-export const HAZARDS: Record<string, HazardSpec> = {};
+export const HAZARDS: Record<string, HazardSpec> = { ...second.HAZARDS };

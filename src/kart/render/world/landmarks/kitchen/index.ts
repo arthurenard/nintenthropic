@@ -18,6 +18,7 @@ import { fruitBowl } from "./fruit";
 import { orange, pea, teacup, toast } from "./hazards";
 import { cerealBox, cookbook, pepperMill, saltShaker } from "./shelf";
 import { drawer } from "./drawer";
+import { LANDMARKS as second } from "./set";
 import { forkArch, grater, spoonArch } from "./spans";
 import { wallClock, windowWall } from "./wall";
 
@@ -37,6 +38,7 @@ export const LANDMARKS: Record<string, LandmarkSpec> = {
   sink,
   window: windowWall,
   "wall-clock": wallClock,
+  ...second,
 };
 
 export const HAZARDS: Record<string, HazardSpec> = { orange, pea, teacup, toast };
