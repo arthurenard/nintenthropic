@@ -135,9 +135,12 @@
           }
         });
         tracker.start(video);
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        tracker.resetStats();
         await new Promise((resolve) => setTimeout(resolve, num("ms", 6000)));
         report.palms = palms;
         report.counts = tracker.counts();
+        report.stats = tracker.stats();
         clearInterval(timer);
         tracker.dispose();
       } catch (error) {

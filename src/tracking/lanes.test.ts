@@ -68,11 +68,12 @@ describe("players sharing a camera, each read in a worker of their own", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  const make = (delegates: ("GPU" | "CPU")[], adapt = false) => {
+  const make = (delegates: ("GPU" | "CPU")[], adapt = false, cutHere = true) => {
     const workers = delegates.map(() => new FakeWorker());
     const tracker = makeLaneTracker(
       workers.map((worker, i) => ({ worker: worker as unknown as Worker, delegate: delegates[i]! })),
       adapt,
+      cutHere,
     );
     return { tracker, workers };
   };
@@ -95,6 +96,36 @@ describe("players sharing a camera, each read in a worker of their own", () => {
     tick(133);
     expect(workers.map((w) => w.frames.length)).toEqual([1, 1, 1]);
     expect(tracker.counts()).toEqual({ frames: 0, skipped: 3, columns: 3 });
+  });
+
+  it("where the browser does not cut a frame (Safari), hands each worker the whole frame and its column to cut itself", () => {
+    const { tracker, workers } = make(["GPU", "CPU"], false, false);
+    tracker.start(video);
+    tick(100);
+    for (const worker of workers) {
+      const message = worker.frames[0]!;
+      // No visibleRect: a frame that says it is cut and is not would be read whole.
+      expect((message.image as unknown as FakeFrame).init.visibleRect).toBeUndefined();
+    }
+    const crops = workers.map((w) => w.frames[0]!.crop!);
+    // The same columns the page would cut, on even pixels, the second overlapping the first.
+    expect(crops[0]).toEqual({ x: 0, y: 0, width: 1076, height: 1080 });
+    expect(crops[1]).toEqual({ x: 844, y: 0, width: 1076, height: 1080 });
+    expect(crops[1]!.x + crops[1]!.width).toBe(1920);
+    // The hands a worker finds are in its crop's own picture and are put back where they are in the whole one.
+    const frames: HandFrame[] = [];
+    tracker.subscribe((frame) => frames.push(frame));
+    workers[1]!.answer({ type: "result", sequence: 0, capturedAt: 100, hands: [hand(0.5)], inference: 20, face: false });
+    const seen = frames[0]!.hands[0]!.landmarks[0]!.x;
+    expect(seen).toBeCloseTo((crops[1]!.x + 0.5 * crops[1]!.width) / 1920, 1);
+    expect(seen).toBeGreaterThan(0.5);
+  });
+
+  it("a frame the page can cut is never sent a crop as well", () => {
+    const { workers, tracker } = make(["GPU", "CPU"]);
+    tracker.start(video);
+    tick(100);
+    expect(workers.every((w) => w.frames[0]!.crop === undefined)).toBe(true);
   });
 
   it("publishes each column's news as soon as it comes, naming the column read, with the others' hands as last seen", () => {
