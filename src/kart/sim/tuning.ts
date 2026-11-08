@@ -92,8 +92,11 @@ export const TUNING = {
   hop: {
     /** `drift` rising above this speed hops. */
     minSpeed: 10,
-    /** ...and starts a drift if the wheel is turned more than this. */
-    minSteer: 0.3,
+    /**
+     * ...and a drift button held, with the wheel turned more than this, starts the drift: in the hop, after it, or
+     * with the button held on from a straight into a bend. A light touch is enough, as on a real Mario Kart's stick.
+     */
+    minSteer: 0.15,
     time: 0.25,
     height: 0.35,
   },
@@ -221,15 +224,15 @@ export const TUNING = {
     boost3: 1.9,
     /** Slower than this the drift is over (no boost). */
     minSpeed: 4,
-    /** A brake this hard ends a drift (the boost is still earned). */
-    endBrake: 0.5,
     /**
-     * The wheel held this hard against the drift (own at or below minus this)
-     * for `againstTime` seconds straightens the kart out of it (the boost is
-     * still earned): the way out of a slide toward the other side of the road.
+     * The wheel's open hands (the brake pedal as read from the camera) turn into a drift, not a brake, when the kart is
+     * past the hop's `minSpeed` and the wheel has been turned more than `steer` for `ask` seconds (a wobble of resting
+     * hands is not a turn). Once drifting, a reading of the open hands that goes missing (a frame or two of the camera
+     * taking an open hand for a fist) is waited out for `lapse` seconds before the drift is let go.
      */
-    against: 0.8,
-    againstTime: 0.25,
+    wheel: { steer: 0.2, ask: 0.05, lapse: 0.15 },
+    /** In the hop the wheel pushed this far the other way turns the drift round: the direction is the one the wheel says on landing. */
+    flip: 0.5,
   },
 
   /**
@@ -481,6 +484,11 @@ export const TUNING = {
     driftMaxCurvature: 1 / 15,
     /** ...and only going faster than this (m/s). */
     driftMinSpeed: 14,
+    /** A drifting bot whose wheel, as the drift is given it, has been this far against it (own at or below minus this) for `driftOutTime` lets the drift go, boost and all. */
+    driftOut: 0.8,
+    driftOutTime: 0.25,
+    /** ...and one that has to brake this hard does the same. */
+    driftBrake: 0.5,
     /** A bot waits this long (seconds, low..high skill) after getting an item before using it. */
     itemWaitSlow: 2.6,
     itemWaitFast: 0.7,
