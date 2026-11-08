@@ -28,6 +28,7 @@ export const PIECE_KINDS: readonly string[] = [
   "whisk",
   "drip",
   "cargo-box",
+  "avalanche",
 ];
 
 export function isPieceKind(kind: string): boolean {

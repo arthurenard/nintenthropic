@@ -32,12 +32,12 @@ export const HAZARDS: Readonly<Record<string, HazardSpec>> = Object.assign({}, .
 /** The names each theme's tracks may use, for the gallery and the dev tracks. */
 export const THEME_LANDMARKS: Readonly<Record<string, readonly string[]>> = {
   meadow: ["windmill", "barn", "barn-run", "pond", "hay-bales", "hot-air-balloon", "sheep", "flower-field", "farm-gate", "oak"],
-  canyon: ["mesa", "rock-arch", "cactus-grove", "water-tower", "mine-cart"],
+  canyon: ["mesa", "rock-arch", "cactus-grove", "water-tower", "mine-cart", "mine-tunnel", "rope-bridge", "headframe", "dynamite-shack"],
   harbour: ["crane", "lighthouse", "ship", "ship-deck", "containers", "warehouse", "buoy", "drawbridge"],
   kitchen: ["teapot", "fruit-bowl", "toaster", "grater", "drawer", "salt-shaker", "pepper-mill", "cookbook", "cereal-box", "mug", "fork-arch", "spoon-arch", "sink", "window", "wall-clock", "mixer", "cooker", "spatula", "drainer"],
-  snow: ["igloo", "cabin", "snowman", "ice-arch", "ice-cave", "pine-snow", "gondola", "ski-jump"],
+  snow: ["igloo", "cabin", "snowman", "ice-arch", "ice-cave", "pine-snow", "gondola", "ski-jump", "frozen-falls"],
   volcano: ["volcano", "lava-fall", "basalt-columns", "stone-bridge", "obsidian-arch", "hot-spring"],
-  funfair: ["ferris-wheel", "carousel", "big-top", "rollercoaster", "entrance-arch", "food-stall", "balloon-stand", "hook-a-duck", "helter-skelter", "fireworks"],
+  funfair: ["ferris-wheel", "carousel", "big-top", "rollercoaster", "entrance-arch", "food-stall", "balloon-stand", "hook-a-duck", "helter-skelter", "fireworks", "ferris-gate", "coaster-trestle", "cannon-tent", "safety-net"],
   space: ["ringed-planet", "ring-gate", "asteroid", "satellite", "space-station", "nebula"],
   palm: ["palm-tree", "beach-hut", "surfboard", "sandcastle", "beach-towel", "giant-ring", "wristwatch"],
 };
@@ -48,7 +48,7 @@ export const THEME_HAZARDS: Readonly<Record<string, readonly { kind: string; mot
   canyon: [{ kind: "boulder", motion: "roll" }, { kind: "tumbleweed", motion: "cross" }, { kind: "rock-crusher", motion: "crush" }, { kind: "wrecking-ball", motion: "swing" }, { kind: "ore-cart", motion: "slide" }],
   harbour: [{ kind: "crab", motion: "cross" }, { kind: "forklift", motion: "cross" }, { kind: "swing-box", motion: "orbit" }, { kind: "cargo-box", motion: "swing" }],
   kitchen: [{ kind: "orange", motion: "roll" }, { kind: "pea", motion: "cross" }, { kind: "teacup", motion: "orbit" }, { kind: "toast", motion: "bob" }, { kind: "whisk", motion: "orbit" }, { kind: "drip", motion: "crush" }],
-  snow: [{ kind: "penguin", motion: "cross" }, { kind: "snowball", motion: "roll" }, { kind: "yeti", motion: "bob" }, { kind: "icicle", motion: "crush" }, { kind: "arm-ball", motion: "orbit" }],
+  snow: [{ kind: "penguin", motion: "cross" }, { kind: "snowball", motion: "roll" }, { kind: "yeti", motion: "bob" }, { kind: "icicle", motion: "crush" }, { kind: "arm-ball", motion: "orbit" }, { kind: "avalanche", motion: "slide" }],
   volcano: [{ kind: "fireball", motion: "bob" }, { kind: "boulder", motion: "roll" }, { kind: "geyser", motion: "bob" }],
   funfair: [{ kind: "teacup-ride", motion: "orbit" }, { kind: "bumper-car", motion: "cross" }, { kind: "arm-ball", motion: "orbit" }, { kind: "mallet", motion: "crush" }, { kind: "funhouse-panel", motion: "slide" }, { kind: "swing-boat", motion: "swing" }],
   space: [{ kind: "asteroid", motion: "orbit" }, { kind: "comet", motion: "roll" }],

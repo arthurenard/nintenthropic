@@ -13,6 +13,7 @@ import { cabin, igloo, snowman } from "./buildings";
 import { penguin, snowball, yeti } from "./hazards";
 import { iceArch, iceCave, pineSnow } from "./nature";
 import { gondola, skiJump } from "./slopes";
+import { frozenFalls } from "./falls";
 
 export const LANDMARKS: Record<string, LandmarkSpec> = {
   igloo,
@@ -23,6 +24,7 @@ export const LANDMARKS: Record<string, LandmarkSpec> = {
   "pine-snow": pineSnow,
   gondola,
   "ski-jump": skiJump,
+  "frozen-falls": frozenFalls,
 };
 
 export const HAZARDS: Record<string, HazardSpec> = { penguin, snowball, yeti };

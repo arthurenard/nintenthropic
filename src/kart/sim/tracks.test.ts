@@ -14,12 +14,12 @@ import { trackStats } from "./trackStats";
 /** What each theme can build (docs/GRIP_PRIX.md, "What each theme can build"). */
 const LANDMARKS: Record<TrackTheme, string[]> = {
   meadow: ["windmill", "barn", "barn-run", "pond", "hay-bales", "hot-air-balloon", "sheep", "flower-field", "farm-gate", "oak"],
-  canyon: ["mesa", "rock-arch", "cactus-grove", "water-tower", "mine-cart"],
+  canyon: ["mesa", "rock-arch", "cactus-grove", "water-tower", "mine-cart", "mine-tunnel", "rope-bridge", "headframe", "dynamite-shack"],
   harbour: ["crane", "lighthouse", "ship", "ship-deck", "containers", "warehouse", "buoy", "drawbridge"],
   kitchen: ["teapot", "fruit-bowl", "toaster", "grater", "drawer", "salt-shaker", "pepper-mill", "cookbook", "cereal-box", "mug", "fork-arch", "spoon-arch", "sink", "window", "wall-clock", "mixer", "cooker", "spatula", "drainer"],
-  snow: ["igloo", "cabin", "snowman", "ice-arch", "ice-cave", "pine-snow", "gondola", "ski-jump"],
+  snow: ["igloo", "cabin", "snowman", "ice-arch", "ice-cave", "pine-snow", "gondola", "ski-jump", "frozen-falls"],
   volcano: ["volcano", "lava-fall", "basalt-columns", "stone-bridge", "obsidian-arch", "hot-spring"],
-  funfair: ["ferris-wheel", "carousel", "big-top", "rollercoaster", "entrance-arch", "food-stall", "balloon-stand", "hook-a-duck", "helter-skelter", "fireworks"],
+  funfair: ["ferris-wheel", "carousel", "big-top", "rollercoaster", "entrance-arch", "food-stall", "balloon-stand", "hook-a-duck", "helter-skelter", "fireworks", "ferris-gate", "coaster-trestle", "cannon-tent", "safety-net"],
   space: ["ringed-planet", "ring-gate", "asteroid", "satellite", "space-station", "nebula"],
   palm: ["palm-tree", "beach-hut", "surfboard", "sandcastle", "beach-towel", "giant-ring", "wristwatch"],
 };
@@ -28,7 +28,7 @@ const HAZARDS: Record<TrackTheme, string[]> = {
   canyon: ["boulder", "tumbleweed", "ore-cart", "wrecking-ball", "rock-crusher"],
   harbour: ["crab", "forklift", "swing-box", "cargo-box"],
   kitchen: ["orange", "pea", "teacup", "toast", "whisk", "drip"],
-  snow: ["penguin", "snowball", "yeti", "icicle"],
+  snow: ["penguin", "snowball", "yeti", "icicle", "avalanche"],
   volcano: ["fireball", "boulder", "geyser"],
   funfair: ["teacup-ride", "bumper-car", "arm-ball", "funhouse-panel", "mallet", "swing-boat"],
   space: ["asteroid", "comet"],

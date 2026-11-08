@@ -2122,12 +2122,19 @@ front of them (or a laptop), and the TV is the host's screen.
   under the stand mixer's arm) and the cargo-box (swing: a container on a crane's spreader, Harbour's dock road). Each
   model carries its own dress (`PieceModel` in render/world/pieces.ts: where the piston takes hold, the gantry's colour,
   how much of the red flush it takes), so a new kind is a model in `pieceSet.ts` and a name in `PIECE_KINDS`. Not built yet:
-  turntable platforms that carry a kart, floors and gates that rise. Also
-  not built, from the round's wish list: the Canyon mine tunnel through the
-  mesa and a swaying rope bridge, a Fun Fair funhouse of mirrors and a Ferris
-  wheel to drive under with its swinging cars, the Glacier frozen waterfall
-  to drive behind and a real rolling avalanche. The Canyon and Glacier road
-  layouts are close to round one's; the set pieces are what changed.
+  turntable platforms that carry a kart, floors and gates that rise. The
+  second pass on Canyon Run, Fun Fair and Glacier Pass built what the first
+  round's wish list left: the Canyon mine tunnel through a mesa and a rope
+  bridge, a Fun Fair Ferris wheel to drive under with its swinging cars and a
+  coaster to climb, the Glacier frozen waterfall to drive behind and a rolling
+  avalanche (a `slide` of kind `avalanche`: a slab of snow across the road, no
+  rails). A branch road's timed pieces are drawn too: the world builds the
+  instanced pieces for each route layer as it does for the main road, and
+  ticks them on the same race clock. Their models (rock crusher, wrecking
+  ball, ore cart, icicle, carousel horse, funhouse panel, mallet, swing boat,
+  avalanche) live in `render/world/pieceModels2B.ts`, added to the
+  piece table by `Object.assign`. Still not built: a Fun Fair funhouse of
+  mirrors as a room (the panels slide across the big top instead).
 - **Landmarks** (`landmarks`): set pieces the picture builds, by name from
   the theme's list below; `span` for a thing over the road (a tunnel, an
   arch). What the picture builds never stands where a kart can be: nothing
@@ -2213,12 +2220,12 @@ front of them (or a laptop), and the TV is the host's screen.
 | Theme | Landmarks | Hazards |
 | --- | --- | --- |
 | meadow | windmill, barn, barn-run (span: a shortcut through a barn), pond, hay-bales, hot-air-balloon, sheep, flower-field, farm-gate (its lantern blinks in the last fifth of the flock's cycle), oak (the acorns' tree) | hay-roll (roll: a round bale down the hill), sheep-flock (slide: four sheep trotting across), acorn (crush) |
-| canyon | mesa, rock-arch (span), cactus-grove, water-tower, mine-cart | boulder, tumbleweed, ore-cart (slide), wrecking-ball (swing), rock-crusher (crush) |
+| canyon | mesa, rock-arch (span), cactus-grove, water-tower, mine-cart, mine-tunnel (span: a mesa with a timbered tunnel through it), rope-bridge (span), headframe (a winding wheel that turns), dynamite-shack | boulder, tumbleweed, ore-cart (slide), wrecking-ball (swing), rock-crusher (crush) |
 | harbour | crane, lighthouse, ship, ship-deck (span: a cargo ship's deck with a gantry crane), containers, warehouse, buoy, drawbridge (two gate towers, signal lamps, a bell and counterweights on the race clock) | crab, forklift, swing-box (orbit: a crane's container), cargo-box (swing: a container hung from a crane) |
 | kitchen | teapot, fruit-bowl, toaster, grater (span: a tunnel), salt-shaker, pepper-mill, drawer (span: a drawer pulled out of the counter, cutlery across it), cookbook, cereal-box, mug, fork-arch (span), spoon-arch (span), sink, window, wall-clock, mixer (span: a stand mixer reaching over the road), cooker (span: the road is its hob, burner rings glowing), spatula, drainer (span: a tap over the draining board) | orange (roll), pea (cross), teacup (orbit), toast (bob: pops from the toaster), whisk (orbit: balloon-whisk heads on the mixer's arm), drip (crush: from the tap) |
-| snow | igloo, cabin, snowman, ice-arch (span), ice-cave (span: a tunnel), pine-snow, gondola, ski-jump | penguin (cross), snowball (roll), yeti (bob), icicle (crush) |
+| snow | igloo, cabin, snowman, ice-arch (span), ice-cave (span: a tunnel), pine-snow, gondola, ski-jump, frozen-falls (span: a pocket behind a frozen waterfall) | penguin (cross), snowball (roll), yeti (bob), icicle (crush), avalanche (slide: a slab of snow across the road) |
 | volcano | volcano, lava-fall, basalt-columns, stone-bridge (span), obsidian-arch (span), hot-spring | fireball (bob), boulder (roll), geyser (bob) |
-| funfair | ferris-wheel, carousel, big-top (span: a tunnel), rollercoaster (span: over the road), entrance-arch (span), food-stall, balloon-stand, hook-a-duck, helter-skelter, fireworks | teacup-ride (orbit), bumper-car (cross), arm-ball (orbit: a carousel's bar), funhouse-panel (slide), mallet (crush), swing-boat (swing) |
+| funfair | ferris-wheel, ferris-gate (a wheel to drive under, its cars swinging), coaster-trestle (span: the coaster's road on its trestle), cannon-tent, safety-net, carousel, big-top (span: a tunnel), rollercoaster (span: over the road), entrance-arch (span), food-stall, balloon-stand, hook-a-duck, helter-skelter, fireworks | teacup-ride (orbit), bumper-car (cross), arm-ball (orbit: a carousel's bar), funhouse-panel (slide), mallet (crush), swing-boat (swing) |
 | space | ringed-planet, ring-gate (span), asteroid, satellite, space-station, nebula | asteroid (orbit), comet (roll) |
 | palm | palm-tree, beach-hut, surfboard, sandcastle, beach-towel, giant-ring (span), wristwatch (span: the start gantry) | crab (cross), coconut (roll), beach-ball (roll) |
 
@@ -2295,44 +2302,79 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    two cranes swing a container across the road each, half a beat apart (a shadow on the
    road shows where), the dry-dock hairpin, a boost pad, and the **ferry ramp**, a gap at
    the water with a trick lip to fly it, on the way to the line.
-4. **Canyon Run** (canyon): the steep climb (sixteen metres), the ridge road,
-   a jump over a gap in the ridge, a lip to fly off into the tumble down
-   S-bends that lean one way and the other, boulders rolling down the
-   descent, a sand cut inside the hairpin for the brave.
+4. **Canyon Run** (canyon): the steep climb (sixteen metres), a hairpin with
+   a sand cut inside it, the ridge road's knife-edge sweepers and an ore-cart
+   crossing, a dynamite cannon at the ridge's end that throws you over the
+   gorge, a rope bridge, the tumble down S-bends that lean one way and the
+   other under swinging wrecking balls, the neck round its U, and the wash:
+   twenty-two metres of sand under three rock crushers. A **mine** through a
+   mesa cuts across the neck's U for the brave.
 
-   *Design note (round two).* The signature is the old mine: the rails cross
-   the road, and the quarry works it. Each lap has four beats you can read
-   and time. On the ridge, two ore carts cross the rails one each way (a red
-   lamp on a post lights before each runs), twenty metres before the long
-   run-up to the gap. After the jump and the lip, a rope bridge: ten metres of
-   planks over the gorge with nothing on either side. Down the tumble, two
-   wrecking balls swing across the road half a beat apart, so you weave. Out
-   of the neck the rails cross again, and then the wash: the gorge opens to
-   twenty-two metres of sand with three rock crushers falling in a wave
-   (shake, red shadow, slam), and a boost pad in the middle lane, under the
-   last one, for the brave. The wow moments: the jump, the bridge, the wash.
+   *Design note (the second pass).* The lap as a story: out of the start the
+   road climbs sixteen metres in an S that leans into each bend, turns on the
+   hairpin (a sand cut across its inside, for a Nitro) and runs the ridge in
+   a knife-edge of fast sweepers, with a pair of ore carts crossing the rails
+   one each way (a red lamp on a post lights before each runs). The signature
+   is the **dynamite cannon**: at the ridge's end a barrel throws every kart
+   over eighty-four metres of gorge (a `gap`: there is no way across on the
+   ground, `air` cannon, 9 m up), the wow moment, landing on a straight with
+   nothing beneath the flight. Then the **rope bridge**, fifty metres of
+   planks, ropes and cairns with a deck that leans one way and then the other
+   (banked 0.08 each way) and nothing either side, and the tumble: two
+   wrecking balls swing across the road half a beat apart, a boulder rolls,
+   so you weave. The risk and reward is the **mine**: a shortcut (about 70 m
+   shorter than the road round the neck's U, which has its own pair of ore
+   carts) through a mesa with a hole through it, a
+   timbered tunnel with rails and lanterns, narrow, with side galleries
+   where an ore cart crosses the road (reach 13 m, every 6.6 s: you wait at
+   the mouth or you gamble). It rejoins the wash at a gentle angle. The run
+   home is the wash: three rock crushers fall in a wave (shake, red shadow,
+   slam) with a boost pad in the middle lane under the last, for the brave.
+   What is new: the cannon (the old ridge gap and lip are gone), the longer
+   bridge and its model, the mine as a branch road with its tunnel, and the
+   mine's landmarks (`mine-tunnel`, `rope-bridge`, `headframe` with a turning
+   wheel, `dynamite-shack`, in `landmarks/canyonMine.ts`); the crusher, ball,
+   cart and boulder have proper models. Bots take both roads, time the
+   pieces and fly the cannon (every kart, every lap); a best lap runs about
+   45 s and the slowest under 57 s.
 
 **Comet Cup**
 
-5. **Fun Fair** (funfair): dusk, every ride lit. Under the entrance arch;
-   past two mallets (test your strength: one up while the other comes down);
-   round the carousel; along the rollercoaster's own course, the lift hill
-   (six and a half metres, weaving either side of the crest) and the plunge
-   to the dip under the coaster; the hairpin by the hook-a-duck stall (the
-   duck), banked hard; back through the big top, where striped funhouse walls
-   slide across the road one each way; the plaza, where a carousel turns in
-   the middle (one arm of horses to time) with bumper cars
-   crossing and a teacup ride beside; a ramp off the helter-skelter's foot;
-   the hall of mirrors chicane under two pirate ships swinging a beat apart (3.5 m either side of the middle);
-   fireworks over the finish.
+5. **Fun Fair** (funfair): dusk, every ride lit. A human-cannonball tent
+   beside the start straight and a cannon that fires you over the entrance
+   arch; two mallets (test your strength: one up while the other comes
+   down); round the carousel; along the rollercoaster's own course (a split:
+   the low road under the rails, or the coaster's own track on its trestle,
+   no barrier, to the top of the lift hill); the hairpin by the hook-a-duck
+   stall (the duck), banked hard; back under a Ferris wheel, through the big
+   top, where striped funhouse walls slide across the road one each way; the
+   plaza, where a carousel turns in the middle (one arm of horses to time)
+   with bumper cars crossing and a teacup ride beside; a ramp off the
+   helter-skelter's foot; the hall of mirrors chicane under two pirate ships
+   swinging a beat apart (3.5 m either side of the middle); fireworks over
+   the finish.
 
-   *Design note (round two).* The fair is a ride, so it has a ride's
-   rhythm: a quiet straight, a climb, a drop, a dark tunnel with moving
-   walls, a spinning plaza, a chicane. The top straight no longer runs
-   flat: its heights are the coaster's (up 6.5 m, down to -2.4 m), so the
-   plunge is the fair's wow moment, with a boost pad at the bottom. Every
-   moving thing is announced: mallets shake and redden, wall panels light a
-   lamp, the carousel turns slowly enough to read (6.5 s).
+   *Design note (the second pass).* The fair is a ride, so it has a ride's
+   rhythm. The lap as a story: the **human cannonball** starts it, the
+   pack is fired off the start straight over the entrance arch and the
+   safety nets beyond it (`air` cannon, 80 m, 7.5 m up), with a striped tent
+   and a cannon on the grass to say so; mallets shake and redden, and the
+   carousel turns slowly enough to read (6.5 s). The top straight is the
+   coaster's: it rolls up and down (up 3 m, down to -2 m) and from it a
+   **split** climbs the coaster's own trestle, higher (to 11.5 m) and longer
+   (about 240 m against 195), no barrier (a low red and cream kerb with lights marks each edge, and a fall costs you the
+   drone's fetch), to plunge down
+   the far side and rejoin the midway at a shallow angle, with a line of boost
+   at the bottom of the drop: the risk and the reward. The wow moments are the
+   flight over the arch, the **Ferris wheel you drive under** (a wheel fifty
+   metres tall on legs that stand clear of the road, six cars swinging as
+   they come over your head), and the plunge. Then the hairpin, the dark
+   funhouse tunnel, the spinning plaza, a ramp, and a chicane under the swinging
+   boats for the run home. What is new: the cannon and its tent and nets, the
+   coaster branch and its trestle (a span of rails, sleepers, bents and arches
+   of lights), the Ferris gate, and models for the mallet, funhouse panel,
+   carousel horse and swing boat (`landmarks/funfair/fair2.ts`,
+   `pieceModels2B.ts`). A best lap runs about 47 s, nobody falls.
 6. **Glacier Pass** (snow): an alpine pass at blue hour. A frozen lake (all
    ice, wide, level) to slide across in the valley, with a kicker on it (a
    short hop on the ice, a trick for a boost), then a climb of fifteen
@@ -2340,18 +2382,32 @@ Two cups of four, as a Grand Prix is raced, and one secret.
    mountain hut, banked hard and falling all the way, a cliff on its outside
    and ice on its tight inside line; a crest to fly over on the shoulder, a
    twisting S that leans one way then the other through an ice cave glowing
-   blue, a long falling in-run to a ski-jump over a crevasse (a drop), and
-   moguls on the way home. Penguins waddle across, snowballs roll down at
-   you, a yeti pops out of a snowdrift once a lap. The duck sits by an
-   ice-fishing hole on the lake.
+   blue, a long falling in-run under an avalanche path, a ski-jump glide
+   over a crevasse, and moguls on the way home. Penguins waddle across,
+   snowballs roll down at you, a yeti pops out of a snowdrift once a lap.
+   The duck sits by an ice-fishing hole on the lake. A **split** behind a
+   frozen waterfall leaves the in-run for the brave.
 
-   *Design note (round two).* The pass has weather, and the weather is on a
-   timer. In the ice cave three icicles let go one after another down the
-   cave (each shakes, and its shadow reddens, a second before it drops), and out of the cave, on the in-run
-   to the ski-jump, two big snowballs thunder down, one each side in turn
-   (an avalanche you read and slip between, then straight into the jump).
-   The lake's kicker is the first wow moment, the corkscrew the second, the
-   cave the third, the ski-jump over the crevasse the fourth.
+   *Design note (the second pass).* The pass has weather, and the weather is
+   on a timer. The lap as a story: the lake and its kicker, the climb, the
+   corkscrew round the hut, and the ice cave, where three icicles let go one
+   after another down the cave (each shakes, and its shadow reddens, a second
+   before it drops). The in-run is longer now, falling a long way south
+   before it bends; where it leaves the mountain's foot a **split**: the main
+   road runs straight under the **avalanche path**, two slabs of snow let go
+   across the road a beat apart from the slope on the left (a lamp on a post
+   lights before each, `slide` of kind `avalanche`); the other bears off left
+   into a pocket in the cliff, **behind a frozen waterfall** (dozens of fluted
+   columns of ice and a roof of it, lit blue from within), a longer road
+   with a line of boost along it and two icicles let go in turn, and rejoins
+   below. The signature is the **ski-jump**: off the brow of the in-run on a
+   **glide** (`air` glide, 84 m, 9 m up) over the crevasse (no barrier either
+   side), and down onto the flat beyond; the wow moments are the kicker, the
+   corkscrew, the cave, and the glide. Home is the moguls and the yeti. What
+   is new: the avalanche piece, the waterfall landmark (`landmarks/snow/falls.ts`),
+   the longer in-run and the branch, the glide in place of the old ski-jump
+   ramp and gap. A best lap runs about 58 s and the slowest about 72 s, the
+   less sure bots and the ones who took the falls.
 7. **Volcano Rush** (volcano): black rock and rivers of lava (drops). Up the
    volcano's flank in switchbacks (two banked hairpins, boulders rolling down
    the first leg at you); on the second leg a **geyser cannon** (`air` cannon,
