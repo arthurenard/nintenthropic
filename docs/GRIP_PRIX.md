@@ -355,7 +355,7 @@ The numbers (all in `sim/tuning.ts`):
   With `drift` held and |steer| > 0.15 (`hop.minSteer`) the drift starts that way:
   in the hop, after it, or from a straight into a bend with the button still down
   (over 10 m/s; 8 in the hop). In the hop the wheel thrown the other way (own ≤
-  -0.5, `drift.flip`) turns it round: the direction is the wheel's on landing. A
+  -0.5, `drift.flip`; not for bots) turns it round: the direction is the wheel's on landing. A
   power-slide: the way the
   kart goes turns at 0.9 + 0.5 × own of a full turn (own: the wheel into the
   drift 1, straight 0, against it -1: 0.4..1.4), and its nose swings out to
@@ -458,7 +458,11 @@ The numbers (all in `sim/tuning.ts`):
     carrying it wide, or a bend gentler than the slide, it lets go of (the
     drift button up) once its wheel has been at own ≤ -0.8 for 0.25 s
     (`bots.driftOut`), as it does for a hard brake (`bots.driftBrake`); a
-    wheel against the drift only widens it now. From skill 0.5 it may shake the wheel at a trick ramp's
+    wheel against the drift only widens it now. Its wheel in a drift is the
+    drift's own from the hop on, and the hop's turn-round (`drift.flip`) is
+    for players only: a bot's wheel held short of it there steered harder
+    into the drift than its line asked, and met hazards about 20% more often.
+    From skill 0.5 it may shake the wheel at a trick ramp's
     lip to kick the jump (its skill times 1 aggressive, 0.9 erratic, 0.5
     careful), and tricks in the air by skill otherwise.
   - *Racecraft* against every kart, bot or person: catching one, it picks a
