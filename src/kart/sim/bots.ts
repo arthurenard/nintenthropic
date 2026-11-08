@@ -683,8 +683,9 @@ export function botInput(world: World, k: KartState): DriveInput {
     const own = clamp((Math.abs(steer) - DR.steerBase) / DR.steerRange, -1, 1);
     const given = Math.sign(steer) === k.drift ? own * k.drift : -k.drift;
     m.out = given * k.drift <= -B.driftOut ? m.out + 1 : 0;
-    // In the hop it keeps short of the wheel thrown the other way, which would turn the drift round (`drift.flip`).
-    steer = k.hop > 0 ? Math.max(given * k.drift, -DR.flip + 0.1) * k.drift : given;
+    // The whole remap in the hop too: held short of the other way there, a bot steered harder into the drift than its line
+    // wanted and met more hazards (a bot's drift is never turned round in the hop: kart.ts, `drift.flip`, is for players).
+    steer = given;
   } else {
     m.out = 0;
   }

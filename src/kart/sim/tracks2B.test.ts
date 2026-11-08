@@ -81,8 +81,7 @@ describe.each(IDS)("%s, the second pass", (id) => {
       expect(stats.bestLap, where).toBeGreaterThanOrEqual(40);
       expect(stats.bestLap, where).toBeLessThanOrEqual(62);
       expect(stats.worstLap, where).toBeLessThanOrEqual(75);
-      // 24 kart-laps: one hit is 0.04, and any change to how the bots drive shuffles who is where when a hazard comes by.
-      expect(stats.hazardHits / (8 * 3), `${where} hits per kart-lap`).toBeLessThan(0.6);
+      expect(stats.hazardHits / (8 * 3), `${where} hits per kart-lap`).toBeLessThan(0.5);
       expect(stats.offroad, `${where} off the road`).toBeLessThan(0.02);
     }
     // Between them the bots drive the branch and the main road both, and every glide is flown.

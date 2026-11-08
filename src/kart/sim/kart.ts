@@ -210,6 +210,11 @@ function endDrift(k: KartState, boost: boolean, emit: Emit): void {
     giveBoost(k, k.level === 3 ? DR.boost3 : k.level === 2 ? DR.boost2 : DR.boost1);
     emit({ type: "boost", kart: k.id, source: "drift", level: k.level });
   }
+  clearDrift(k);
+}
+
+/** No drift, and nothing of one left over: its charge, and the open hands' debounce and grace (a new one starts afresh). */
+function clearDrift(k: KartState): void {
   k.drift = 0;
   k.charge = 0;
   k.level = 0;
@@ -225,9 +230,7 @@ export function spinOut(k: KartState, seconds: number = TUNING.items.spin): void
   k.vz *= TUNING.items.spinSpeedKept;
   k.boost = 0;
   k.hop = 0;
-  k.drift = 0;
-  k.charge = 0;
-  k.level = 0;
+  clearDrift(k);
 }
 
 /**
@@ -258,9 +261,7 @@ function startFall(k: KartState, emit: Emit): void {
   k.boost = 0;
   k.spin = 0;
   k.hop = 0;
-  k.drift = 0;
-  k.charge = 0;
-  k.level = 0;
+  clearDrift(k);
   k.air = 0;
   k.vy = 0;
   k.flight = 0;
@@ -639,9 +640,11 @@ function drive(w: World, k: KartState, steerIn: number, throttleIn: number, brak
     k.drift = steerIn > 0 ? 1 : -1;
     k.charge = 0;
     k.level = 0;
+    k.lapse = 0;
     k.slid = slide;
-  } else if (k.drift !== 0 && !k.slid && k.hop > 0 && steerIn * k.drift <= -DR.flip) {
+  } else if (k.drift !== 0 && !k.slid && !k.ai && k.hop > 0 && steerIn * k.drift <= -DR.flip) {
     // Still in the hop, the wheel thrown the other way: that is the way it goes (the open hands' drift keeps the turn that began it).
+    // A player's change of mind; a bot picks its side before it hops, and its wheel in a drift is the drift's own (bots.ts).
     k.drift = -k.drift as -1 | 1;
     k.charge = 0;
     k.level = 0;
