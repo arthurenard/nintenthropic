@@ -140,7 +140,8 @@ export function trackMapSvg(def: TrackDef, options: MapOptions = {}): string {
     push(`<polygon points="${band(from, to, (s) => sign * half(s), (s) => sign * (half(s) + v.distance))}" fill="${colour}" opacity="0.55"/>`);
     push(`<polyline points="${line(from, to, (s) => sign * (half(s) + v.distance))}" fill="none" stroke="#e8890c" stroke-width="2" stroke-dasharray="7 4"/>`);
   }
-  // Open edges: where there is nothing to stop a kart.
+  // Drops beside the road (bridges, quays, ribbons): a rail stands along each now (track/edges.ts), but they are where a
+  // kart is high over nothing, so the map marks them.
   for (const d of def.drops ?? []) {
     if (d.gap) continue;
     const from = d.from * geo.length;
