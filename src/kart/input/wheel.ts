@@ -678,7 +678,10 @@ export class WheelReader {
     const lead = speed * moving * ahead * (1 - smooth((since - 0.1) / 0.1));
     // Never past what the hands showed on the last frame: the lead only makes up the smoothing's lag behind them. Carried
     // on further (for the camera's delay), a quick turn overshot where the hands stopped, and felt twitchy: a turn to 30
-    // degrees peaked at 33 (steer 0.65 for 0.61), a fast one to 30 went 3.5 past.
+    // degrees peaked at 33 (steer 0.65 for 0.61), a fast one to 30 went 3.5 past. Gliding on past it between frames only
+    // (not for the delay) overshot nearly as much (frames 70 ms old: 0.75 for 0.61), so the steer can stand still for a
+    // tick between frames while a wheel turns: it did on every other tick before the lead existed (3 in 8 now, 4 in 8 then),
+    // and reaches 90% of a quick turn sooner than then (250 ms against 283 on frames 70 ms old).
     const gap = this.shown - this.angle;
     return lead * gap > 0 ? Math.sign(lead) * Math.min(Math.abs(lead), Math.abs(gap)) : 0;
   }
