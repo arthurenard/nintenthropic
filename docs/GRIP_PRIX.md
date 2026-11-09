@@ -271,6 +271,26 @@ typed, or by scanning the QR code on the host's screen, which opens
   for 1920x1080; the wheel check and the race show one picture with the
   columns marked in the players' colours. The host's screen is the big
   screen by default. The room still holds four.
+- **Auto: the camera counts the players.** Players on This Camera starts on
+  Auto (a count chosen before Auto came reads as Auto; one chosen since is
+  kept). The camera comes on before Choose Your Driver and a screen asks
+  everyone driving to hold up their fists (`app/count.ts`): the whole
+  picture, split into the columns the players counted so far would drive in,
+  each named (the friends' names from last time), a dot on every hand. Two
+  hands are a player and an odd one is one more, up to four and no more than
+  the room has seats for; the count is the most players seen in at least 30%
+  of the last second's pictures (so a fist missed now and then still counts
+  and a hand seen twice on one picture adds nobody, `app/headCount.ts`), and
+  it moves on to the drivers once it has not changed for 1.5 s (Continue goes
+  at once). Counting reads the picture as four players' would be read (four
+  tiles, up to eight hands, confidence 0.4, 1920x1080) but in one worker, a
+  tile after another: 10 to 13 reads a second here, plenty to count by. The
+  camera is let go for Choose Your Driver, as before, and comes back for the
+  wheels counted. Measured on `e2e/tracker.html` (`?players=N`, the count's
+  setup): two players' fists 3.7 hands a picture of 4; three and four
+  players' far-off fists 3.0 of 6 and 1.0 of 8, where the game's own setup
+  for them finds 2.0 and 0.8: drawn crowds that far off are hard for
+  MediaPipe either way, and real ones are untested.
 - **Practice** is a room with no one else, and never touches the network.
 
 The camera picture never leaves the device, but for one photo of each wheel
@@ -1710,7 +1730,9 @@ tight type, springy motion; a white pill is the one main action of a screen;
    carries `assets/kart/icon-180.png` as its icon and Apple touch icon.
 2. **Who's Driving?** (`you.ts`). One calm card: your name (a friendly default), how you
    drive as three tiles (Wheel, Keyboard, Gamepad), the wheel's steering, and
-   Players on This Camera (1 to 4, each with a name). Remembered.
+   Players on This Camera (Auto, then 1 to 4, each with a name). Remembered.
+2b. **Fists Up** (`count.ts`, Auto only): the camera counts the players (see
+   Auto above), then Choose Your Driver for that many.
 3. **Choose Your Driver** (`driver.ts`, `driverStats.ts`, `render/stage.ts`).
    The player's turn at the stage, one seat at a time (a chip for each seat
    says whose turn it is; Next Driver, then Continue; Back goes back a seat):

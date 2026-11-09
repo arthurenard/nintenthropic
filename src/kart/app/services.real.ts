@@ -215,6 +215,30 @@ export function createRealServices(options: RealServicesOptions = {}): Services 
         },
       };
     },
+    previewCount(container: HTMLElement, read): Disposable {
+      const picture = new WheelPreview({ size: "full", aspect: aspect() });
+      picture.attach(video());
+      picture.canvas.removeAttribute("style");
+      picture.canvas.setAttribute("aria-label", "Your camera, with every hand it sees marked");
+      container.append(picture.canvas);
+      let frame = 0;
+      const tick = () => {
+        const now = read();
+        // Mirrored, as the players see themselves.
+        picture.drawCount(
+          now.seats,
+          now.hands.map((hand) => [1 - hand.x, hand.y] as const),
+        );
+        frame = requestAnimationFrame(tick);
+      };
+      frame = requestAnimationFrame(tick);
+      return {
+        dispose() {
+          cancelAnimationFrame(frame);
+          picture.dispose();
+        },
+      };
+    },
     photo(control) {
       const from = video();
       if (!isWheel(control) || !from) return null;

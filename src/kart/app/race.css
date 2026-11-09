@@ -84,7 +84,8 @@ body[data-screen="race"] {
 .wheel-view.wide {
   aspect-ratio: 16 / 9;
 }
-#screen-check[data-shared] .check-inner {
+#screen-check[data-shared] .check-inner,
+#screen-count .check-inner {
   max-width: calc(1000px + 2 * var(--margin));
   width: 100%;
 }
@@ -94,7 +95,8 @@ body[data-screen="race"] {
   margin: 0 auto;
 }
 .check-pictures[data-shared],
-#screen-check[data-shared] .check-pictures {
+#screen-check[data-shared] .check-pictures,
+#screen-count .check-pictures {
   flex-direction: column;
   align-items: center;
 }

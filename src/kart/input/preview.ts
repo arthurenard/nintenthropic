@@ -252,6 +252,24 @@ export class WheelPreview {
     });
   }
 
+  /**
+   * The count screen's picture (app/count.ts): the whole picture, split into a column for each player counted once there
+   * are two or more, and every hand seen as a dot in the colour of the column it is in (the drive green for one player).
+   * `hands` are in the mirrored picture, as the players see themselves.
+   */
+  drawCount(seats: readonly { name: string; colour: string }[], hands: readonly (readonly [number, number])[]): void {
+    const { width, height } = this.canvas;
+    if (seats.length >= 2) this.drawColumns(seats.map((seat) => ({ ...seat, status: null })));
+    else this.paintPicture(fitPicture(width, height, this.aspectNow(), null));
+    const fit = fitPicture(width, height, this.aspectNow(), null);
+    const k = Math.min(2.2, Math.max(0.6, width / 640));
+    for (const [x, y] of hands) {
+      const column = Math.min(seats.length - 1, Math.max(0, Math.floor(x * seats.length)));
+      const colour = seats.length >= 2 ? seats[column]!.colour : MODE_COLOURS.drive;
+      this.drawHand(fit.point(x, y), 14 * k, false, colour, k);
+    }
+  }
+
   /** A column's colour as a dot with a dark rim, centred at (x, y). */
   private drawDot(colour: string, x: number, y: number, k: number): void {
     const g = this.context;

@@ -32,7 +32,8 @@ export function crowdPainter(canvas, image, params) {
     for (let i = 0; i < players; i++) {
       const cx = ((i + 0.5) / slots) * w;
       const cy = 0.6 * h;
-      const angle = 0.2 * Math.sin(t * 1.3 + i * 1.7);
+      // ?still=a: held still at a turn of a radians (as a test camera's picture is).
+      const angle = params.has("still") ? Number(params.get("still")) : 0.2 * Math.sin(t * 1.3 + i * 1.7);
       const half = 1.75 * fist;
       for (const side of [-1, 1]) {
         context.save();

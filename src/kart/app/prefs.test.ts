@@ -47,6 +47,8 @@ describe("the player Grip Prix remembers", () => {
     expect(first.drive).toBe("wheel");
     expect(first.steering).toBe("normal");
     expect(first.players).toBe(1);
+    // Everyone starts with the camera counting the players.
+    expect(first.auto).toBe(true);
     // The friends' default names are never yours, nor each other's.
     expect(new Set([first.name, ...first.mates.map((mate) => mate.name)]).size).toBe(4);
     // Another visit sees the same name, whatever the dice say.
@@ -62,6 +64,7 @@ describe("the player Grip Prix remembers", () => {
       character: "rivet",
       golden: true,
       players: 3,
+      auto: false,
       mates: [
         { name: "Lou", character: "dabble", golden: false },
         { name: "Finn", character: "rivet", golden: true },
@@ -83,6 +86,9 @@ describe("the player Grip Prix remembers", () => {
     // More than four, or fewer than one, is not a thing.
     expect(loadYou(0, memory({ "handy.kart.you.v1": JSON.stringify({ players: 9 }) })).players).toBe(4);
     expect(loadYou(0, memory({ "handy.kart.you.v1": JSON.stringify({ players: 0 }) })).players).toBe(1);
+    // A count chosen before Auto came is no choice between the two: Auto. One chosen since is kept.
+    expect(loadYou(0, memory({ "handy.kart.you.v1": JSON.stringify({ players: 3 }) })).auto).toBe(true);
+    expect(loadYou(0, memory({ "handy.kart.you.v1": JSON.stringify({ players: 3, auto: false }) })).auto).toBe(false);
   });
 
   it("reads anything odd as the default", () => {

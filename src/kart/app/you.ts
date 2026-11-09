@@ -1,8 +1,10 @@
 /**
  * The You screen: your name, how you drive, and (with the wheel) up to three
- * friends on the same camera, each with a name. What is chosen is remembered
- * (prefs.ts) and comes back the next time. Who sits in the kart is the next
- * screen's question (driver.ts): one thing at a time.
+ * friends on the same camera, each with a name, or Auto (the first choice):
+ * the camera counts who holds up their fists when it turns on (count.ts) and
+ * friends keep the names they had. What is chosen is remembered (prefs.ts)
+ * and comes back the next time. Who sits in the kart is the next screen's
+ * question (driver.ts): one thing at a time.
  */
 import { $, setText } from "../../ui/dom";
 import { cleanName, defaultName } from "./format";
@@ -23,8 +25,9 @@ const ABOUT: Record<Drive, string> = {
   gamepad: "Left stick to steer, the triggers to go and stop, A to drift, B or X for your item.",
 };
 
-/** What sharing the camera asks of the players, by how many there are. */
-const SHARING: Record<1 | 2 | 3 | 4, string> = {
+/** What sharing the camera asks of the players, by how many there are, or what Auto does. */
+const SHARING: Record<Count, string> = {
+  auto: "When the camera turns on, everyone driving holds up their fists and the game counts them, up to four. To name your friends, choose how many.",
   1: "You drive alone, with the whole picture.",
   2: "You share one camera: you drive with the left half of the picture, your friend with the right.",
   3: "You share one camera, standing side by side: the picture is split into three columns, left to right in the order below.",
@@ -33,7 +36,7 @@ const SHARING: Record<1 | 2 | 3 | 4, string> = {
 
 const WHERE = { host: "Host a Race", join: "Join a Race", practice: "Practice" } as const;
 
-type Count = "1" | "2" | "3" | "4";
+type Count = "auto" | "1" | "2" | "3" | "4";
 
 export class YouScreen {
   private you!: You;
@@ -56,10 +59,11 @@ export class YouScreen {
       this.you.steering = steering;
     });
     this.players = new Segmented<Count>($("pick-players"), (count) => {
-      const was = this.you.players;
-      this.you.players = Number(count) as You["players"];
+      const was = this.you.auto ? 1 : this.you.players;
+      this.you.auto = count === "auto";
+      if (count !== "auto") this.you.players = Number(count) as You["players"];
       this.sync();
-      if (this.you.players > was) this.mates[this.you.players - 2]?.focus({ preventScroll: true });
+      if (!this.you.auto && this.you.players > was) this.mates[this.you.players - 2]?.focus({ preventScroll: true });
     });
     $("you-back").addEventListener("click", () => hooks.back());
     this.name.addEventListener("input", () => (this.you.name = this.name.value));
@@ -81,7 +85,7 @@ export class YouScreen {
     this.mates.forEach((field, i) => (field.value = you.mates[i]!.name));
     this.drive.value = you.drive;
     this.steering.value = you.steering;
-    this.players.value = String(you.players) as Count;
+    this.players.value = you.auto ? "auto" : (String(you.players) as Count);
     this.sync();
     focusHeading($("you-title"));
   }
@@ -89,13 +93,14 @@ export class YouScreen {
   /** Shows what the current choice needs: steering and friends on the camera only go with the wheel. */
   private sync(): void {
     const wheel = this.you.drive === "wheel";
-    const count = this.you.players;
+    // Auto names nobody: the friends counted keep the names they had.
+    const count = this.you.auto ? 1 : this.you.players;
     $("row-steering").hidden = !wheel;
     $("group-second").hidden = !wheel;
     $("row-second").hidden = !wheel || count < 2;
     $("row-third").hidden = !wheel || count < 3;
     $("row-fourth").hidden = !wheel || count < 4;
-    setText("foot-players", SHARING[count]);
+    setText("foot-players", SHARING[this.you.auto ? "auto" : (String(count) as Count)]);
     setText("foot-drive", ABOUT[this.you.drive]);
   }
 
@@ -103,7 +108,8 @@ export class YouScreen {
   finish(): void {
     const name = cleanName(this.name.value, this.was.name);
     const wheel = this.you.drive === "wheel";
-    const count = wheel ? this.you.players : 1;
+    // Counted on the camera, any of the friends may drive: none of them may share a name.
+    const count = wheel ? (this.you.auto ? 4 : this.you.players) : 1;
     // Drivers with the same name could not be told apart on the screen.
     const taken = [name];
     const mates = this.you.mates.map((mate, i) => {

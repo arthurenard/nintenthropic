@@ -2,7 +2,7 @@
 <!-- The tracker as the game runs it, served by the dev server only: a still
      picture of a hand played as a 30 fps video, read frame by frame by the
      tracker (?where=worker or ?where=page, ?delegate=CPU, ?hands=2, ?confidence=0.4, ?tiles=4, ?copies=4,
-     ?players=3 for three players' fists (e2e/crowd.js), ?lanes=GPU,CPU,CPU for a worker per tile, ?adapt=1 for a
+     ?players=3 for three players' fists (e2e/crowd.js), ?camera=1280x720 for the browser's camera instead, ?lanes=GPU,CPU,CPU for a worker per tile, ?adapt=1 for a
      slow worker to try the other delegate, ?face=N to read the face too on every Nth frame, as a game that
      reads the eye does, and ?wheels=N for N players' wheel readers and corner pictures drawn as a race draws them),
      while a busy animation loop measures what the tracking costs the page's frames. -->
@@ -35,7 +35,10 @@
         const crowd = params.has("players") ? crowdPainter(canvas, image, params) : null;
         const context = canvas.getContext("2d");
         const video = document.getElementById("video");
-        video.srcObject = canvas.captureStream(30);
+        // ?camera=WxH: the browser's camera (a fake one playing a video in the tests) at that size, not the painted picture.
+        video.srcObject = params.has("camera")
+          ? await navigator.mediaDevices.getUserMedia({ video: { width: Number(params.get("camera").split("x")[0]), height: Number(params.get("camera").split("x")[1]) } })
+          : canvas.captureStream(30);
         let tick = 0;
         const paint = () => {
           if (crowd) crowd();
@@ -81,10 +84,13 @@
         let hands = 0;
         let total = 0;
         let counted = 0;
+        // How many frames saw each number of hands (to count players by: app/headCount.ts).
+        report.handCounts = {};
         tracker.subscribe((frame) => {
           hands += frame.landmarks ? 1 : 0;
           total += frame.hands.length;
           report.handsPerFrame = total / ++counted;
+          report.handCounts[frame.hands.length] = (report.handCounts[frame.hands.length] ?? 0) + 1;
         });
         let faces = 0;
         tracker.subscribeFace((face) => (faces += face.eyes ? 1 : 0));

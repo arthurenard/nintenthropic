@@ -3,7 +3,7 @@ import { CameraError, type Camera } from "../../tracking/camera";
 import type { Tracker } from "../../tracking/tracker";
 import type { HandFrame, HandSource } from "../../tracking/types";
 import { CameraStack, SwitchableSource } from "./camera";
-import { CameraFailure } from "./services";
+import { CameraFailure, type CameraHands } from "./services";
 
 const frame = (sequence: number): HandFrame => ({ landmarks: null, handedness: null, hands: [], capturedAt: sequence, sequence });
 
@@ -68,7 +68,7 @@ describe("a source that follows whichever tracker is current", () => {
 function parts() {
   const video = {} as HTMLVideoElement;
   const cameras: { stopped: boolean; size: { width: number; height: number } }[] = [];
-  const trackers: { hands: number; started: boolean; disposed: boolean; source: ReturnType<typeof source> }[] = [];
+  const trackers: { hands: CameraHands; started: boolean; disposed: boolean; source: ReturnType<typeof source> }[] = [];
   const stack = new CameraStack({
     makeVideo: () => video,
     open: async (_video, size) => {
@@ -88,7 +88,10 @@ function parts() {
         start: () => (record.started = true),
         stop: () => {},
         dispose: () => (record.disposed = true),
-        counts: () => ({ frames: 40 * hands, skipped: hands, columns: hands / 2 }),
+        counts: () => {
+          const many = hands === "count" ? 8 : hands;
+          return { frames: 40 * many, skipped: many, columns: many / 2 };
+        },
       } as unknown as Tracker;
     },
   });

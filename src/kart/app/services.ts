@@ -11,6 +11,7 @@ import type { KartSound, MusicKind } from "../audio";
 import type { DriverControl, RaceRenderer, RaceView, Session, SessionClosed, TrackDef } from "../contract";
 import type { Steering } from "../input";
 import type { PodiumRenderer } from "../render/podium";
+import type { HandSource } from "../../tracking/types";
 import type { TrackerCounts } from "./handsFirst";
 
 // --- the room --------------------------------------------------------------------------------------------
@@ -84,6 +85,14 @@ export interface ColumnSeat {
   colour: string;
 }
 
+/** What the count screen's picture shows (Services.previewCount). */
+export interface CountPicture {
+  /** The players counted so far, left to right as they see themselves: one column each once there are two or more. */
+  seats: readonly { name: string; colour: string }[];
+  /** Every hand in the picture: its palm, in the camera's own (unmirrored) picture, 0..1. */
+  hands: readonly { x: number; y: number }[];
+}
+
 /** A still taken from the camera for a finish-line photo: a small picture in memory until it is made a JPEG, or let go. */
 export interface Still {
   /** The JPEG, as a data URL of at most MAX_PHOTO_CHARS (contract.ts), or null if it cannot be made. */
@@ -111,6 +120,12 @@ export class CameraFailure extends Error {
   }
 }
 
+/**
+ * What the camera is started for: 2 hands for one wheel, 4, 6 or 8 for two to four players sharing it, or "count": the
+ * whole picture read for up to eight hands, to count the players in it (count.ts), in one worker, read a part at a time.
+ */
+export type CameraHands = 2 | 4 | 6 | 8 | "count";
+
 export interface CameraService {
   /**
    * Whether the browser will let the page use the camera without asking:
@@ -127,9 +142,11 @@ export interface CameraService {
    * number of hands without opening the camera twice. `progress` hears the
    * download of the tracker, 0..1 (the first visit fetches about 20 MB).
    */
-  start(hands: 2 | 4 | 6 | 8, progress?: (fraction: number) => void): Promise<void>;
+  start(hands: CameraHands, progress?: (fraction: number) => void): Promise<void>;
   /** Lets the camera go. */
   stop(): void;
+  /** Every hand the tracker finds, on every frame (the count screen's; the wheels read theirs through their controls). */
+  readonly hands: HandSource;
   /**
    * The tracker's running counts while it reads: frames read, and frames dropped because a worker was still busy (for
    * the race to make room for it, handsFirst.ts). Null with no tracker; absent where there is no real one.
@@ -225,6 +242,12 @@ export interface Services {
    * whose own columns would be narrow slivers.
    */
   previewColumns(container: HTMLElement, seats: readonly ColumnSeat[], size: "corner" | "large"): Disposable;
+  /**
+   * The count screen's picture: the whole mirrored camera, split into the columns the players counted so far would
+   * each drive in (none for one), each column's player named over it, and every hand the tracker sees as a dot in its
+   * column's colour. `read` says, every frame, who is counted and where the hands are (camera's own picture, 0..1).
+   */
+  previewCount(container: HTMLElement, read: () => CountPicture): Disposable;
   /**
    * A still for a wheel player's finish-line photo: the camera's picture as it is at the call, mirrored as they see
    * themself, their own column of it when they share the camera, small; made a JPEG only if it is the one kept (`Still`).

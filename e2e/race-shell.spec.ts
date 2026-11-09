@@ -331,14 +331,24 @@ test("hosting with the wheel: the check, the code and its QR code, and the wheel
   // The wheel is the default, with its steering and a second player on offer.
   await expect(page.getByRole("radio", { name: "Normal" })).toHaveAttribute("aria-checked", "true");
   await page.getByRole("radio", { name: "Quick" }).click();
+  // The players on the camera are counted when it turns on (Auto, the first choice), so the camera comes on now.
+  await expect(page.getByRole("radiogroup", { name: "Players on This Camera" }).getByRole("radio", { name: "Auto" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator("#foot-players")).toContainText("counts them");
+  await expect(page.getByLabel("Second Driver")).toBeHidden();
   await page.getByRole("button", { name: "Continue" }).click();
-  await chooseDrivers(page);
 
   // Before the browser asks for the camera, we say why.
   await expect(page.locator("#prime")).toBeVisible();
   await expect(page.locator("#prime")).toContainText("The picture stays on this device; only your photo at the finish line goes to the friends you race.");
   await shot(page, info, "race-3a-prime", 400);
   await page.locator("#prime").getByRole("button", { name: "Continue" }).click();
+
+  // The count: one pair of fists is one player, and it moves on to the driver by itself.
+  await expect(page.locator("#count-title")).toHaveText("1 Player");
+  await shot(page, info, "race-2g-count-one", 200);
+  await chooseDrivers(page);
+  // One seat to choose for, and the camera is asked for no more: the browser was asked already.
+  await expect(page.locator("#prime")).toBeHidden();
 
   // The wheel check, one idea at a time, on the real reader: fists, held level, turned both ways, opened to brake.
   const title = page.locator("#check-title");
@@ -447,7 +457,7 @@ test("two on one camera: a second name, and each checked in their own picture", 
   );
   await page.getByRole("button", { name: "Practice" }).click();
   const players = page.getByRole("radiogroup", { name: "Players on This Camera" });
-  await expect(players.getByRole("radio", { name: "1", exact: true })).toHaveAttribute("aria-checked", "true");
+  await expect(players.getByRole("radio", { name: "Auto" })).toHaveAttribute("aria-checked", "true");
   await players.getByRole("radio", { name: "2", exact: true }).click();
   await expect(players.getByRole("radio", { name: "2", exact: true })).toHaveAttribute("aria-checked", "true");
   // The first name is chosen too: a random default that happened to be Finn would make the second one change (two with one name).
@@ -583,7 +593,7 @@ test("the real camera with four players: eight hands, a tracker per column, and 
     if ((message.type() === "warning" || message.type() === "error") && !/^([WI]\d{4} |INFO: )/.test(message.text())) errors.push(message.text());
   });
   await returning(page);
-  await page.addInitScript(() => localStorage.setItem("handy.kart.you.v1", JSON.stringify({ name: "Maya", drive: "wheel", players: 4 })));
+  await page.addInitScript(() => localStorage.setItem("handy.kart.you.v1", JSON.stringify({ name: "Maya", drive: "wheel", players: 4, auto: false })));
   await open(page);
   await page.getByRole("button", { name: "Practice" }).click();
   await expect(page.getByRole("radiogroup", { name: "Players on This Camera" }).getByRole("radio", { name: "4", exact: true })).toHaveAttribute("aria-checked", "true");
@@ -706,8 +716,9 @@ test("troubles say what happened and give the way back", async ({ page }, info) 
     await page.getByRole("button", { name: "Practice" }).click();
     // (The keyboard may be remembered from before: back to the wheel.)
     await page.getByRole("radio", { name: "Wheel" }).click();
+    // The camera comes on to count the players (Auto): a camera that will not start says so there.
     await page.getByRole("button", { name: "Continue" }).click();
-    await chooseDrivers(page);
+    await expect(page.locator("#screen-count")).toBeVisible();
   };
 
   // A camera the browser refuses: try again, or drive with the keyboard.
@@ -715,6 +726,8 @@ test("troubles say what happened and give the way back", async ({ page }, info) 
   await expect(trouble).toContainText("Your browser is blocking the camera for this page.");
   await shot(page, info, "race-7d-camera", 400);
   await trouble.getByRole("button", { name: "Drive With Keyboard" }).click();
+  // No driver was chosen yet: that comes next, for the keyboard.
+  await chooseDrivers(page);
   await pastHowTo(page);
   await expect(heading(page, "Ready to Race")).toBeVisible();
   await expect(page.locator("#lobby-players")).toContainText("Keyboard");
