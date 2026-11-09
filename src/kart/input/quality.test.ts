@@ -37,7 +37,7 @@ describe("the steer follows the hands", () => {
       rig.wheel(1 / 60, { angle: 20 });
       highest = Math.max(highest, rig.last.status.angle);
     }
-    expect(highest).toBeLessThan(23);
+    expect(highest).toBeLessThan(20.3);
     expect(rig.last.status.angle).toBeGreaterThan(19);
   });
 
@@ -171,16 +171,20 @@ describe("frames that arrive late", () => {
     return { worst, overshoot: highest - stop };
   };
 
-  it("steers closer to where the hands are than to where they were", () => {
+  it("keeps up with late frames as well as they allow: no further behind than their age, and the smoothing's lag", () => {
+    // 90 degrees a second, frames 70 ms old: the newest frame is already 6.3 degrees behind the hands. The wheel is not
+    // carried past what the hands showed (that overshot every quick turn by a quarter), so that is the floor.
     const late = run(90, 70, 160);
     const prompt = run(90, 0, 160);
-    expect(late.worst).toBeLessThan(prompt.worst + 6);
-    expect(late.worst).toBeLessThan(7.5);
+    expect(late.worst).toBeLessThan(prompt.worst + 6.3 + 0.5);
+    expect(late.worst).toBeLessThan(8.5);
   });
 
-  it("overshoots a wheel that stops by a few degrees at most, even a fast one", () => {
-    expect(run(200, 70, 30).overshoot).toBeLessThan(3.5);
-    expect(run(90, 70, 30).overshoot).toBeLessThan(2);
+  it("never overshoots a wheel that stops, even a fast one on late frames", () => {
+    // (Carried on for the frames' age, a turn to 30 degrees went 3.5 past at 200 degrees a second, and its steer peaked a
+    // quarter above where it settled: what made the wheel feel twitchy.)
+    expect(run(200, 70, 30).overshoot).toBeLessThan(0.3);
+    expect(run(90, 70, 30).overshoot).toBeLessThan(0.3);
   });
 });
 
