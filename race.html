@@ -142,6 +142,7 @@
             <div class="you-line">
               <span class="field-label" id="label-players">Players on This Camera</span>
               <div class="segmented" role="radiogroup" id="pick-players" aria-labelledby="label-players" aria-describedby="foot-players">
+                <button type="button" role="radio" data-value="auto">Auto</button>
                 <button type="button" role="radio" data-value="1">1</button>
                 <button type="button" role="radio" data-value="2">2</button>
                 <button type="button" role="radio" data-value="3">3</button>
@@ -168,6 +169,26 @@
         <div class="page-actions">
           <button id="you-continue" class="button primary large wide">Continue</button>
         </div>
+      </div>
+    </section>
+
+    <!-- 2b. Auto: the camera counts who holds up their fists, before the drivers are chosen (count.ts). -->
+    <section id="screen-count" class="screen page check count" hidden aria-labelledby="count-title">
+      <header class="bar">
+        <button id="count-back" class="button back glass">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-chevron-left" /></svg>Back
+        </button>
+      </header>
+      <div class="check-inner">
+        <div class="check-pictures">
+          <figure class="count-shared"><div class="wheel-view wide" id="count-picture"></div></figure>
+        </div>
+        <div class="check-words" aria-live="polite">
+          <p class="eyebrow">Players on This Camera</p>
+          <h1 class="title2" id="count-title" tabindex="-1">Turning the camera on</h1>
+          <p class="subhead secondary" id="count-detail">Then everyone driving holds up both fists.</p>
+        </div>
+        <button id="count-continue" class="button primary large" style="visibility: hidden">Continue</button>
       </div>
     </section>
 

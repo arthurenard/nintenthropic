@@ -4,7 +4,8 @@
  *
  * The camera opens once and stays open while the player is in a room; the
  * tracker is loaded for the number of hands wanted (2 for a wheel, 4, 6 or 8
- * for two, three or four players on one camera) and replaced if that changes.
+ * for two, three or four players on one camera, or "count" to count the
+ * players first: count.ts) and replaced if that changes.
  * The wheels are built before the camera is up (Choose Your Driver's Continue
  * makes them, then starts the camera; the wheel check comes after), so they
  * read from a `SwitchableSource`, which forwards to whichever tracker is
@@ -21,7 +22,7 @@ import { loadTracker, type Tracker } from "../../tracking/tracker";
 import { MODEL_BYTES, WASM_BYTES } from "../../tracking/sizes";
 import type { HandFrame, HandSource } from "../../tracking/types";
 import type { TrackerCounts } from "./handsFirst";
-import { CameraFailure, type CameraService } from "./services";
+import { CameraFailure, type CameraHands, type CameraService } from "./services";
 
 /** A hand source that follows whichever real source is current, so a wheel built early keeps working when the tracker is replaced. */
 export class SwitchableSource implements HandSource {
@@ -55,8 +56,8 @@ export class SwitchableSource implements HandSource {
 export interface CameraStackOptions {
   /** Opens the camera into a video, asking for a picture this size. */
   open?: (video: HTMLVideoElement, size: { width: number; height: number }) => Promise<Camera>;
-  /** Loads the tracker for this many hands. */
-  load?: (hands: number, progress: (fraction: number) => void) => Promise<Tracker>;
+  /** Loads the tracker for this many hands, or for counting the players. */
+  load?: (hands: CameraHands, progress: (fraction: number) => void) => Promise<Tracker>;
   /** Makes the video the camera plays into (in the page, out of sight, by default). */
   makeVideo?: () => HTMLVideoElement;
 }
@@ -87,10 +88,15 @@ function makeVideo(): HTMLVideoElement {
 export class CameraStack implements CameraService {
   /** What the wheels read. */
   readonly source = new SwitchableSource();
+  /** The count screen's hands: the same tracker's. */
+  get hands(): HandSource {
+    return this.source;
+  }
   private video_: HTMLVideoElement | null = null;
   private camera: Camera | null = null;
   private tracker: Tracker | null = null;
-  private hands = 0;
+  /** What the tracker was loaded for (0: none). */
+  private loaded: CameraHands | 0 = 0;
   /** Whether the camera was opened for a crowd (three or four players: a bigger picture). */
   private crowd = false;
   /** Counts starts and stops, so a start that was overtaken lets go of what it opened. */
@@ -149,7 +155,7 @@ export class CameraStack implements CameraService {
     return (this.options.open ?? ((video, want) => openCamera(video, { size: want })))(this.video, size);
   }
 
-  start(hands: 2 | 4 | 6 | 8, progress?: (fraction: number) => void): Promise<void> {
+  start(hands: CameraHands, progress?: (fraction: number) => void): Promise<void> {
     const mine = ++this.generation;
     // One start at a time: a second call waits for the first, then only changes what differs.
     const run = this.busy.then(() => this.begin(hands, mine, progress));
@@ -157,12 +163,12 @@ export class CameraStack implements CameraService {
     return run;
   }
 
-  private async begin(hands: 2 | 4 | 6 | 8, mine: number, progress?: (fraction: number) => void): Promise<void> {
+  private async begin(hands: CameraHands, mine: number, progress?: (fraction: number) => void): Promise<void> {
     // Overtaken (the player left, or asked again): quietly nothing to do, and nothing left open.
     if (mine !== this.generation) return;
     try {
       // A crowd needs a bigger picture than one or two players do: a camera opened for the other kind is opened again.
-      const crowd = isCrowd(hands);
+      const crowd = hands === "count" || isCrowd(hands);
       if (this.camera && this.crowd !== crowd) {
         this.camera.stop();
         this.camera = null;
@@ -173,7 +179,7 @@ export class CameraStack implements CameraService {
         this.camera = camera;
         this.crowd = crowd;
       }
-      if (!this.tracker || this.hands !== hands) {
+      if (!this.tracker || this.loaded !== hands) {
         this.source.use(null);
         this.tracker?.dispose();
         this.tracker = null;
@@ -181,7 +187,7 @@ export class CameraStack implements CameraService {
         const tracker = await load(hands, (fraction) => progress?.(fraction));
         if (mine !== this.generation) return tracker.dispose();
         this.tracker = tracker;
-        this.hands = hands;
+        this.loaded = hands;
         this.source.use(tracker);
         tracker.start(this.video);
       }
@@ -204,7 +210,7 @@ export class CameraStack implements CameraService {
     this.tracker?.stop();
     this.tracker?.dispose();
     this.tracker = null;
-    this.hands = 0;
+    this.loaded = 0;
     this.crowd = false;
     this.camera?.stop();
     this.camera = null;
@@ -236,8 +242,12 @@ function cutOverride(): boolean | undefined {
  * camera each read in a tile and a worker of their own (lanesFor), and a worker whose landmarker is slow here tries the
  * other delegate (tracking/adapt.ts).
  */
-async function loadForWheel(hands: number, progress: (fraction: number) => void): Promise<Tracker> {
-  const tiles = tilesOverride() ?? tilesFor(hands);
+async function loadForWheel(wanted: CameraHands, progress: (fraction: number) => void): Promise<Tracker> {
+  // Counting reads the picture as four players' would be read, for up to eight hands, but in one worker, a tile after
+  // another (a few reads a second are plenty to count by): no downloads or memory beyond the one wheel's.
+  const counting = wanted === "count";
+  const hands = counting ? 8 : wanted;
+  const tiles = counting ? 4 : (tilesOverride() ?? tilesFor(hands));
   let wasm = 0;
   let model = 0;
   const report = () => progress((wasm * WASM_BYTES + model * MODEL_BYTES) / (WASM_BYTES + MODEL_BYTES));
@@ -252,6 +262,6 @@ async function loadForWheel(hands: number, progress: (fraction: number) => void)
         report();
       },
     },
-    { hands, confidence: handConfidence(hands), tiles, lanes: lanesFor(tiles) ?? undefined, adapt: true, cutOnPage: cutOverride() },
+    { hands, confidence: handConfidence(hands), tiles, lanes: counting ? undefined : (lanesFor(tiles) ?? undefined), adapt: true, cutOnPage: cutOverride() },
   );
 }

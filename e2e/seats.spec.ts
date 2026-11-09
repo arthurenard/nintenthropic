@@ -108,3 +108,26 @@ for (const real of CLIPS ? [false, true] : [false]) {
     }
   }
 }
+
+// Auto: the real tracker, reading the whole picture for counting, finds every fist and counts two to a player. "pair"
+// (one fist in each half of the picture) is one player's two fists; "two-players" is two players' four.
+for (const { camera, players } of [
+  { camera: "pair", players: 1 },
+  { camera: "two-players", players: 2 },
+] as const) {
+  test(`Auto counts ${players} ${players === 1 ? "player" : "players"} from ${players * 2} fists on a real camera`, async ({ baseURL }) => {
+    await withCamera(seatsFixture(camera), baseURL!, async (page) => {
+      const errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      await open(page);
+      await page.getByRole("button", { name: "Practice" }).click();
+      await expect(page.getByRole("radiogroup", { name: "Players on This Camera" }).getByRole("radio", { name: "Auto" })).toHaveAttribute("aria-checked", "true");
+      await page.getByRole("button", { name: "Continue" }).click();
+      await expect(page.locator("#count-title")).toHaveText(players === 1 ? "1 Player" : `${players} Players`, { timeout: 90_000 });
+      await onScreen(page, "driver", 10_000);
+      if (players === 1) await expect(page.locator("#driver-seats")).toBeHidden();
+      else await expect(page.locator("#driver-seats button")).toHaveCount(players);
+      expect(errors).toEqual([]);
+    });
+  });
+}

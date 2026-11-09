@@ -23,7 +23,7 @@ import type { Rivalries } from "../rivals";
 import type { KartApp, KartAppSnapshot } from "./app";
 import { LoadingScreen, raceWords } from "./loading";
 import type { StandIn } from "./services.real";
-import { CameraFailure, type CameraService, type CameraTrouble } from "./services";
+import { CameraFailure, type CameraHands, type CameraService, type CameraTrouble } from "./services";
 
 /** Hands that follow a script: fists on a wheel held level, until a test says otherwise. */
 export class ScriptedWheel implements HandSource {
@@ -79,9 +79,14 @@ export class ScriptedCamera implements CameraService {
     return this.fail === "denied" ? "denied" : this.ask ? "prompt" : "granted";
   }
 
-  async start(hands: 2 | 4 | 6 | 8, progress?: (fraction: number) => void): Promise<void> {
+  /** The count screen's hands: the script's. */
+  get hands(): HandSource {
+    return this.wheel;
+  }
+
+  async start(hands: CameraHands, progress?: (fraction: number) => void): Promise<void> {
     if (this.fail) throw new CameraFailure(this.fail);
-    if (this.video && !this.camera) this.camera = await openCamera(this.video, { size: cameraSize(hands) });
+    if (this.video && !this.camera) this.camera = await openCamera(this.video, { size: cameraSize(hands === "count" ? 8 : hands) });
     progress?.(1);
     this.wheel.start();
   }

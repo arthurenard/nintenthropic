@@ -46,8 +46,10 @@ export interface You {
   /** Who drives (characters.ts id), and whether the kart is golden (only once that is unlocked). */
   character: string;
   golden: boolean;
-  /** Players on this camera, 1 to 4 (wheel only): you, then the first of `mates`, and so on. */
+  /** Players on this camera, 1 to 4 (wheel only): you, then the first of `mates`, and so on. With `auto`, the last count. */
   players: 1 | 2 | 3 | 4;
+  /** The players on the camera are counted when it turns on (count.ts), not chosen: everyone's first choice. */
+  auto: boolean;
   /** The second, third and fourth players, always three kept so choosing more players brings back who they were. */
   mates: Mate[];
 }
@@ -126,6 +128,8 @@ export function loadYou(random = Math.random(), storage: Storage | undefined = l
     drive: DRIVES.includes(saved?.drive as Drive) ? (saved!.drive as Drive) : "wheel",
     steering: STEERINGS.includes(saved?.steering as Steering) ? (saved!.steering as Steering) : "normal",
     players: Math.min(MAX_ON_CAMERA, Math.max(1, asked)) as You["players"],
+    // Counted unless a number was chosen since Auto came (a save from before it means no choice between the two).
+    auto: saved?.auto !== false,
     mates,
   };
   if (!saved) saveYou(you, storage);
