@@ -89,7 +89,8 @@ body[data-screen="race"] {
   max-width: calc(1000px + 2 * var(--margin));
   width: 100%;
 }
-.check-shared {
+.check-shared,
+.count-shared {
   width: min(100%, calc((100dvh - 330px) * 16 / 9));
   min-width: 240px;
   margin: 0 auto;

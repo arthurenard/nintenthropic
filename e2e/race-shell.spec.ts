@@ -884,7 +884,9 @@ test("a gamepad alone gets from the start screen into a race, with the focus rin
   // You: up from Continue to the ways to drive, along to the gamepad, chosen with A, and down to Continue.
   await press("down");
   expect((await focused()).name).toBe("you-continue");
-  await reach("gamepad", "up");
+  // Up lands on whichever way to drive is above it; right goes along to the gamepad.
+  for (let i = 0; i < 8 && !["wheel", "keyboard", "gamepad"].includes((await focused()).name); i++) await press("up");
+  await reach("gamepad", "right");
   await press("a");
   await expect(page.getByRole("radio", { name: /Gamepad/ })).toHaveAttribute("aria-checked", "true");
   await reach("you-continue", "down");
