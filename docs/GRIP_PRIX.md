@@ -752,9 +752,14 @@ of three; bytes are exact and are the numbers to trust.
   on at the wheel's speed (`WHEEL.lead`, at most 45 ms, the slower of the
   smoothed speed and the last step, none when they disagree, fading out when
   no frame comes), so the steer glides instead of stepping, and a fifth of the
-  frame's measured age on arrival (`compensate`) is made up too; a wheel
-  stopping at 30 degrees from 200 a second goes 3 degrees past at most
-  (`quality.test.ts`). The level (an offset) is set by holding the
+  frame's measured age on arrival (`compensate`) is made up too, but never
+  past the angle the hands showed on the newest frame: the lead only makes up
+  the smoothing's lag. Carried further (as from 7 to 9 November), a quick turn
+  overshot where the hands stopped, the steer peaking a quarter above where it
+  settled with frames 70 ms old (a turn to 30 degrees: 0.77 for 0.61), which
+  felt twitchy; now a wheel that stops does not go past (`quality.test.ts`),
+  at the cost of about 30 ms more to reach 90% of a quick turn on late
+  frames. The level (an offset) is set by holding the
   wheel level for a second.
 - **Fist or open.** From the world landmarks: a finger is out when its tip is
   much farther from the wrist than its middle joint; three or four fingers

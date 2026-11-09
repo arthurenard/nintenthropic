@@ -61,8 +61,8 @@ export const WHEEL = {
   /**
    * A frame is some time old when it arrives (the camera, the read, the worker's answer: tracker.ts measures 40 to 90
    * ms). The wheel carries on that far at its speed too, this share of the delay measured (the frame's arrival less
-   * the moment the camera took it, when that is a believable 0 to 250 ms), so the kart steers where the hands are
-   * rather than where they were; a fifth, because a lead longer overshoots a wheel that stops (0.5 overshot a fast stop by 7 degrees, 0.2 by 3).
+   * the moment the camera took it, when that is a believable 0 to 250 ms), but never past the angle the hands showed on
+   * the last frame (`lead`): it makes up the smoothing's lag, and a wheel that stops is not carried past where it stopped.
    */
   compensate: 0.2,
   /** Both hands open this long (after each has held open, Grip): brake, seconds. */
@@ -262,6 +262,8 @@ export class WheelReader {
   private readonly gestures = new Gestures();
   /** The smoothed wheel angle before the level is taken away, degrees, unwrapped (it can pass 180). */
   private angle = 0;
+  /** The last frame's angle as the hands showed it, before smoothing (unwrapped as `angle`): the lead never goes past it. */
+  private shown = 0;
   private haveAngle = false;
   private levelDegrees = 0;
   private isLevelled = false;
@@ -562,6 +564,7 @@ export class WheelReader {
     const degrees = wheelAngle(left, right, this.aspect, this.haveAngle && !fresh ? this.angle : null);
     const before = this.angle;
     const dt = t - this.turnedAt;
+    this.shown = degrees;
     this.angle = this.filter.filter(degrees, t);
     this.speed.update(this.angle, t);
     // The latest step alone: when the wheel has just stopped it is already near zero while the smoothed speed is not.
@@ -672,7 +675,15 @@ export class WheelReader {
     const moving = smooth((Math.abs(speed) - WHEEL.leadSpeed[0]) / (WHEEL.leadSpeed[1] - WHEEL.leadSpeed[0]));
     if (moving === 0) return 0;
     // Past full lock the steer cannot go further (shapeSteer saturates), so the lead cannot push the kart beyond it.
-    return speed * moving * ahead * (1 - smooth((since - 0.1) / 0.1));
+    const lead = speed * moving * ahead * (1 - smooth((since - 0.1) / 0.1));
+    // Never past what the hands showed on the last frame: the lead only makes up the smoothing's lag behind them. Carried
+    // on further (for the camera's delay), a quick turn overshot where the hands stopped, and felt twitchy: a turn to 30
+    // degrees peaked at 33 (steer 0.65 for 0.61), a fast one to 30 went 3.5 past. Gliding on past it between frames only
+    // (not for the delay) overshot nearly as much (frames 70 ms old: 0.75 for 0.61), so the steer can stand still for a
+    // tick between frames while a wheel turns: it did on every other tick before the lead existed (3 in 8 now, 4 in 8 then),
+    // and reaches 90% of a quick turn sooner than then (250 ms against 283 on frames 70 ms old).
+    const gap = this.shown - this.angle;
+    return lead * gap > 0 ? Math.sign(lead) * Math.min(Math.abs(lead), Math.abs(gap)) : 0;
   }
 
   private modeAt(t: number): WheelStatus["mode"] {
