@@ -84,6 +84,8 @@ export class KartApp {
   private readonly startScreen: StartScreen;
   private readonly youScreen: YouScreen;
   private readonly countScreen: CountScreen;
+  /** Counts the count screen's openings, so one overtaken while its camera started (Back, then Continue) lets go. */
+  private counting = 0;
   private readonly driverScreen: DriverScreen;
   private readonly checkScreen: CheckScreen;
   private readonly howToScreen: HowToScreen;
@@ -407,6 +409,7 @@ export class KartApp {
   // --- you, the camera, the check --------------------------------------------------------------------------------
 
   private openYou(): void {
+    this.counting++;
     this.countScreen.stop();
     this.checkScreen.stop();
     this.howToScreen.stop();
@@ -433,6 +436,7 @@ export class KartApp {
   private async openCount(): Promise<void> {
     const session = this.session;
     if (!session) return;
+    const mine = ++this.counting;
     this.checkScreen.stop();
     this.howToScreen.stop();
     this.ready = false;
@@ -450,8 +454,8 @@ export class KartApp {
       this.services.camera.stop();
       return;
     }
-    // Gone back while the camera was starting.
-    if (this.screen !== "count") return;
+    // Gone back while the camera was starting (and maybe come again: that opening has the screen now).
+    if (this.screen !== "count" || mine !== this.counting) return;
     if (on === "on") this.countScreen.start();
     // Not now (the explanation before the browser asks was closed): back to the choice.
     else if (on === "off") this.openYou();

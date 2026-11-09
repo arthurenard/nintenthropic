@@ -46,6 +46,8 @@ export class HeadCounter {
   private players: 0 | 1 | 2 | 3 | 4 = 0;
   /** When `players` last changed. */
   private since = 0;
+  /** The most players there is room for (the room's free seats): more fists than that are that many, and settle. */
+  private most: 1 | 2 | 3 | 4 = MAX_ON_CAMERA;
 
   /** A picture with this many hands in it, seen at `now` (ms). */
   push(hands: number, now: number): void {
@@ -61,11 +63,12 @@ export class HeadCounter {
     return { players: this.players, settled: this.players > 0 && held >= SETTLE_AFTER, progress };
   }
 
-  /** Starts again: nobody counted. */
-  reset(now: number): void {
+  /** Starts again: nobody counted, and room for `most` players. */
+  reset(now: number, most: 1 | 2 | 3 | 4 = MAX_ON_CAMERA): void {
     this.seen = [];
     this.players = 0;
     this.since = now;
+    this.most = most;
   }
 
   private update(now: number): void {
@@ -73,7 +76,7 @@ export class HeadCounter {
     while (this.seen.length > 2 && this.seen[0]!.at < now - COUNT_WINDOW) this.seen.shift();
     const enough = Math.max(2, Math.ceil(COUNT_SHARE * this.seen.length));
     let most = 0;
-    for (let players = MAX_ON_CAMERA; players > 0 && most === 0; players--) {
+    for (let players: number = this.most; players > 0 && most === 0; players--) {
       if (this.seen.filter((one) => one.players >= players).length >= enough) most = players;
     }
     if (most !== this.players) {

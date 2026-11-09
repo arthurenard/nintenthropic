@@ -8,7 +8,7 @@
  * once it has held for a moment; Continue moves on at once.
  */
 import type { HandFrame, SeenHand } from "../../tracking/types";
-import { $, announce, setText } from "../../ui/dom";
+import { $, setText } from "../../ui/dom";
 import { HeadCounter } from "./headCount";
 import type { Disposable, Services } from "./services";
 import { focusHeading } from "./ui";
@@ -84,7 +84,7 @@ export class CountScreen {
   /** The camera is on: count. */
   start(): void {
     this.stop();
-    this.counter.reset(performance.now());
+    this.counter.reset(performance.now(), Math.max(1, Math.min(4, this.seats.length)) as 1 | 2 | 3 | 4);
     this.picture = this.services.previewCount($("count-picture"), () => ({
       // One player drives with the whole picture: no columns until there are two.
       seats: this.players >= 2 ? this.seats.slice(0, this.players) : [],
@@ -102,9 +102,9 @@ export class CountScreen {
 
   private tick(): void {
     const now = performance.now();
+    // (Never more than the room has seats for: the counter was told.)
     const count = this.counter.read(now);
-    // Never more than the room has seats for.
-    const players = Math.min(count.players, this.seats.length) as 0 | 1 | 2 | 3 | 4;
+    const players = count.players;
     this.players = players;
     if (count.settled && players > 0) {
       this.settledAt ??= now;
@@ -113,11 +113,14 @@ export class CountScreen {
         return;
       }
     } else this.settledAt = null;
-    $("count-continue").style.visibility = players > 0 ? "visible" : "hidden";
+    const proceed = $("count-continue");
+    // A Continue that goes while it has the focus hands it to the words, not to nowhere (a pad or keyboard player).
+    if (players === 0 && document.activeElement === proceed) focusHeading($("count-title"));
+    proceed.style.visibility = players > 0 ? "visible" : "hidden";
+    // (The words are a polite live region: what they say is read as it changes.)
     if (players === 0) this.say("Fists up, everyone driving", "Hold both fists up like a wheel, side by side. Up to four players.");
-    else if (this.settledAt !== null) {
-      if (this.say(plural(players), players === 1 ? "Next, choose your driver." : "Next, choose your drivers.")) announce(`${plural(players)} counted.`);
-    } else if (players >= this.seats.length) this.say(plural(players), this.seats.length < 4 ? "That fills the room." : "That fills the camera.");
+    else if (this.settledAt !== null) this.say(plural(players), players === 1 ? "Next, choose your driver." : "Next, choose your drivers.");
+    else if (players >= this.seats.length) this.say(plural(players), this.seats.length < 4 ? "That fills the room." : "That fills the camera.");
     else this.say(plural(players), "Anyone else driving? Fists up now.");
   }
 

@@ -87,6 +87,13 @@ describe("HeadCounter", () => {
     expect(counter.read(t)).toMatchObject({ players: 2, settled: false });
   });
 
+  it("counts no more than there is room for, and settles there however many more fists come and go", () => {
+    const counter = new HeadCounter();
+    counter.reset(0, 2);
+    const t = feed(counter, 0, 2500, (at) => (Math.round(at / (1000 / 30)) % 2 === 0 ? 6 : 8));
+    expect(counter.read(t)).toMatchObject({ players: 2, settled: true });
+  });
+
   it("holds its last count when pictures stop coming", () => {
     const counter = new HeadCounter();
     counter.reset(0);
